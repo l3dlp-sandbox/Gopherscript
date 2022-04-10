@@ -3,6 +3,7 @@
 Gopherscript is a secure scripting/configuration language written in Go. 
 It features a fined-grain permission system and enforces a strong isolation of dependencies.
 Gopherscript is not production ready yet : if you find a bug or want to suggest a feature create an issue please !
+See [here](#installation) for installation & usage.
 
 ## Security & Minimalism
 
@@ -12,62 +13,6 @@ Gopherscript is not production ready yet : if you find a bug or want to suggest 
   For more details go to the [permission section](#permissions).
 - Paths, path patterns, URLs are literals and dynamic paths are only possible as path expressions. You cannot create them from strings at runtime ! That facilitates the listing of permissions and helps static analysis.
 - Properties cannot be accessed with a dynamic name ( ``$obj[$name]`` ), only Go functions that are passed objects in can (you have to trust them anyway).
-
-## Installation & Usage
-
-As said in the security section, Gopherscript is very minimal. You can use it as a library and only add whay you need to the global scope (see following example).\
-You can also use the ``gos`` executable, it allows you to execute scripts and provides a REPL. See the documentation [here](./gos.md).
-
-```go
-package main
-
-import (
-	gos "gopherscript"
-	"log"
-)
-
-type User struct {
-	Name string
-}
-
-func main() {
-	grantedPerms := []gos.Permission{
-		gos.GlobalVarPermission{gos.UsePerm, "*"},
-	}
-	ctx := gos.NewContext(grantedPerms)
-	state := gos.NewState(ctx, map[string]interface{}{
-		//initial globals
-		"makeUser": func(ctx *gos.Context) User {
-			return User{Name: "Bar"}
-		},
-	})
-
-	mod, err := gos.ParseAndCheckModule(`
-            # permissions must be requested at the top of the file AND granted
-            require {
-                use: {globals: "*"} 
-            }
-            $a = 1
-            $user = makeUser()
-            return [
-                ($a + 2),
-                $user.Name
-            ]
-    `, "")
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	res, err := gos.Eval(mod, state)
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	log.Printf("%#v", res)
-}
-
-
-```
 
 ## Features
 
@@ -331,7 +276,7 @@ Syntax for spawning routines:
 $routine = sr [group] <globals> <module | call | variable>
 ``` 
 
-Call:
+Call (all permissions are inherited).
 ```
 $routine = sr nil f()
 ```
@@ -462,6 +407,62 @@ Noote: Binary expressions are always expressed inside parenthesis.
 10%
 
 sleep 100ms
+```
+
+## Installation
+
+As said in the security section, Gopherscript is very minimal. You can use it as a library and only add whay you need to the global scope (see following example).\
+You can also use the ``gos`` executable, it allows you to execute scripts and provides a REPL. See the documentation [here](./gos.md).
+
+```go
+package main
+
+import (
+	gos "gopherscript"
+	"log"
+)
+
+type User struct {
+	Name string
+}
+
+func main() {
+	grantedPerms := []gos.Permission{
+		gos.GlobalVarPermission{gos.UsePerm, "*"},
+	}
+	ctx := gos.NewContext(grantedPerms)
+	state := gos.NewState(ctx, map[string]interface{}{
+		//initial globals
+		"makeUser": func(ctx *gos.Context) User {
+			return User{Name: "Bar"}
+		},
+	})
+
+	mod, err := gos.ParseAndCheckModule(`
+            # permissions must be requested at the top of the file AND granted
+            require {
+                use: {globals: "*"} 
+            }
+            $a = 1
+            $user = makeUser()
+            return [
+                ($a + 2),
+                $user.Name
+            ]
+    `, "")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	res, err := gos.Eval(mod, state)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	log.Printf("%#v", res)
+}
+
+
 ```
 
 ## Implementation
