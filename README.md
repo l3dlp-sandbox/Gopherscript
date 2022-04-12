@@ -27,7 +27,9 @@ You can also use the ``gos`` executable, it allows you to execute scripts and pr
 
 If you use VSCode you can install the extension of ID ``xbsd.gopherscript`` . If you are a NeoVim user, check this [repo](https://github.com/debloat-dev/Gopherscript-nvim) please.
 
-### Example
+### Example 
+
+Example of using Gopherscript as a library from Golang:
 
 ```go
 package main
