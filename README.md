@@ -243,38 +243,16 @@ Any other type will be considered as a "Go value".
 
 ### Functions
 
-Functions can be declared with the following syntax.
 ```
-fn f($x){
+fn myfunc($x){
     return ($x + 1)
 }
-$y = f(1)
-```
 
-you can also use function expressions:
-```
-$f = fn(){
-    log "hello"
-}
-$f()
-```
-
-Declared functions can be called without parenthesis:
-
-```
+$y = myfunc(1)
 myfunc 1 { }
-```
-
-```
 myfunc 1 { 
 
 }
-```
-
-You can make several calls on a single line by using a semicolon.
-
-```
-f 1 { }; f 2 { }
 ```
 
 ### Calling Go functions & Go values
