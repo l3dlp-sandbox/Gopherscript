@@ -1,0 +1,11 @@
+require {
+    read: /home/user/...
+    use: {
+        globals: "*"
+    }
+}
+
+$entries = toval(fs.ls(./*.go)!)
+$names = map(@{Name: $.Name, Size: $.Size} $entries)!
+
+log topjson($names)

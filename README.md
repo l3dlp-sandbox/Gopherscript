@@ -3,16 +3,84 @@
 Gopherscript is a secure scripting/configuration language written in Go. 
 It features a fined-grain permission system and enforces a strong isolation of dependencies.
 Gopherscript is not production ready yet : if you find a bug or want to suggest a feature create an issue please !
-See [here](#installation) for installation & usage.
+
+Join the official community on [Revolt](https://app.revolt.chat/invite/cJQPeQkc).
+If you prefer to use Discord I am active in this [server about Golang](https://discord.gg/dZwwfECx).
 
 ## Security & Minimalism
 
 - The codebase is small on purpose (a single Go file with less than 6K lines and only std lib dependencies)
 - The default global scope has ZERO variables/functions. (only add what you need)
-- A strict permission system allows you to precisely control what is allowed (almost no permissions by default). 
+- A strict but extensive permission system allows you to precisely control what is allowed (almost no permissions by default). 
   For more details go to the [permission section](#permissions).
 - Paths, path patterns, URLs are literals and dynamic paths are only possible as path expressions. You cannot create them from strings at runtime ! That facilitates the listing of permissions and helps static analysis.
 - Properties cannot be accessed with a dynamic name ( ``$obj[$name]`` ), only Go functions that are passed objects in can (you have to trust them anyway).
+
+
+## Installation & Usage
+
+As said in the security section, Gopherscript is very minimal. You can use it as a library and only add whay you need to the global scope (see the example further below).
+
+You can also use the ``gos`` executable, it allows you to execute scripts and provides convenient ways to manipulate files & HTTP resources. See the documentation [here](./gos.md).
+
+### IDE
+
+If you use VSCode you can install the extension of ID ``xbsd.gopherscript`` . If you are a NeoVim user, check this [repo](https://github.com/debloat-dev/Gopherscript-nvim) please.
+
+### Example
+
+```go
+package main
+
+import (
+	gos "github.com/debloat-dev/Gopherscript"
+	"log"
+)
+
+type User struct {
+	Name string
+}
+
+func main() {
+    //we create a Context that contains the granted permissions
+	grantedPerms := []gos.Permission{
+		gos.GlobalVarPermission{gos.UsePerm, "*"},
+	}
+	ctx := gos.NewContext(grantedPerms)
+
+    //we create the initial state with the globals we want to expose
+    //the state can be re used several times (and with different modules)
+	state := gos.NewState(ctx, map[string]interface{}{
+		"makeUser": func(ctx *gos.Context) User {
+			return User{Name: "Bar"}
+		},
+	})
+
+	mod, err := gos.ParseAndCheckModule(`
+            # permissions must be requested at the top of the file AND granted
+            require {
+                use: {globals: "*"} 
+            }
+            $a = 1
+            $user = makeUser()
+            return [
+                ($a + 2),
+                $user.Name
+            ]
+    `, "")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+    //we execute the script
+	res, err := gos.Eval(mod, state)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	log.Printf("%#v", res)
+}
+```
 
 ## Features
 
@@ -154,6 +222,7 @@ type URL string
 type HTTPHost string
 type HTTPHostPattern string
 type URLPattern string
+type JSONstring string
 ```
 
 Complex types
@@ -302,7 +371,7 @@ Routines can optionally be part of a "routine group" that allows easier control 
 
 ```
 for (1 .. 10) {
-    sr req_group nil read(https://jsonplaceholder.typicode.com/posts/)!
+    sr req_group nil read(https://debloat.dev/fakeapp/users)!
 }
 
 $results = $req_group.WaitAllResults()!
@@ -397,7 +466,7 @@ Examples:
 (0 ..< 2)
 ```
 
-Noote: Binary expressions are always expressed inside parenthesis.
+Note: Binary expressions are always expressed inside parenthesis.
 
 ### Quantity literals
 
@@ -407,62 +476,6 @@ Noote: Binary expressions are always expressed inside parenthesis.
 10%
 
 sleep 100ms
-```
-
-## Installation
-
-As said in the security section, Gopherscript is very minimal. You can use it as a library and only add whay you need to the global scope (see following example).\
-You can also use the ``gos`` executable, it allows you to execute scripts and provides a REPL. See the documentation [here](./gos.md).
-
-```go
-package main
-
-import (
-	gos "gopherscript"
-	"log"
-)
-
-type User struct {
-	Name string
-}
-
-func main() {
-	grantedPerms := []gos.Permission{
-		gos.GlobalVarPermission{gos.UsePerm, "*"},
-	}
-	ctx := gos.NewContext(grantedPerms)
-	state := gos.NewState(ctx, map[string]interface{}{
-		//initial globals
-		"makeUser": func(ctx *gos.Context) User {
-			return User{Name: "Bar"}
-		},
-	})
-
-	mod, err := gos.ParseAndCheckModule(`
-            # permissions must be requested at the top of the file AND granted
-            require {
-                use: {globals: "*"} 
-            }
-            $a = 1
-            $user = makeUser()
-            return [
-                ($a + 2),
-                $user.Name
-            ]
-    `, "")
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	res, err := gos.Eval(mod, state)
-	if err != nil {
-		log.Panicln(err)
-	}
-
-	log.Printf("%#v", res)
-}
-
-
 ```
 
 ## Implementation

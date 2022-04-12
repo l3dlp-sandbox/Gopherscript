@@ -1,0 +1,7 @@
+require {
+    use: {
+        globals: ["log", "map", "filter"]
+    }
+}
+
+log "hello world!"

@@ -1,0 +1,9 @@
+require {
+    read: https://debloat.dev/fakeapp/users/1
+    use: {
+        globals: "*"
+    }
+}
+
+$json = read(https://debloat.dev/fakeapp/users/1 mime"json")!
+log $json

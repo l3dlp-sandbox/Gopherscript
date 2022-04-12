@@ -1,0 +1,25 @@
+require {
+    use: {
+        globals: ["http", "log", "tostr"]
+    }
+    read: {
+        globals: "handle"
+        : https://localhost:8080/
+    }
+    provide: https://localhost:8080
+}
+
+
+fn handle($rw, $r){
+    match $r.Path {
+        / {
+            $rw.WriteJSON({ 
+                a: 1 
+            })
+        }
+    }
+}
+
+$server = http.serve(https://localhost:8080 $$handle)!
+$body = tostr(http.getbody(https://localhost:8080/)!)
+log $body

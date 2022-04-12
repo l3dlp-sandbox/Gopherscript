@@ -1,0 +1,12 @@
+require {
+    read: https://debloat.dev/fakeapp/users/1
+    use: {
+        globals: "*"
+    }
+}
+
+$res = http.get(https://debloat.dev/fakeapp/users/1)!
+$json = tostr(io.ReadAll($res.Body)!)
+
+log $json
+

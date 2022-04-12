@@ -1,0 +1,11 @@
+require {
+    create: https://debloat.dev/fakeapp/users
+    use: {
+        globals: "*"
+    }
+}
+
+$res = http.post(https://debloat.dev/fakeapp/users)!
+$body = tostr(io.ReadAll($res.Body)!)
+
+log $body

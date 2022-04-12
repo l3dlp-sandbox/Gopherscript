@@ -1,0 +1,9 @@
+require {
+    read: https://debloat.dev/fakeapp/users/1
+    use: {
+        globals: "*"
+    }
+}
+
+$body = http.getbody(https://debloat.dev/fakeapp/users/1)!
+log tostr($body)

@@ -1,0 +1,25 @@
+require {
+    use: {
+        globals: "log"
+    }
+}
+
+
+switch 0 {
+    0 {
+        log 0
+    }
+    1 {
+        log 1
+    }
+}
+
+match / {
+    /* {
+        log "/..."
+    }
+
+    /e* {
+        log "/e..."
+    }
+}

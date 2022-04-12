@@ -1,0 +1,18 @@
+require {
+    use: {
+        globals: ["http", "log", "tostr"]
+    }
+    read: {
+        globals: "handle"
+        : https://localhost:8080/
+    }
+    provide: https://localhost:8080
+}
+
+$server = http.servedir$ https://localhost:8080 ./examples/static/
+
+$body = tostr(http.getbody(https://localhost:8080/)!)
+log "response :"
+log $body
+
+$server.WaitClosed()

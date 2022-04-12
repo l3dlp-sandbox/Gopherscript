@@ -1,0 +1,32 @@
+const (
+    $$TYPICODE = https://debloat.dev/fakeapp
+)
+
+require {
+    read: {
+        globals: "*"
+        : $$TYPICODE
+    }
+    use: {
+        globals: "*"
+    }
+    create: {
+        routines: {}
+    }
+}
+
+
+for (1 .. 2) {
+    sr req_group .{http,io,tostr} {
+        $res = http.get(https://debloat.dev/fakeapp/users/1)!
+        $json = tostr(io.ReadAll($res.Body)!)
+
+        return $json
+    } allow {
+        read: $$TYPICODE
+        use: {globals: "*"}
+    }
+}
+
+$results = $req_group.WaitAllResults()!
+log $results

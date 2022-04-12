@@ -1,0 +1,17 @@
+const (
+    $$DIR_PATH = /tmp/toto
+)
+
+require {
+    create: $$DIR_PATH
+    delete: $$DIR_PATH
+    read: {
+        globals: "*"
+    }
+    use: {
+        globals: "*"
+    }
+}
+
+fs.mkdir $$DIR_PATH
+fs.del $$DIR_PATH

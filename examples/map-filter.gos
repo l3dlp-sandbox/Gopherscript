@@ -1,0 +1,16 @@
+require {
+    use: {
+        globals: "*"
+    }
+}
+
+$users = [
+    { name: "Foo"} 
+    { name: "Bar"}
+]
+
+
+$names = map(@$.name $users)!
+$names = filter(@($ == "Foo") $names)!
+
+log $names

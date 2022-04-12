@@ -10,6 +10,13 @@ Like Gopherscript it is not production read yet. If you find a bug of want to su
   It is and will stay easy to understand and audit. If you want more functionnality see the [executables](./README.md##executables) section in the README.
 - the functions that have side effects (Golang functions) actively checks permissions before doing anything.
 
+
+## Installation
+
+```
+go install github.com/debloat-dev/Gopherscript/cmd/gos@latest
+```
+
 ## Scripting
 
 ```
@@ -41,11 +48,33 @@ Before starting the REPL ``gos`` will execute ``./startup.gos`` and grant the re
 No additional permissions will be granted.
 
 
-## Read, Create, Delete, Provide resources
+## Read, Create, Update, Delete, Provide resources
 
 From now on we will references files, HTTP servers and endpoints as "resources".
 
-You can easily manipulate resources using ``read | create | delete`` followed by the resource's name.\
-To create a folder do ``create ./dir/`` (trailing slash required), for a file do ``create ./file.txt [optional string content]``.\
-Use ``delete <resource>`` for deletion, if the resource is a folder the deletion will be recursive.\
-Read a file's content with ``read ./file.txt`` or read an HTTP resource with ``read https://example.com/data.json``
+You can easily manipulate resources using ``read | create | update | delete`` followed by the resource's name.\
+
+
+### Read
+
+Read the entries of a folder: ``read ./dir/``
+
+Read a file: ``read ./file.txt``
+
+Read an HTTP resource with: ``read https://debloat.dev/fakeapp/users/1``
+
+### Create
+
+Create a dir: ``create ./dir/``
+
+Create a file: ``create ./file.txt [optional string content]``
+
+### Update
+
+Append to a file: ``update ./file.txt append <string>``
+
+Patch an HTTP resource: ``update <url> <string | object>``
+
+### Delete
+
+Use ``delete <resource>`` for deletion. The deletion is recursive for folders.

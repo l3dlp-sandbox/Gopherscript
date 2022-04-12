@@ -1,0 +1,25 @@
+require {
+    read: {
+        globals: "*"
+        : https://*
+        : /home/user/...
+    }
+    use: {
+        globals: "*"
+        : https://*
+    },
+    create: {
+        globals: "*"
+        : https://*
+        : https://localhost:8080
+    }
+    update: {
+        globals: "*"
+        : https://*
+        : https://localhost:8080
+        : /home/user/...
+    }
+    delete: https://*
+    provide: https://*
+}
+
