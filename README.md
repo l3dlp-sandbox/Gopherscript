@@ -367,33 +367,6 @@ for (1 .. 10) {
 $results = $req_group.WaitAllResults()!
 ```
 
-### Objects
-
-Objects are just instances of ``type Object map[string]interface{}``
-
-![image](https://user-images.githubusercontent.com/84961291/162415297-c0f9fe11-6976-4d1a-87e9-5a0754004978.png)
-
-<!--
-$object = {   
-    # properties can be separated with commas
-    count: 0, duration: 10ms
-
-    #or this way
-    a: 1 
-    b: 2
-
-    # or just with space (this might be removed in the future though)
-    c: 3 d: 4
-
-    # implicit-key properties, implicit keys starts at 0
-    : "a"
-    : "b"
-}
--->
-
-Objects with at least one implicit-key property are also given an additional property
-to represent the "length" of the object : "__len" which has a value of type ``int``.
-
 **For more details about the different features you can read the repository's wiki.**
 
 ## Implementation
