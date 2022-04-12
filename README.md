@@ -381,7 +381,7 @@ $results = $req_group.WaitAllResults()!
 
 ### Objects
 
-Objects are just map\[string]interface{}.
+Objects are just instances of ``type Object map[string]interface{}``
 
 ![image](https://user-images.githubusercontent.com/84961291/162415297-c0f9fe11-6976-4d1a-87e9-5a0754004978.png)
 
