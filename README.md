@@ -394,6 +394,8 @@ $object = {
 Objects with at least one implicit-key property are also given an additional property
 to represent the "length" of the object : "__len" which has a value of type ``int``.
 
+**For more details about the different features you can read the repository's wiki.**
+
 ## Implementation
 
 - Why use a tree walk interpreter instead of a bytecode interpreter ?\
