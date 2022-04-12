@@ -406,55 +406,6 @@ $object = {
 Objects with at least one implicit-key property are also given an additional property
 to represent the "length" of the object : "__len" which has a value of type ``int``.
 
-### Loops & Iterables
-
-Iteration of a ``List``:
-```
-for $i, $e in ["a", "b", "c"] {
-    # 0 "a"
-    # 1 "b"
-    # 2 "c"
-}
-```
-
-Iteration of an ``Object``:
-```
-for $k, $v in {:"a", :"b", name: "Foo", "count": 10} {
-    # note: iteration order is random
-    # "0" "a"
-    # "1" "b"
-    # "name" "Foo"
-    # "count" 10
-    # "__len" 2
-}
-```
-
-The ``for .. in`` loop can also iterate through Go values that implement the following Iterable interface.
-
-```go
-type Iterable interface {
-	Iterator() Iterator
-}
-
-type Iterator interface {
-	HasNext() bool
-	GetNext() interface{}
-}
-```
-
-
-The IntRange type implements this interface so it is iterable:
-
-```
-$iterable = (0 .. 2) # use ..< for exclusive end
-
-for $i, $e in $iterable {
-    # 0 0
-    # 1 1
-    # 2 2
-}
-```
-
 ### Quantity literals
 
 ```
