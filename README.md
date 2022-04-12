@@ -208,6 +208,16 @@ URL pattern literals (only prefixs supported):
 https://example.com/users/...
 -->
 
+### Quantity literals
+
+```
+10s		# time.Duration
+10ms		# time.Duration
+10%		# 0.10
+
+sleep 100ms
+```
+
 ### Gopherscript types
 
 Basic types 
@@ -383,16 +393,6 @@ $object = {
 
 Objects with at least one implicit-key property are also given an additional property
 to represent the "length" of the object : "__len" which has a value of type ``int``.
-
-### Quantity literals
-
-```
-10s
-10ms
-10%
-
-sleep 100ms
-```
 
 ## Implementation
 
