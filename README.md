@@ -455,21 +455,6 @@ for $i, $e in $iterable {
 }
 ```
 
-### Binary expressions
-
-Examples:
-```
-(1 + 2)
-(1.0 +. 3.5)
-(1 == 3)
-("name" keyof {"name": "Foo"})
-(1 in [1, 2, 3])
-(0 .. 2)
-(0 ..< 2)
-```
-
-Note: Binary expressions are always expressed inside parenthesis.
-
 ### Quantity literals
 
 ```
