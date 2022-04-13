@@ -44,7 +44,7 @@ Launch the REPL with the ``repl`` subcommand:
 gos repl
 ```
 
-Before starting the REPL ``gos`` will execute ``./startup.gos`` and grant the required permissions by the script to the REPL.\
+Before starting the REPL ``gos`` will execute ``~/startup.gos`` and grant the required permissions by the script to the REPL.\
 No additional permissions will be granted.
 
 

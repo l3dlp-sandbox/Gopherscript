@@ -464,19 +464,33 @@ func main() {
 		case "repl":
 			replFlags := flag.NewFlagSet("repl", flag.ExitOnError)
 			var startupScriptPath string
-			replFlags.StringVar(&startupScriptPath, "c", "./startup.gos", "startup script path")
+
+			home, err := os.UserHomeDir()
+			if err == nil && home != "" {
+				pth := path.Join(home, "startup.gos")
+				info, err := os.Stat(startupScriptPath)
+				if err == nil && info.Mode().IsRegular() {
+					startupScriptPath = pth
+				}
+			}
+
+			replFlags.StringVar(&startupScriptPath, "c", startupScriptPath, "startup script path")
 
 			subcommandArgs := os.Args[2:]
 			moveFlagsStart(subcommandArgs)
 
-			err := replFlags.Parse(subcommandArgs)
+			err = replFlags.Parse(subcommandArgs)
 			if err != nil {
 				log.Panicln(err)
 			}
 
+			if startupScriptPath == "" {
+				log.Panicln("no startup file found in homedir and none was specified (-c <file>)")
+			}
+
 			b, err := os.ReadFile(startupScriptPath)
 			if err != nil {
-				log.Panicln("failed to read startup file", err)
+				log.Panicln("failed to read startup file ", startupScriptPath, ":", err)
 			}
 
 			startupMod, err := gopherscript.ParseAndCheckModule(string(b), "")
