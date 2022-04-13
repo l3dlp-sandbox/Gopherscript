@@ -157,63 +157,39 @@ type Permission interface {
 
 ### Special literals & expressions
 
-Path literals
-
-![image](https://user-images.githubusercontent.com/84961291/162411824-f87ffda1-7de4-4eca-8e9a-1e9329964d88.png)
-
-<!--
+```
+# Path literals
 /home/user/
 ./file.json
--->
 
-Path patterns support basic globbing (*, \[set], ?) and prefixing (not both at the same time).
+# Path expressions
+/home/user/$dirpath
 
-![image](https://user-images.githubusercontent.com/84961291/162411903-41f33536-db98-420f-a0de-ab433380c5b8.png)
-
-<!--
+# Path patterns support basic globbing (*, [set], ?) and prefixing (not both at the same time).
 ./data/*.json
 /app/logs/...
+/app/*/...     		# invalid (this might be allowed in the future though)
 
-/app/*/...      # invalid (this might be allowed in the future though)
--->
-
-HTTP host literals:
-
-![image](https://user-images.githubusercontent.com/84961291/162412319-a18945af-987d-4d04-982a-7d1a51313021.png)
-
-<!--
+# HTTP host literals
 https://example.com
 https://example.com:443
--->
 
-HTTP host pattern literals:
-
-![image](https://user-images.githubusercontent.com/84961291/162412383-dcacd28e-bd12-4fbe-94be-036cdf14c7b5.png)
-
-<!--
+# HTTP host pattern literals
 https://*               # any HTTPS host
 https://*.com           # any domain with .com as TLD, will not match against subdomains
 https://*.example.com   # any subdomain of example.com
--->
 
-
-URL literals:
-
-![image](https://user-images.githubusercontent.com/84961291/162412439-4049ba90-644b-4dda-bc87-cee49873047b.png)
-
-<!--
+# URL literals
 https://example.com/
 https://example.com/index.html
 https://localhost/
--->
 
-URL pattern literals (only prefixs supported):
+# URL expressions
+https://example.com/users/$id
 
-![image](https://user-images.githubusercontent.com/84961291/162470615-be697feb-8c21-4e17-89fd-30e503214b0e.png)
-
-<!--
+# URL pattern literals (only prefix patterns supported)
 https://example.com/users/...
--->
+```
 
 ### Quantity literals
 
