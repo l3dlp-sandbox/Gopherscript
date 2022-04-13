@@ -9,7 +9,7 @@ If you prefer to use Discord I am active in this [server about Golang](https://d
 
 ## Security & Minimalism
 
-- The codebase is small on purpose (a single Go file with less than 6K lines and only std lib dependencies) See [Implementation](#implementation).
+- The codebase is small on purpose (a single Go file with less than 6K lines and only std lib dependencies). See [Implementation](#implementation).
 - The default global scope has ZERO variables/functions. (only add what you need)
 - A strict but extensive permission system allows you to precisely control what is allowed (almost no permissions by default). 
   For more details go to the [permission section](#permissions).
@@ -48,14 +48,14 @@ type User struct {
 }
 
 func main() {
-    //we create a Context that contains the granted permissions
+   	//we create a Context that contains the granted permissions
 	grantedPerms := []gos.Permission{
 		gos.GlobalVarPermission{gos.UsePerm, "*"},
 	}
 	ctx := gos.NewContext(grantedPerms)
 
-    //we create the initial state with the globals we want to expose
-    //the state can be re used several times (and with different modules)
+    	//we create the initial state with the globals we want to expose
+    	//the state can be re used several times (and with different modules)
 	state := gos.NewState(ctx, map[string]interface{}{
 		"makeUser": func(ctx *gos.Context) User {
 			return User{Name: "Bar"}
@@ -73,12 +73,13 @@ func main() {
                 ($a + 2),
                 $user.Name
             ]
-    `, "")
+        `, "")
+	
 	if err != nil {
 		log.Panicln(err)
 	}
 
-    //we execute the script
+	//we execute the script
 	res, err := gos.Eval(mod, state)
 	if err != nil {
 		log.Panicln(err)
