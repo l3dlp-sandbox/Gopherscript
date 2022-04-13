@@ -45,7 +45,7 @@ gos repl
 ```
 
 Before starting the REPL ``gos`` will execute ``~/startup.gos`` and grant the required permissions by the script to the REPL.\
-No additional permissions will be granted.
+No additional permissions will be granted. You can copy the file named ``startup.gos`` in this repository and modify it.
 
 
 ## Read, Create, Update, Delete, Provide resources
