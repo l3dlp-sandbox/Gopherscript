@@ -401,7 +401,7 @@ func main() {
 		switch os.Args[1] {
 		case "run":
 			if len(os.Args) == 2 {
-				log.Panicln("missing script path")
+				panic("missing script path")
 			}
 
 			runFlags := flag.NewFlagSet("run", flag.ExitOnError)
@@ -413,42 +413,42 @@ func main() {
 
 			err := runFlags.Parse(subcommandArgs)
 			if err != nil {
-				log.Panicln(err)
+				panic(err)
 			}
 
 			filepath := runFlags.Arg(0)
 
 			if filepath == "" {
-				log.Panicln("missing script path")
+				panic("missing script path")
 			}
 
 			if info, err := os.Stat(filepath); err == os.ErrNotExist || (err == nil && info.IsDir()) {
-				log.Panicln(filepath, "does not exist or is a folder")
+				panic(fmt.Sprint(filepath, "does not exist or is a folder"))
 			}
 			b, err := os.ReadFile(filepath)
 			if err != nil {
-				log.Panicln("failed to read", filepath, err.Error())
+				panic(fmt.Sprint("failed to read", filepath, err.Error()))
 			}
 			code := string(b)
 			mod, err := gopherscript.ParseModule(code, filepath)
 			if err != nil {
-				log.Panicln("parsing error:", err.Error())
+				panic(fmt.Sprint("parsing error:", err.Error()))
 			}
 
 			if err := gopherscript.Check(mod); err != nil {
-				log.Panicln("checking error:", err.Error())
+				panic(fmt.Sprint("checking error:", err.Error()))
 			}
 
 			var ctx *gopherscript.Context
 			if mod.Requirements == nil {
-				log.Panicln("missing requirements in script")
+				panic("missing requirements in script")
 			}
 			requiredPermissions := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil)
 
 			if perms == "required" {
 				ctx = gopherscript.NewContext(requiredPermissions)
 			} else if len(requiredPermissions) != 0 {
-				log.Panicln("some required permissions are not granted")
+				panic("some required permissions are not granted. Did you use -p=required ?")
 			}
 
 			//CONTEXT & STATE
@@ -485,12 +485,12 @@ func main() {
 			}
 
 			if startupScriptPath == "" {
-				log.Panicln("no startup file found in homedir and none was specified (-c <file>)")
+				panic("no startup file found in homedir and none was specified (-c <file>). You can fix this by copying the startup.gos file from the Gopherscript repository to your home directory.")
 			}
 
 			b, err := os.ReadFile(startupScriptPath)
 			if err != nil {
-				log.Panicln("failed to read startup file ", startupScriptPath, ":", err)
+				panic(fmt.Sprint("failed to read startup file ", startupScriptPath, ":", err))
 			}
 
 			startupMod, err := gopherscript.ParseAndCheckModule(string(b), "")
@@ -503,11 +503,11 @@ func main() {
 
 			_, err = gopherscript.Eval(startupMod, state)
 			if err != nil {
-				log.Panicln("startup script failed:", err)
+				panic(fmt.Sprint("startup script failed:", err))
 			}
 			startShell(state)
 		default:
-			log.Panicln("unknown subcommand", os.Args[1])
+			panic(fmt.Sprint("unknown subcommand", os.Args[1]))
 		}
 	}
 }
