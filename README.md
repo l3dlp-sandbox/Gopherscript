@@ -17,7 +17,7 @@ If you prefer to use Discord I am active in this [server about Golang](https://d
 - Properties cannot be accessed with a dynamic name ( ``$obj[$name]`` ), only Go functions that are passed objects in can (you have to trust them anyway).
 - In a general way some features will be added (or refused) to limit code obfuscation.
 
-If you find Gopherscript too restrictive a ``lax`` mode might be introduced in the future.
+If you find Gopherscript too restrictive don't worry ! A ``lax`` mode might be introduced in the future.
 
 ## Installation & Usage
 
