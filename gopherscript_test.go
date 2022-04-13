@@ -2465,6 +2465,18 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("switch statement : case is not a simple literal", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("switch 1 { $a { } }")
+		})
+	})
+
+	t.Run("match statement : case is not a simple literal", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("match 1 { $a { } }")
+		})
+	})
+
 	t.Run("empty single line comment", func(t *testing.T) {
 		n := MustParseModule("# ")
 		assert.EqualValues(t, &Module{

@@ -3161,7 +3161,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								i,
 							})
 						}
-						valueNodes = append(valueNodes, parseExpression())
+						valueNode := parseExpression()
+						if !isSimpleValueLiteral(valueNode) {
+							panic(ParsingError{
+								"invalid switch/match case : only simple value literals are supported (1, 1.0, /home, ..)",
+								i,
+							})
+						}
+						valueNodes = append(valueNodes, valueNode)
 
 						eatSpace()
 
