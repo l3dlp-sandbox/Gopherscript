@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -443,7 +444,7 @@ func main() {
 			if mod.Requirements == nil {
 				panic("missing requirements in script")
 			}
-			requiredPermissions := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil)
+			requiredPermissions := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil, nil)
 
 			if perms == "required" {
 				ctx = gopherscript.NewContext(requiredPermissions)
@@ -497,7 +498,7 @@ func main() {
 			if err != nil {
 				log.Panicln("failed to parse & check startup file:", err)
 			}
-			requiredPermissions := startupMod.Requirements.Object.Permissions(startupMod.GlobalConstantDeclarations, nil)
+			requiredPermissions := startupMod.Requirements.Object.Permissions(startupMod.GlobalConstantDeclarations, nil, nil)
 			ctx := gopherscript.NewContext(requiredPermissions)
 			state := NewState(ctx)
 
@@ -520,10 +521,52 @@ type FileInfo struct {
 	IsDir   bool        // abbreviation for Mode().IsDir()
 }
 
+type CommandResult struct {
+}
+
 func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 	var state *gopherscript.State
 	state = gopherscript.NewState(ctx, map[string]interface{}{
+		"ex": func(ctx *gopherscript.Context, cmdName gopherscript.Identifier, args ...interface{}) (string, error) {
+
+			var subcommandNameChain []string
+			var cmdArgs []string
+
+			for len(args) != 0 {
+				name, ok := args[0].(gopherscript.Identifier)
+				if ok {
+					subcommandNameChain = append(subcommandNameChain, string(name))
+					args = args[1:]
+				} else {
+					break
+				}
+			}
+
+			for _, arg := range args {
+				if gopherscript.IsSimpleGopherVal(arg) {
+					cmdArgs = append(cmdArgs, fmt.Sprint(arg))
+				} else {
+					return "", fmt.Errorf("ex: invalid argument %v of type %T, only simple values are allowed", arg, arg)
+				}
+			}
+
+			perm := gopherscript.CommandPermission{
+				CommandName:         string(cmdName),
+				SubcommandNameChain: subcommandNameChain,
+			}
+
+			if err := ctx.CheckHasPermission(perm); err != nil {
+				return "", err
+			}
+
+			passedArgs := make([]string, 0)
+			passedArgs = append(passedArgs, subcommandNameChain...)
+			passedArgs = append(passedArgs, cmdArgs...)
+
+			b, err := exec.Command(string(cmdName), passedArgs...).Output()
+			return string(b), err
+		},
 		"fs": gopherscript.Object{
 			"mkfile": gopherscript.ValOf(fsMkfile),
 			"mkdir":  gopherscript.ValOf(fsMkdir),
