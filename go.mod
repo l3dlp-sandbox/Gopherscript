@@ -1,4 +1,4 @@
-module github.com/debloat-dev/Gopherscript/gopherscript
+module github.com/debloat-dev/Gopherscript
 
 go 1.17
 
