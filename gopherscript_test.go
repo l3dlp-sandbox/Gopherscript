@@ -2740,7 +2740,7 @@ func TestRequirements(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mod := MustParseModule(testCase.inputModule)
-			perms := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil)
+			perms := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil, nil)
 			assert.EqualValues(t, testCase.expectedPermissions, perms)
 		})
 	}

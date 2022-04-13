@@ -269,7 +269,31 @@ type ObjectLiteral struct {
 	Properties []ObjectProperty
 }
 
-func (objLit ObjectLiteral) Permissions(globalConsts *GlobalConstantDeclarations, runningState *State) []Permission {
+func getCommandPermissions(n Node) ([]Permission, error) {
+
+	var perms []Permission
+
+	objLit, ok := n.(*ObjectLiteral)
+	if !ok {
+		return nil, errors.New("invalid requirements, use: commands: value should be an object literal whose keys are command names")
+	}
+
+	for _, p := range objLit.Properties {
+		cmdName := p.Name()
+		perm := CommandPermission{
+			CommandName: cmdName,
+		}
+		perms = append(perms, perm)
+	}
+
+	return perms, nil
+}
+
+func (objLit ObjectLiteral) Permissions(
+	globalConsts *GlobalConstantDeclarations,
+	runningState *State,
+	handleCustomType func(kind PermissionKind, name string) ([]Permission, bool, error),
+) []Permission {
 	perms := make([]Permission, 0)
 
 	if (globalConsts != nil) && (runningState != nil) {
@@ -333,8 +357,28 @@ func (objLit ObjectLiteral) Permissions(globalConsts *GlobalConstantDeclarations
 						default:
 							log.Panicln("invalid requirements, 'routines' should be followed by an object literal")
 						}
+					case "commands":
+						if permKind != UsePerm {
+							log.Panic("permission 'commands' should be required in the 'use' section of permission")
+						}
 
+						newPerms, err := getCommandPermissions(p.Value)
+						if err != nil {
+							log.Panic(err.Error())
+						}
+						perms = append(perms, newPerms...)
 					default:
+						if handleCustomType != nil {
+							customPerms, handled, err := handleCustomType(permKind, typeName)
+							if handled {
+								if err != nil {
+									log.Panicf("invalid requirements, cannot infer '%s' permission '%s': %s\n", name, typeName, err.Error())
+								}
+								perms = append(perms, customPerms...)
+								break
+							}
+						}
+
 						log.Panicf("invalid requirements, cannot infer '%s' permission '%s'\n", name, typeName)
 					}
 
@@ -4458,7 +4502,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		perms := n.GrantedPermissions.Permissions(nil, nil)
+		perms := n.GrantedPermissions.Permissions(nil, nil, nil)
 		for _, perm := range perms {
 			if err := state.ctx.CheckHasPermission(perm); err != nil {
 				return nil, fmt.Errorf("import: cannot allow permission: %s", err.Error())
@@ -4557,7 +4601,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 
 		if n.GrantedPermissions != nil {
-			perms := n.GrantedPermissions.Permissions(nil, state)
+			perms := n.GrantedPermissions.Permissions(nil, state, nil)
 			for _, perm := range perms {
 				if err := state.ctx.CheckHasPermission(perm); err != nil {
 					return nil, fmt.Errorf("spawn: cannot allow permission: %s", err.Error())

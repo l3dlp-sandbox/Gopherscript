@@ -7,6 +7,9 @@ require {
     use: {
         globals: "*"
         : https://*
+        commands: {
+            echo: []
+        }
     },
     create: {
         globals: "*"
