@@ -19,11 +19,15 @@ If you prefer to use Discord I am active in this [server about Golang](https://d
 
 ## Installation & Usage
 
-As said in the security section, Gopherscript is very minimal. You can use it as a library and only add whay you need to the global scope (see the example further below).
+You can use the ``gos`` executable to execute scripts or launch a REPL:
+```
+go install github.com/debloat-dev/Gopherscript/cmd/gos@latest
+```
+See the documentation [here](./gos.md).
+You can also use Gopherscript as a library and only add whay you need to the global scope (see the example further below).
 
-You can also use the ``gos`` executable, it allows you to execute scripts and provides convenient ways to manipulate files & HTTP resources. See the documentation [here](./gos.md).
 
-### IDE
+### Editor support
 
 If you use VSCode you can install the extension of ID ``xbsd.gopherscript`` . If you are a NeoVim user, check this [repo](https://github.com/debloat-dev/Gopherscript-nvim) please.
 
