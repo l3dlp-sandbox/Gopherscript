@@ -3622,6 +3622,24 @@ func TestHttpPermission(t *testing.T) {
 	}
 }
 
+func TestCommandPermission(t *testing.T) {
+	permNoSub := CommandPermission{CommandName: "mycmd"}
+	assert.True(t, permNoSub.Includes(permNoSub))
+
+	otherPermNoSub := CommandPermission{CommandName: "mycmd2"}
+	assert.False(t, otherPermNoSub.Includes(permNoSub))
+	assert.False(t, permNoSub.Includes(otherPermNoSub))
+
+	permSub1a := CommandPermission{CommandName: "mycmd", SubcommandNameChain: []string{"a"}}
+	assert.True(t, permSub1a.Includes(permSub1a))
+	assert.False(t, permNoSub.Includes(permSub1a))
+	assert.False(t, permSub1a.Includes(permNoSub))
+
+	permSub1b := CommandPermission{CommandName: "mycmd", SubcommandNameChain: []string{"b"}}
+	assert.False(t, permSub1b.Includes(permSub1a))
+	assert.False(t, permSub1a.Includes(permSub1b))
+}
+
 func TestFilesystemPermission(t *testing.T) {
 	ENTITIES := List{
 		Path("./"),

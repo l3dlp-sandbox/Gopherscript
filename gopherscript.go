@@ -3455,7 +3455,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	return mod, nil
 }
 
-func isSimpleGopherVal(v interface{}) bool {
+func IsSimpleGopherVal(v interface{}) bool {
 	switch v.(type) {
 	case string, JSONstring, bool, int, float64,
 		Identifier, Path, PathPattern, URL, HTTPHost, HTTPHostPattern, URLPattern:
@@ -3477,7 +3477,7 @@ func isGopherVal(v interface{}) bool {
 
 func ExtValOf(v interface{}, state *State) interface{} {
 	v = ValOf(v)
-	if isSimpleGopherVal(v) {
+	if IsSimpleGopherVal(v) {
 		return v
 	}
 	if extVal, ok := v.(ExternalValue); ok {
@@ -5085,6 +5085,48 @@ func (perm FilesystemPermission) Includes(otherPerm Permission) bool {
 
 func (perm FilesystemPermission) String() string {
 	return fmt.Sprintf("[%s path(s) %s]", perm.Kind_, perm.Entity)
+}
+
+type CommandPermission struct {
+	CommandName         string
+	SubcommandNameChain []string //can be empty
+}
+
+func (perm CommandPermission) Kind() PermissionKind {
+	return UsePerm
+}
+
+func (perm CommandPermission) Includes(otherPerm Permission) bool {
+
+	otherCmdPerm, ok := otherPerm.(CommandPermission)
+	if !ok || perm.Kind() != otherCmdPerm.Kind() {
+		return false
+	}
+
+	if otherCmdPerm.CommandName != perm.CommandName || len(otherCmdPerm.SubcommandNameChain) != len(perm.SubcommandNameChain) {
+		return false
+	}
+
+	for i, name := range perm.SubcommandNameChain {
+		if otherCmdPerm.SubcommandNameChain[i] != name {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (perm CommandPermission) String() string {
+	b := bytes.NewBufferString("[exec command:")
+	b.WriteString(perm.CommandName)
+
+	for _, name := range perm.SubcommandNameChain {
+		b.WriteString(" ")
+		b.WriteString(name)
+	}
+	b.WriteString("]")
+
+	return b.String()
 }
 
 type HttpPermission struct {
