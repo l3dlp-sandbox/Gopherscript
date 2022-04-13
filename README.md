@@ -91,6 +91,8 @@ func main() {
 
 ## Features
 
+The most important features are described in this section. If you want to learn Gopherscript or want to know more details about specific features you can go on the wiki.
+
 ### Basic
 
 ![image](https://user-images.githubusercontent.com/84961291/162411233-e183312b-3cb3-424c-baf0-ad32d3ab87b3.png)
