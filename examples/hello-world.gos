@@ -1,6 +1,6 @@
 require {
     use: {
-        globals: ["log", "map", "filter"]
+        globals: "*"
     }
 }
 
