@@ -665,7 +665,7 @@ type FunctionExpression struct {
 
 type FunctionDeclaration struct {
 	NodeBase
-	Function FunctionExpression
+	Function *FunctionExpression
 	Name     *IdentifierLiteral
 }
 
@@ -953,7 +953,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 			log.Panicln("'must' function calls are only supported for Go functions")
 		}
 	case *FunctionDeclaration:
-		fn = &f.Function
+		fn = f.Function
 		if must {
 			log.Panicln("'must' function calls are only supported for Go functions")
 		}
@@ -3027,7 +3027,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					Span: fn.Span,
 				},
-				Function: fn,
+				Function: &fn,
 				Name:     ident,
 			}
 		}
@@ -3946,262 +3946,274 @@ func traverse(v interface{}, fn func(interface{}) (TraversalAction, error), conf
 	return nil
 }
 
-func Walk(node Node, fn func(Node) error) error {
+func Walk(node, parent Node, fn func(Node, Node) error) error {
 	//refactor with panics ?
 
-	if err := fn(node); err != nil {
+	if err := fn(node, parent); err != nil {
 		return err
 	}
 
 	switch n := node.(type) {
 	case *Module:
 		if n.Requirements != nil {
-			if err := Walk(n.Requirements.Object, fn); err != nil {
+			if err := Walk(n.Requirements.Object, node, fn); err != nil {
 				return err
 			}
 		}
 
 		if n.GlobalConstantDeclarations != nil {
-			if err := Walk(n.GlobalConstantDeclarations, fn); err != nil {
+			if err := Walk(n.GlobalConstantDeclarations, node, fn); err != nil {
 				return err
 			}
 		}
 
 		for _, stmt := range n.Statements {
-			if err := Walk(stmt, fn); err != nil {
+			if err := Walk(stmt, node, fn); err != nil {
+				return err
+			}
+		}
+	case *EmbeddedModule:
+		if n.Requirements != nil {
+			if err := Walk(n.Requirements.Object, node, fn); err != nil {
+				return err
+			}
+		}
+
+		for _, stmt := range n.Statements {
+			if err := Walk(stmt, node, fn); err != nil {
 				return err
 			}
 		}
 	case *ImportStatement:
-		if err := Walk(n.Identifier, fn); err != nil {
+		if err := Walk(n.Identifier, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.URL, fn); err != nil {
+		if err := Walk(n.URL, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.ValidationString, fn); err != nil {
+		if err := Walk(n.ValidationString, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.ArgumentObject, fn); err != nil {
+		if err := Walk(n.ArgumentObject, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.GrantedPermissions, fn); err != nil {
+		if err := Walk(n.GrantedPermissions, node, fn); err != nil {
 			return err
 		}
 	case *SpawnExpression:
 		if n.GroupIdent != nil {
-			if err := Walk(n.GroupIdent, fn); err != nil {
+			if err := Walk(n.GroupIdent, node, fn); err != nil {
 				return err
 			}
 		}
-		if err := Walk(n.Globals, fn); err != nil {
+		if err := Walk(n.Globals, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.ExprOrVar, fn); err != nil {
+		if err := Walk(n.ExprOrVar, node, fn); err != nil {
 			return err
 		}
 		if n.GrantedPermissions != nil {
-			if err := Walk(n.GrantedPermissions, fn); err != nil {
+			if err := Walk(n.GrantedPermissions, node, fn); err != nil {
 				return err
 			}
 		}
 	case *Block:
 		for _, stmt := range n.Statements {
-			if err := Walk(stmt, fn); err != nil {
+			if err := Walk(stmt, node, fn); err != nil {
 				return err
 			}
 		}
 	case *FunctionDeclaration:
-		if err := Walk(n.Name, fn); err != nil {
+		if err := Walk(n.Name, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Function, fn); err != nil {
+		if err := Walk(n.Function, node, fn); err != nil {
 			return err
 		}
 	case *FunctionExpression:
 		for _, p := range n.Parameters {
-			if err := Walk(p.Var, fn); err != nil {
+			if err := Walk(p.Var, node, fn); err != nil {
 				return err
 			}
 		}
-		if err := Walk(n.Body, fn); err != nil {
+		if err := Walk(n.Body, node, fn); err != nil {
 			return err
 		}
 
 		if n.Requirements != nil {
-			if err := Walk(n.Requirements.Object, fn); err != nil {
+			if err := Walk(n.Requirements.Object, node, fn); err != nil {
 				return err
 			}
 		}
 
 	case *ObjectLiteral:
 		for _, prop := range n.Properties {
-			if err := Walk(&prop, fn); err != nil {
+			if err := Walk(&prop, node, fn); err != nil {
 				return err
 			}
 		}
 	case *ObjectProperty:
 		if n.Key != nil {
-			if err := Walk(n.Key, fn); err != nil {
+			if err := Walk(n.Key, node, fn); err != nil {
 				return err
 			}
 		}
 
-		if err := Walk(n.Value, fn); err != nil {
+		if err := Walk(n.Value, node, fn); err != nil {
 			return err
 		}
 	case *MemberExpression:
-		if err := Walk(n.Left, fn); err != nil {
+		if err := Walk(n.Left, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.PropertyName, fn); err != nil {
+		if err := Walk(n.PropertyName, node, fn); err != nil {
 			return err
 		}
 	case *IndexExpression:
-		if err := Walk(n.Indexed, fn); err != nil {
+		if err := Walk(n.Indexed, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Index, fn); err != nil {
+		if err := Walk(n.Index, node, fn); err != nil {
 			return err
 		}
 	case *SliceExpression:
-		if err := Walk(n.Indexed, fn); err != nil {
+		if err := Walk(n.Indexed, node, fn); err != nil {
 			return err
 		}
 		if n.StartIndex != nil {
-			if err := Walk(n.StartIndex, fn); err != nil {
+			if err := Walk(n.StartIndex, node, fn); err != nil {
 				return err
 			}
 		}
 		if n.EndIndex != nil {
-			if err := Walk(n.EndIndex, fn); err != nil {
+			if err := Walk(n.EndIndex, node, fn); err != nil {
 				return err
 			}
 		}
 	case *IdentifierMemberExpression:
-		if err := Walk(n.Left, fn); err != nil {
+		if err := Walk(n.Left, node, fn); err != nil {
 			return err
 		}
 		for _, p := range n.PropertyNames {
-			if err := Walk(p, fn); err != nil {
+			if err := Walk(p, node, fn); err != nil {
 				return err
 			}
 		}
 	case *KeyListExpression:
 		for _, key := range n.Keys {
-			if err := Walk(key, fn); err != nil {
+			if err := Walk(key, node, fn); err != nil {
 				return err
 			}
 		}
 	case *Assignment:
-		if err := Walk(n.Left, fn); err != nil {
+		if err := Walk(n.Left, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Right, fn); err != nil {
+		if err := Walk(n.Right, node, fn); err != nil {
 			return err
 		}
 	case *MultiAssignment:
 		for _, vr := range n.Variables {
-			if err := Walk(vr, fn); err != nil {
+			if err := Walk(vr, node, fn); err != nil {
 				return err
 			}
 		}
-		if err := Walk(n.Right, fn); err != nil {
+		if err := Walk(n.Right, node, fn); err != nil {
 			return err
 		}
 	case *Call:
-		Walk(n.Callee, fn)
+		Walk(n.Callee, node, fn)
 		for _, arg := range n.Arguments {
-			if err := Walk(arg, fn); err != nil {
+			if err := Walk(arg, node, fn); err != nil {
 				return err
 			}
 		}
 	case *IfStatement:
-		if err := Walk(n.Test, fn); err != nil {
+		if err := Walk(n.Test, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Consequent, fn); err != nil {
+		if err := Walk(n.Consequent, node, fn); err != nil {
 			return err
 		}
 		if n.Alternate != nil {
-			if err := Walk(n.Alternate, fn); err != nil {
+			if err := Walk(n.Alternate, node, fn); err != nil {
 				return err
 			}
 		}
 	case *ForStatement:
 		if n.KeyIndexVar != nil {
-			if err := Walk(n.KeyIndexVar, fn); err != nil {
+			if err := Walk(n.KeyIndexVar, node, fn); err != nil {
 				return err
 			}
-			if err := Walk(n.ValueElemVar, fn); err != nil {
+			if err := Walk(n.ValueElemVar, node, fn); err != nil {
 				return err
 			}
 		}
 
-		if err := Walk(n.IteratedValue, fn); err != nil {
+		if err := Walk(n.IteratedValue, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Body, fn); err != nil {
+		if err := Walk(n.Body, node, fn); err != nil {
 			return err
 		}
 	case *ReturnStatement:
-		if err := Walk(n.Expr, fn); err != nil {
+		if err := Walk(n.Expr, node, fn); err != nil {
 			return err
 		}
 	case *SwitchStatement:
-		if err := Walk(n.Discriminant, fn); err != nil {
+		if err := Walk(n.Discriminant, node, fn); err != nil {
 			return err
 		}
 		for _, switcCase := range n.Cases {
-			if err := Walk(switcCase, fn); err != nil {
+			if err := Walk(switcCase, node, fn); err != nil {
 				return err
 			}
 		}
 	case *MatchStatement:
-		if err := Walk(n.Discriminant, fn); err != nil {
+		if err := Walk(n.Discriminant, node, fn); err != nil {
 			return err
 		}
 		for _, switcCase := range n.Cases {
-			if err := Walk(switcCase, fn); err != nil {
+			if err := Walk(switcCase, node, fn); err != nil {
 				return err
 			}
 		}
 	case *Case:
-		if err := Walk(n.Value, fn); err != nil {
+		if err := Walk(n.Value, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Block, fn); err != nil {
+		if err := Walk(n.Block, node, fn); err != nil {
 			return err
 		}
 	case *LazyExpression:
-		if err := Walk(n.Expression, fn); err != nil {
+		if err := Walk(n.Expression, node, fn); err != nil {
 			return err
 		}
 	case *BinaryExpression:
-		if err := Walk(n.Left, fn); err != nil {
+		if err := Walk(n.Left, node, fn); err != nil {
 			return err
 		}
-		if err := Walk(n.Right, fn); err != nil {
+		if err := Walk(n.Right, node, fn); err != nil {
 			return err
 		}
 	case *UpperBoundRangeExpression:
-		if err := Walk(n.UpperBound, fn); err != nil {
+		if err := Walk(n.UpperBound, node, fn); err != nil {
 			return err
 		}
 	case *AbsolutePathExpression:
 		for _, e := range n.Slices {
-			if err := Walk(e, fn); err != nil {
+			if err := Walk(e, node, fn); err != nil {
 				return err
 			}
 		}
 	case *RelativePathExpression:
 		for _, e := range n.Slices {
-			if err := Walk(e, fn); err != nil {
+			if err := Walk(e, node, fn); err != nil {
 				return err
 			}
 		}
 	case *URLExpression:
-		if err := Walk(n.Path, fn); err != nil {
+		if err := Walk(n.Path, node, fn); err != nil {
 			return err
 		}
 	}
@@ -4210,7 +4222,11 @@ func Walk(node Node, fn func(Node) error) error {
 }
 
 func Check(node Node) error {
-	return Walk(node, func(n Node) error {
+
+	//key: *Module|*EmbeddedModule
+	fnDecls := make(map[Node]map[string]int)
+
+	return Walk(node, nil, func(n Node, parent Node) error {
 
 		switch node := n.(type) {
 		case *QuantityLiteral:
@@ -4259,6 +4275,24 @@ func Check(node Node) error {
 				return errors.New("invalid spawn expression: the expression should be a global func call, an embedded module or a variable (that can be global)")
 			default:
 				return errors.New("invalid spawn expression: the expression should be a global func call, an embedded module or a variable (that can be global)")
+			}
+		case *FunctionDeclaration:
+
+			switch parent.(type) {
+			case *Module, *EmbeddedModule:
+				fns, ok := fnDecls[parent]
+				if !ok {
+					fns = make(map[string]int)
+					fnDecls[parent] = fns
+				}
+
+				_, alreadyDeclared := fns[node.Name.Name]
+				if alreadyDeclared {
+					return fmt.Errorf("invalid function declaration: %s is already declared", node.Name.Name)
+				}
+				fns[node.Name.Name] = 0
+			default:
+				return errors.New("invalid function declaration: a function declaration should be a top level statement in a module (embedded or not)")
 			}
 		}
 

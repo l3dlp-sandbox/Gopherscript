@@ -2706,6 +2706,36 @@ func TestCheck(t *testing.T) {
 		n := MustParseModule(`sr {} {}`)
 		assert.NoError(t, Check(n.Statements[0]))
 	})
+
+	t.Run("function declaration in another function declaration", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(){
+				fn g(){
+
+				}
+			}
+		`)
+		assert.Error(t, Check(n))
+	})
+
+	t.Run("function declared twice", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(){}
+			fn f(){}
+		`)
+		assert.Error(t, Check(n))
+	})
+
+	t.Run("function with same name in an embedded module", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(){}
+
+			sr nil {
+				fn f(){}
+			}
+		`)
+		assert.NoError(t, Check(n))
+	})
 }
 
 func TestRequirements(t *testing.T) {
