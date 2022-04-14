@@ -1,6 +1,7 @@
 package main
 
 import (
+	//STANDARD LIBRARY
 	"bufio"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -54,6 +55,10 @@ const PATH_ARG_PROVIDED_TWICE = "path argument provided at least twice"
 const CONTENT_ARG_PROVIDED_TWICE = "content argument provided at least twice"
 const MISSING_URL_ARG = "missing URL argument"
 const HTTP_OPTION_OBJECT_PROVIDED_TWICE = "http option object provided at least twice"
+
+const JSON_CTYPE = "application/json"
+const HTML_CTYPE = "text/html"
+const PLAIN_TEXT_CTYPE = "text/plain"
 
 var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -533,6 +538,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			var subcommandNameChain []string
 			var cmdArgs []string
 
+			//we remove the subcommand chain from <argss>
 			for len(args) != 0 {
 				name, ok := args[0].(gopherscript.Identifier)
 				if ok {
@@ -543,6 +549,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				}
 			}
 
+			//we check that remaining args are simple values
 			for _, arg := range args {
 				if gopherscript.IsSimpleGopherVal(arg) {
 					cmdArgs = append(cmdArgs, fmt.Sprint(arg))
@@ -615,6 +622,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						if handler != nil {
 							return nil, errors.New("handler already provided")
 						}
+
 						handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 							state := NewState(ctx)
 
@@ -651,6 +659,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					return nil, errors.New("no address required")
 				}
 
+				//if no handler was provided we set a default handler that writes "hello"
 				if handler == nil {
 					mux := http.NewServeMux()
 					mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -758,6 +767,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"map": func(ctx *gopherscript.Context, node gopherscript.Node, list gopherscript.List) (gopherscript.List, error) {
 			result := gopherscript.List{}
 
+			//should ctx allow to do that instead ?
 			state.PushScope()
 			defer state.PopScope()
 
@@ -843,7 +853,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					}
 
 					switch contentType.WithoutParams() {
-					case "application/json", "text/html", "text/plain":
+					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
 						return string(b), nil
 					}
 
@@ -858,7 +868,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						return nil, err
 					}
 					switch contentType {
-					case "application/json", "text/html", "text/plain":
+					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
 						return string(b), nil
 					}
 					return b, nil
@@ -910,7 +920,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					}
 
 					switch contentType {
-					case "application/json", "text/html", "text/plain":
+					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
 						return string(b), nil
 					}
 					return b, nil
@@ -984,7 +994,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					}
 
 					switch contentType {
-					case "application/json", "text/html", "text/plain":
+					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
 						return string(b), nil
 					}
 					return b, nil
@@ -1035,7 +1045,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					}
 
 					switch contentType {
-					case "application/json", "text/html", "text/plain":
+					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
 						return string(b), nil
 					}
 					return b, nil
@@ -1151,9 +1161,9 @@ type mimetype string
 func mime_(ctx *gopherscript.Context, arg string) (mimetype, error) {
 	switch arg {
 	case "json":
-		arg = "application/json"
+		arg = JSON_CTYPE
 	case "text":
-		arg = "text/plain"
+		arg = PLAIN_TEXT_CTYPE
 	}
 
 	_, _, err := mime.ParseMediaType(arg)
@@ -1352,7 +1362,7 @@ func (resp *httpResponse) WriteJSON(ctx *gopherscript.Context, v interface{}) (i
 	if !json.Valid(b) {
 		return 0, fmt.Errorf("not valid JSON : %s", string(b))
 	}
-	resp.rw.Header().Set("Content-Type", "application/json")
+	resp.rw.Header().Set("Content-Type", JSON_CTYPE)
 	return resp.rw.Write(b)
 }
 
@@ -1635,6 +1645,8 @@ func httpDelete(ctx *gopherscript.Context, args ...interface{}) (*http.Response,
 
 func makeHttpServer(addr string, handler http.Handler, certFilePath string, keyFilePath string) (*http.Server, string, string, error) {
 
+	//we generate a self signed certificate that we write to disk so that
+	//we can reuse it
 	CERT_FILEPATH := "localhost.cert"
 	CERT_KEY_FILEPATH := "localhost.key"
 
