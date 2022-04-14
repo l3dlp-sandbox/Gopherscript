@@ -1,7 +1,7 @@
 # gos executable
 
 The ``gos`` executable allows you to execute scripts & launch a REPL.
-It provides a small set of functions to do basic operations on files and HTTP resources.
+It provides a small set of functions to execute commands and do basic operations on files and HTTP resources.
 Like Gopherscript it is not production read yet. If you find a bug of want to suggest a feature, create an issue please !
 
 ## Security & Minimalism
@@ -46,6 +46,16 @@ gos repl
 
 Before starting the REPL ``gos`` will execute ``~/startup.gos`` and grant the required permissions by the script to the REPL.\
 No additional permissions will be granted. You can copy the file named ``startup.gos`` in this repository and modify it.
+
+
+## Execute commands
+
+```
+ex echo "hello"   # 'ex echo hello' will not work
+ex go help
+```
+
+NOTE: Almost no commands are allowed by default, edit your ``startup.gos`` file to allow more commands (and subcommands).
 
 
 ## Read, Create, Update, Delete, Provide resources
