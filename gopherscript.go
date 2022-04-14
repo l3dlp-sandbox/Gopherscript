@@ -1263,6 +1263,8 @@ func ParseAndCheckModule(s string, fpath string) (*Module, error) {
 type ParsingError struct {
 	Message string
 	Index   int
+
+	NodeStartIndex int //< 0 if not specified
 }
 
 func (err ParsingError) Error() string {
@@ -1418,11 +1420,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if i >= len(s) {
-			panic(ParsingError{"unterminated block, missing closing brace '}", i})
+			panic(ParsingError{"unterminated block, missing closing brace '}", i, openingBraceIndex})
 		}
 
 		if s[i] != '}' {
-			panic(ParsingError{"invalid block", i})
+			panic(ParsingError{"invalid block", i, openingBraceIndex})
 		}
 		i++
 
@@ -1475,6 +1477,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"a path interpolation should contain an identifier without spaces, example: $name$ ",
 						i,
+						-1,
 					})
 				}
 
@@ -1498,6 +1501,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"unterminated path interpolation",
 				i,
+				-1,
 			})
 		}
 
@@ -1532,6 +1536,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"a path pattern cannot be interpolated '" + value + "'",
 						i,
+						start,
 					})
 				}
 
@@ -1539,6 +1544,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"prefix path patterns cannot contain globbing patterns '" + value + "'",
 						i,
+						start,
 					})
 				}
 
@@ -1561,6 +1567,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"a path expression cannot contain interpolations next to each others",
 					i,
+					start,
 				})
 			}
 
@@ -1583,6 +1590,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"'/...' can only be present at the end of a path pattern  '" + value + "'",
 					i,
+					start,
 				})
 			}
 			if isAbsolute {
@@ -1624,6 +1632,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"URL-like patterns cannot contain more than two subsequents dots except /... at the end for URL patterns",
 				i,
+				start,
 			})
 		}
 
@@ -1631,6 +1640,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"URLs with a query parts are not supported yet'" + _url,
 				i,
+				start,
 			})
 		}
 		span := NodeSpan{ident.Span.Start, i}
@@ -1648,6 +1658,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid HTTP host pattern '" + _url,
 							i,
+							start,
 						})
 					}
 				} else {
@@ -1657,6 +1668,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid HTTP host pattern '" + _url + "' : " + err.Error(),
 							i,
+							start,
 						})
 					}
 				}
@@ -1672,6 +1684,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"an URL expression cannot contain interpolations next to each others",
 						i,
+						start,
 					})
 				}
 
@@ -1679,6 +1692,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"an URL expression cannot ends with /...",
 						i,
+						start,
 					})
 				}
 
@@ -1709,6 +1723,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"invalid URL '" + _url + "'",
 				i,
+				start,
 			})
 		}
 
@@ -1717,6 +1732,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"invalid URL '" + _url + "'",
 				i,
+				start,
 			})
 		}
 
@@ -1779,6 +1795,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated identifier member expression",
 						i,
+						start,
 					})
 				}
 
@@ -1786,6 +1803,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"property name should start with a letter not '" + string(s[i]) + "'",
 						i,
+						start,
 					})
 				}
 
@@ -1829,6 +1847,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"require is a keyword, it cannot be used as an identifier",
 				i,
+				start,
 			})
 		case "http", "https":
 			if i < len(s)-2 && string(s[i:i+3]) == "://" {
@@ -1840,6 +1859,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"invalid URI : unsupported protocol",
 				i,
+				start,
 			})
 		}
 
@@ -1859,6 +1879,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated key list, missing closing brace '}'",
 					i,
+					start,
 				})
 			}
 
@@ -1868,6 +1889,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"a key list can only contain identifiers",
 					i,
+					start,
 				})
 			}
 
@@ -1878,6 +1900,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"unterminated key list, missing closing brace '}'",
 				i,
+				start,
 			})
 		}
 		i++
@@ -1931,6 +1954,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		case '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 			'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
 			identLike := parseIdentLike()
+			spawnExprStart := identLike.Base().Span.Start
 			var name string
 
 			switch v := identLike.(type) {
@@ -1948,6 +1972,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid spawn expression: sr should be followed by two expressions",
 						i,
+						spawnExprStart,
 					})
 				}
 
@@ -1973,6 +1998,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid spawn expression: sr should be followed by two expressions",
 						i,
+						spawnExprStart,
 					})
 				}
 
@@ -1999,6 +2025,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated embedded module",
 							i,
+							start,
 						})
 					}
 
@@ -2020,8 +2047,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					allowIdent := parseExpression()
 					if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
 						panic(ParsingError{
-							"import statement: argument should be followed by a the 'allow' keyword",
+							"spawn expression: argument should be followed by a the 'allow' keyword",
 							i,
+							spawnExprStart,
 						})
 					}
 
@@ -2034,6 +2062,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
 							i,
+							spawnExprStart,
 						})
 					}
 				}
@@ -2108,8 +2137,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 				if i >= len(s) || (s[i] != '\t' && s[i] != ' ') {
 					panic(ParsingError{
-						"a non-parenthesized call expression should have arguments and the callee (<name$) should be followed by a space",
+						"a non-parenthesized call expression should have arguments and the callee (<name>$) should be followed by a space",
 						i,
+						identLike.Base().Span.Start,
 					})
 				}
 
@@ -2161,6 +2191,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid floating point literal '" + raw + "'",
 						i,
+						start,
 					})
 				}
 				literal = &FloatLiteral{
@@ -2179,6 +2210,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid integer literal '" + raw + "'",
 						i,
+						start,
 					})
 				}
 
@@ -2256,6 +2288,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"Only identifiers and strings are valid object keys",
 								i,
+								openingBraceIndex,
 							})
 						}
 
@@ -2276,6 +2309,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"invalid object literal, missing colon after key '" + lastKeyName + "'",
 								i,
+								openingBraceIndex,
 							})
 						}
 
@@ -2284,6 +2318,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								panic(ParsingError{
 									"invalid object literal, following key should be followed by a colon : '" + lastKeyName + "'",
 									i,
+									openingBraceIndex,
 								})
 							}
 							i++
@@ -2298,6 +2333,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid object literal, missing value after colon, key '" + lastKeyName + "'",
 						i,
+						openingBraceIndex,
 					})
 				}
 				v := parseExpression()
@@ -2310,6 +2346,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"invalid object literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 								i,
+								openingBraceIndex,
 							})
 						}
 					}
@@ -2333,6 +2370,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated object literal, missing closing brace '}'",
 					i,
+					openingBraceIndex,
 				})
 			}
 			i++
@@ -2365,6 +2403,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated list literal, missing closing bracket ']'",
 					i,
+					openingBracketIndex,
 				})
 			}
 			i++
@@ -2388,6 +2427,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated string literal '" + string(s[start:]) + "'",
 					i,
+					start,
 				})
 			}
 			i++
@@ -2401,6 +2441,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"invalid string literal '" + raw + "': " + err.Error(),
 					i,
+					start,
 				})
 			}
 
@@ -2444,6 +2485,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"invalid lazy expression, '@' should be followed by an expression",
 					i,
+					start,
 				})
 			}
 
@@ -2476,6 +2518,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing operator",
 					i,
+					openingParenIndex,
 				})
 			}
 
@@ -2509,6 +2552,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						NON_EXISTING_OPERATOR,
 						i,
+						openingParenIndex,
 					})
 				}
 				if s[i] == '=' {
@@ -2518,6 +2562,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
+					openingParenIndex,
 				})
 			case '=':
 				i++
@@ -2525,6 +2570,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						NON_EXISTING_OPERATOR,
 						i,
+						openingParenIndex,
 					})
 				}
 				if s[i] == '=' {
@@ -2534,6 +2580,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
+					openingParenIndex,
 				})
 			case 'i':
 				i++
@@ -2541,6 +2588,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						UNTERMINATED_BIN_EXPR,
 						i,
+						openingParenIndex,
 					})
 				}
 				if s[i] == 'n' {
@@ -2550,6 +2598,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
+					openingParenIndex,
 				})
 			case 'k':
 				KEYOF_LEN := len("keyof")
@@ -2561,6 +2610,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
+					openingParenIndex,
 				})
 			case '.':
 				operator = Dot
@@ -2576,6 +2626,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid binary expression, non existing operator",
 						i,
+						openingParenIndex,
 					})
 				}
 			}
@@ -2591,6 +2642,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing right operand",
 					i,
+					openingParenIndex,
 				})
 			}
 
@@ -2601,6 +2653,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing closing parenthesis",
 					i,
+					openingParenIndex,
 				})
 			}
 
@@ -2608,6 +2661,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"invalid binary expression",
 					i,
+					openingParenIndex,
 				})
 			}
 
@@ -2636,6 +2690,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated member/index expression",
 						i,
+						first.Base().Span.Start,
 					})
 				}
 
@@ -2646,6 +2701,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated index expression",
 							i,
+							first.Base().Span.Start,
 						})
 					}
 
@@ -2665,6 +2721,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated index/slice expression",
 							i,
+							first.Base().Span.Start,
 						})
 					}
 
@@ -2673,6 +2730,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"invalid slice expression, a single colon should be present",
 								i,
+								first.Base().Span.Start,
 							})
 						}
 						isSliceExpr = true
@@ -2685,6 +2743,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated slice expression, missing end index",
 							i,
+							first.Base().Span.Start,
 						})
 					}
 
@@ -2698,6 +2757,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated index/slice expression, missing closing bracket ']'",
 							i,
+							first.Base().Span.Start,
 						})
 					}
 
@@ -2731,6 +2791,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"property name should start with a letter not '" + string(s[i]) + "'",
 							i,
+							first.Base().Span.Start,
 						})
 					}
 
@@ -2799,6 +2860,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated call, missing closing parenthesis ')'",
 					i,
+					first.Base().Span.Start,
 				})
 			}
 			i++
@@ -2822,6 +2884,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		panic(ParsingError{
 			fmt.Sprintf("an expression was expected: ...%s<<here>>%s...", left, right),
 			i,
+			first.Base().Span.Start,
 		})
 	}
 
@@ -2851,6 +2914,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated global const declarations",
 					i,
+					start,
 				})
 			}
 
@@ -2858,6 +2922,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"invalid global const declarations, expected opening parenthesis after 'const'",
 					i,
+					start,
 				})
 			}
 
@@ -2875,6 +2940,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid global const declarations, missing closing parenthesis",
 						i,
+						start,
 					})
 				}
 
@@ -2884,6 +2950,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid global const declarations, left hand sides must be global variable identifiers",
 						i,
+						start,
 					})
 				}
 
@@ -2893,6 +2960,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						fmt.Sprintf("invalid global const declarations, missing '=' after name %s", globvar.Name),
 						i,
+						start,
 					})
 				}
 
@@ -2903,6 +2971,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						fmt.Sprintf("invalid global const declarations, missing value after '$$%s ='", globvar.Name),
 						i,
+						start,
 					})
 				}
 
@@ -2911,6 +2980,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
 						i,
+						start,
 					})
 				}
 
@@ -2946,6 +3016,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					fmt.Sprintf("function name should be an identifier not a %T", idnt),
 					i,
+					start,
 				})
 			}
 		}
@@ -2954,6 +3025,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"function : fn keyword (or function name) should be followed by '(' <param list> ')' ",
 				i,
+				start,
 			})
 		}
 
@@ -2974,6 +3046,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"function : the parameter list should contain variables separated by a comma",
 					i,
+					start,
 				})
 			}
 
@@ -2988,6 +3061,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"function : unterminated parameter list : missing closing parenthesis",
 				i,
+				start,
 			})
 		}
 
@@ -2995,6 +3069,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"function : invalid syntax",
 				i,
+				start,
 			})
 		}
 
@@ -3009,6 +3084,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			panic(ParsingError{
 				"function : parameter list should be followed by a block, not " + string(s[i]),
 				i,
+				start,
 			})
 		}
 
@@ -3059,6 +3135,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated if statement, missing block",
 						i,
+						expr.Base().Span.Start,
 					})
 				}
 
@@ -3066,6 +3143,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"invalid if statement, test expression should be followed by a block, not " + string(s[i]),
 						i,
+						expr.Base().Span.Start,
 					})
 				}
 
@@ -3083,6 +3161,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated if statement, missing block after 'else'",
 							i,
+							expr.Base().Span.Start,
 						})
 					}
 
@@ -3090,6 +3169,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid if statement, else should be followed by a block, not " + string(s[i]),
 							i,
+							expr.Base().Span.Start,
 						})
 					}
 
@@ -3106,6 +3186,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Alternate:  alternate,
 				}
 			case "for":
+				forStart := expr.Base().Span.Start
 				eatSpace()
 				keyIndexVar := parseExpression()
 
@@ -3117,6 +3198,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid for statement",
 							i,
+							forStart,
 						})
 					}
 
@@ -3124,6 +3206,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"for statement : key/index variale should be followed by a comma ',' , not " + string(s[i]),
 							i,
+							forStart,
 						})
 					}
 
@@ -3134,6 +3217,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated for statement",
 							i,
+							forStart,
 						})
 					}
 
@@ -3143,6 +3227,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexVar),
 							i,
+							forStart,
 						})
 					}
 
@@ -3152,6 +3237,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated for statement",
 							i,
+							forStart,
 						})
 					}
 
@@ -3159,6 +3245,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid for statement : missing 'in' keyword ",
 							i,
+							forStart,
 						})
 					}
 
@@ -3168,6 +3255,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid for statement : 'in' keyword should be followed by a space",
 							i,
+							forStart,
 						})
 					}
 					eatSpace()
@@ -3176,6 +3264,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated for statement, missing value after 'in'",
 							i,
+							forStart,
 						})
 					}
 
@@ -3187,6 +3276,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"unterminated for statement, missing block",
 							i,
+							forStart,
 						})
 					}
 
@@ -3212,6 +3302,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"unterminated for statement, missing block",
 								i,
+								forStart,
 							})
 						}
 
@@ -3230,21 +3321,26 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						fmt.Sprintf("invalid for statement : 'for' should be followed by a binary range expression, operator is %s", v.Operator.String()),
 						i,
+						forStart,
 					})
 				default:
 					panic(ParsingError{
 						fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexVar),
 						i,
+						forStart,
 					})
 				}
 
 			case "switch", "match":
+				switchMatchStart := expr.Base().Span.Start
+
 				eatSpace()
 
 				if i >= len(s) {
 					panic(ParsingError{
 						"unterminated switch statement: missing value",
 						i,
+						switchMatchStart,
 					})
 				}
 
@@ -3257,6 +3353,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated switch statement : missing body",
 						i,
+						switchMatchStart,
 					})
 				}
 
@@ -3272,6 +3369,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"unterminated switch statement",
 								i,
+								switchMatchStart,
 							})
 						}
 						valueNode := parseExpression()
@@ -3279,6 +3377,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							panic(ParsingError{
 								"invalid switch/match case : only simple value literals are supported (1, 1.0, /home, ..)",
 								i,
+								switchMatchStart,
 							})
 						}
 						valueNodes = append(valueNodes, valueNode)
@@ -3298,6 +3397,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"invalid switch case : missing block",
 							i,
+							switchMatchStart,
 						})
 					}
 
@@ -3322,6 +3422,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated switch statement : missing closing body brace '}'",
 						i,
+						switchMatchStart,
 					})
 				}
 
@@ -3351,6 +3452,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				return fn
 			case "import":
+				importStart := expr.Base().Span.Start
+
 				eatSpace()
 
 				identifier := parseIdentLike()
@@ -3358,7 +3461,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: import should be followed by an identifier",
 						i,
+						importStart,
 					})
+
 				}
 
 				eatSpace()
@@ -3368,6 +3473,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: URL should be a URL literal",
 						i,
+						importStart,
 					})
 				}
 
@@ -3378,6 +3484,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: checksum should be a string literal",
 						i,
+						importStart,
 					})
 				}
 
@@ -3388,6 +3495,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: argument should be an object literal",
 						i,
+						importStart,
 					})
 				}
 
@@ -3397,6 +3505,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: argument should be followed by a the 'allow' keyword",
 						i,
+						importStart,
 					})
 				}
 
@@ -3407,6 +3516,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"import statement: 'allow' keyword should be followed by an object literal (permissions)",
 						i,
+						importStart,
 					})
 				}
 
@@ -3441,6 +3551,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						panic(ParsingError{
 							"assign keyword should be followed by variables (assign $a $b = <value>)",
 							i,
+							expr.Base().Span.Start,
 						})
 					}
 					vars = append(vars, e)
@@ -3452,6 +3563,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					panic(ParsingError{
 						"unterminated assign statement, missing '='",
 						i,
+						expr.Base().Span.Start,
 					})
 				}
 
@@ -3485,6 +3597,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				panic(ParsingError{
 					"unterminated assignment, missing value after '='",
 					i,
+					expr.Base().Span.Start,
 				})
 			}
 			right := parseExpression()
