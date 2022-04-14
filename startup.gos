@@ -8,7 +8,13 @@ require {
         globals: "*"
         : https://*
         commands: {
-            echo: []
+            echo: {}
+            go: {
+                help: {
+                    build: {} 
+                    run: {}
+                }
+            }
         }
     },
     create: {

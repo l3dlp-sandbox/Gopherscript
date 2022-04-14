@@ -273,17 +273,82 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 
 	var perms []Permission
 
-	objLit, ok := n.(*ObjectLiteral)
+	ERR_PREFIX := "invalid requirements, use: commands: "
+	ERR := ERR_PREFIX + "a command (or subcommand) name should be followed by object literals with the next subcommands as keys (or empty)."
+
+	objLit0, ok := n.(*ObjectLiteral)
 	if !ok {
-		return nil, errors.New("invalid requirements, use: commands: value should be an object literal whose keys are command names")
+		return nil, errors.New(ERR)
 	}
 
-	for _, p := range objLit.Properties {
-		cmdName := p.Name()
-		perm := CommandPermission{
-			CommandName: cmdName,
+	for _, p0 := range objLit0.Properties {
+
+		if p0.HasImplicitKey() {
+			return nil, errors.New(ERR)
 		}
-		perms = append(perms, perm)
+
+		cmdName := p0.Name()
+
+		objLit1, ok := p0.Value.(*ObjectLiteral)
+		if !ok {
+			return nil, errors.New(ERR)
+		}
+
+		if len(objLit1.Properties) == 0 {
+			cmdPerm := CommandPermission{
+				CommandName: cmdName,
+			}
+			perms = append(perms, cmdPerm)
+			continue
+		}
+
+		for _, p1 := range objLit1.Properties {
+
+			if p1.HasImplicitKey() {
+				return nil, errors.New(ERR)
+			}
+
+			subcmdName := p1.Name()
+
+			objLit2, ok := p1.Value.(*ObjectLiteral)
+			if !ok {
+				return nil, errors.New(ERR)
+			}
+
+			if len(objLit2.Properties) == 0 {
+				subcommandPerm := CommandPermission{
+					CommandName:         cmdName,
+					SubcommandNameChain: []string{subcmdName},
+				}
+				perms = append(perms, subcommandPerm)
+				continue
+			}
+
+			for _, p2 := range objLit2.Properties {
+
+				if p2.HasImplicitKey() {
+					return nil, errors.New(ERR)
+				}
+
+				deepSubcmdName := p2.Name()
+
+				objLit3, ok := p2.Value.(*ObjectLiteral)
+				if !ok {
+					return nil, errors.New(ERR)
+				}
+
+				if len(objLit3.Properties) == 0 {
+					subcommandPerm := CommandPermission{
+						CommandName:         cmdName,
+						SubcommandNameChain: []string{subcmdName, deepSubcmdName},
+					}
+					perms = append(perms, subcommandPerm)
+					continue
+				}
+
+				return nil, errors.New(ERR_PREFIX + "the subcommand chain has a maximum length of 2")
+			}
+		}
 	}
 
 	return perms, nil
@@ -447,6 +512,10 @@ type ObjectProperty struct {
 	NodeBase
 	Key   Node //can be nil (implicit key)
 	Value Node
+}
+
+func (prop ObjectProperty) HasImplicitKey() bool {
+	return prop.Key == nil
 }
 
 func (prop ObjectProperty) Name() string {
