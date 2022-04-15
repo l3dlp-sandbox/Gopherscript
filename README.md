@@ -69,8 +69,8 @@ func main() {
             require {
                 use: {globals: "*"} 
             }
-            $a = 1
-            $user = makeUser()
+            a = 1
+            user = makeUser()
             return [
                 ($a + 2),
                 $user.Name
