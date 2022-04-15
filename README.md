@@ -100,12 +100,12 @@ The most important features are described in this section. If you want to learn 
 
 ### Basic
 
-![image](https://user-images.githubusercontent.com/84961291/162411233-e183312b-3cb3-424c-baf0-ad32d3ab87b3.png)
+![image](https://user-images.githubusercontent.com/84961291/163572856-5ca4ddd5-3bd0-44d6-a73e-efde341a9bd7.png)
 
 <!--
 
-$integer = 1 
-$float = 1.0
+integer = 1 
+float = 1.0
 
 if true {
     log 1 2
@@ -113,14 +113,15 @@ if true {
     log(3,4)
 }
 
-$slice1 = ["a", "b", 3]
-$slice2 = [
+slice1 = ["a", "b", 3, $integer]
+slice2 = [
     "a" 
     "b"
     3
+    $integer
 ]
 
-$object = {name: "Foo"}
+object = {name: "Foo"}
 -->
 
 ### Permissions
