@@ -169,7 +169,7 @@ type Permission interface {
 ./file.json
 
 # Path expressions
-/home/user/$dirpath
+/home/user/$dirpath$
 
 # Path patterns support basic globbing (*, [set], ?) and prefixing (not both at the same time).
 ./data/*.json
@@ -191,7 +191,7 @@ https://example.com/index.html
 https://localhost/
 
 # URL expressions
-https://example.com/users/$id
+https://example.com/users/$id$
 
 # URL pattern literals (only prefix patterns supported)
 https://example.com/users/...
