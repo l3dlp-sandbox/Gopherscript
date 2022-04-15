@@ -91,6 +91,9 @@ func main() {
 }
 ```
 
+You can learn more about the interactions between Gopherscript and Golang [here](https://github.com/debloat-dev/Gopherscript/wiki/Advanced#interaction-with-golang).
+
+
 ## Features
 
 The most important features are described in this section. If you want to learn Gopherscript or want to know more details about specific features you can go on the wiki.
@@ -215,45 +218,6 @@ myfunc 1 { }
 myfunc 1 { 
 
 }
-```
-
-### Calling Go functions & Go values
-
-When you create the initial global state you can expose Go functions or values.
-Go values & functions are "wrapped" in a reflect.Value. Reflection is used when calling Go functions or accessing fields.
-
-```go
-
-type User struct {
-    Name string
-}
-
-...
-
-gos.NewState(ctx, map[string]interface{}{
-    "user": User{Name: "Foo"},
-    "makeUser": func(ctx *gos.Context) User {
-        return User{Name: "Bar"}
-    },
-    /* Golang values are unwrapped before being passed to a Go function.
-       Functions results that are not valid Gopherscript values are wrapped.
-       If a Go function returns multiple results there will be returned in a List{}.
-    */
-    "hasName": func(ctx *gos.Context, user User, name string) bool {
-        return user.Name == name
-    },
-})
-
-```
-
-Gopherscript:
-
-```
-$user = makeUser()
-$user.Name              # "Bar"
-hasName($user, "Bar")   # true
-
-$$user                  # User{Name: "Foo"}
 ```
 
 ### Imports
