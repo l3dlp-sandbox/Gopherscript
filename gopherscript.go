@@ -709,6 +709,16 @@ func isSimpleValueLiteral(node Node) bool {
 	}
 }
 
+type NodeCategory int
+
+const (
+	UnspecifiedCategory NodeCategory = iota
+	URLlike
+	Pathlike
+	IdentLike
+	KnownType
+)
+
 // the following types are considered as Gopherscript values
 
 //int, float64, string, bool, reflect.Value
@@ -1265,6 +1275,8 @@ type ParsingError struct {
 	Index   int
 
 	NodeStartIndex int //< 0 if not specified
+	NodeCategory   NodeCategory
+	NodeType       Node //not nil if .NodeCategory is KnownType
 }
 
 func (err ParsingError) Error() string {
@@ -1420,11 +1432,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if i >= len(s) {
-			panic(ParsingError{"unterminated block, missing closing brace '}", i, openingBraceIndex})
+			panic(ParsingError{
+				"unterminated block, missing closing brace '}",
+				i,
+				openingBraceIndex,
+				KnownType,
+				(*Block)(nil),
+			})
 		}
 
 		if s[i] != '}' {
-			panic(ParsingError{"invalid block", i, openingBraceIndex})
+			panic(ParsingError{
+				"invalid block",
+				i,
+				openingBraceIndex,
+				KnownType,
+				(*Block)(nil),
+			})
 		}
 		i++
 
@@ -1478,6 +1502,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"a path interpolation should contain an identifier without spaces, example: $name$ ",
 						i,
 						-1,
+						UnspecifiedCategory,
+						nil,
 					})
 				}
 
@@ -1502,6 +1528,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"unterminated path interpolation",
 				i,
 				-1,
+				UnspecifiedCategory,
+				nil,
 			})
 		}
 
@@ -1537,6 +1565,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"a path pattern cannot be interpolated '" + value + "'",
 						i,
 						start,
+						Pathlike,
+						nil,
 					})
 				}
 
@@ -1545,6 +1575,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"prefix path patterns cannot contain globbing patterns '" + value + "'",
 						i,
 						start,
+						Pathlike,
+						nil,
 					})
 				}
 
@@ -1568,6 +1600,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"a path expression cannot contain interpolations next to each others",
 					i,
 					start,
+					Pathlike,
+					nil,
 				})
 			}
 
@@ -1591,6 +1625,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"'/...' can only be present at the end of a path pattern  '" + value + "'",
 					i,
 					start,
+					Pathlike,
+					nil,
 				})
 			}
 			if isAbsolute {
@@ -1633,6 +1669,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"URL-like patterns cannot contain more than two subsequents dots except /... at the end for URL patterns",
 				i,
 				start,
+				URLlike,
+				nil,
 			})
 		}
 
@@ -1641,6 +1679,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"URLs with a query parts are not supported yet'" + _url,
 				i,
 				start,
+				URLlike,
+				nil,
 			})
 		}
 		span := NodeSpan{ident.Span.Start, i}
@@ -1659,6 +1699,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid HTTP host pattern '" + _url,
 							i,
 							start,
+							URLlike,
+							(*HTTPHostPatternLiteral)(nil),
 						})
 					}
 				} else {
@@ -1669,6 +1711,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid HTTP host pattern '" + _url + "' : " + err.Error(),
 							i,
 							start,
+							URLlike,
+							(*HTTPHostPatternLiteral)(nil),
 						})
 					}
 				}
@@ -1685,6 +1729,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"an URL expression cannot contain interpolations next to each others",
 						i,
 						start,
+						URLlike,
+						nil,
 					})
 				}
 
@@ -1693,6 +1739,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"an URL expression cannot ends with /...",
 						i,
 						start,
+						URLlike,
+						(*URLExpression)(nil),
 					})
 				}
 
@@ -1724,6 +1772,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"invalid URL '" + _url + "'",
 				i,
 				start,
+				URLlike,
+				nil,
 			})
 		}
 
@@ -1733,6 +1783,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"invalid URL '" + _url + "'",
 				i,
 				start,
+				URLlike,
+				nil,
 			})
 		}
 
@@ -1796,6 +1848,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"unterminated identifier member expression",
 						i,
 						start,
+						IdentLike,
+						(*IdentifierMemberExpression)(nil),
 					})
 				}
 
@@ -1804,6 +1858,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"property name should start with a letter not '" + string(s[i]) + "'",
 						i,
 						start,
+						IdentLike,
+						(*IdentifierMemberExpression)(nil),
 					})
 				}
 
@@ -1848,6 +1904,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"require is a keyword, it cannot be used as an identifier",
 				i,
 				start,
+				UnspecifiedCategory,
+				nil,
 			})
 		case "http", "https":
 			if i < len(s)-2 && string(s[i:i+3]) == "://" {
@@ -1860,6 +1918,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"invalid URI : unsupported protocol",
 				i,
 				start,
+				URLlike,
+				nil,
 			})
 		}
 
@@ -1880,6 +1940,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated key list, missing closing brace '}'",
 					i,
 					start,
+					KnownType,
+					(*KeyListExpression)(nil),
 				})
 			}
 
@@ -1890,6 +1952,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"a key list can only contain identifiers",
 					i,
 					start,
+					KnownType,
+					(*KeyListExpression)(nil),
 				})
 			}
 
@@ -1901,6 +1965,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"unterminated key list, missing closing brace '}'",
 				i,
 				start,
+				KnownType,
+				(*KeyListExpression)(nil),
 			})
 		}
 		i++
@@ -1973,6 +2039,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid spawn expression: sr should be followed by two expressions",
 						i,
 						spawnExprStart,
+						KnownType,
+						(*SpawnExpression)(nil),
 					})
 				}
 
@@ -1999,6 +2067,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid spawn expression: sr should be followed by two expressions",
 						i,
 						spawnExprStart,
+						KnownType,
+						(*SpawnExpression)(nil),
 					})
 				}
 
@@ -2026,6 +2096,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated embedded module",
 							i,
 							start,
+							KnownType,
+							(*EmbeddedModule)(nil),
 						})
 					}
 
@@ -2050,6 +2122,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"spawn expression: argument should be followed by a the 'allow' keyword",
 							i,
 							spawnExprStart,
+							KnownType,
+							(*SpawnExpression)(nil),
 						})
 					}
 
@@ -2063,6 +2137,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
 							i,
 							spawnExprStart,
+							KnownType,
+							(*SpawnExpression)(nil),
 						})
 					}
 				}
@@ -2140,6 +2216,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"a non-parenthesized call expression should have arguments and the callee (<name>$) should be followed by a space",
 						i,
 						identLike.Base().Span.Start,
+						KnownType,
+						(*Call)(nil),
 					})
 				}
 
@@ -2192,6 +2270,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid floating point literal '" + raw + "'",
 						i,
 						start,
+						KnownType,
+						(*FloatLiteral)(nil),
 					})
 				}
 				literal = &FloatLiteral{
@@ -2211,6 +2291,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid integer literal '" + raw + "'",
 						i,
 						start,
+						KnownType,
+						(*IntLiteral)(nil),
 					})
 				}
 
@@ -2289,6 +2371,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								"Only identifiers and strings are valid object keys",
 								i,
 								openingBraceIndex,
+								KnownType,
+								(*ObjectLiteral)(nil),
 							})
 						}
 
@@ -2310,6 +2394,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								"invalid object literal, missing colon after key '" + lastKeyName + "'",
 								i,
 								openingBraceIndex,
+								KnownType,
+								(*ObjectLiteral)(nil),
 							})
 						}
 
@@ -2319,6 +2405,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									"invalid object literal, following key should be followed by a colon : '" + lastKeyName + "'",
 									i,
 									openingBraceIndex,
+									KnownType,
+									(*ObjectLiteral)(nil),
 								})
 							}
 							i++
@@ -2334,6 +2422,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid object literal, missing value after colon, key '" + lastKeyName + "'",
 						i,
 						openingBraceIndex,
+						KnownType,
+						(*ObjectLiteral)(nil),
 					})
 				}
 				v := parseExpression()
@@ -2347,6 +2437,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								"invalid object literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 								i,
 								openingBraceIndex,
+								KnownType,
+								(*ObjectLiteral)(nil),
 							})
 						}
 					}
@@ -2371,6 +2463,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated object literal, missing closing brace '}'",
 					i,
 					openingBraceIndex,
+					KnownType,
+					(*ObjectLiteral)(nil),
 				})
 			}
 			i++
@@ -2404,6 +2498,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated list literal, missing closing bracket ']'",
 					i,
 					openingBracketIndex,
+					KnownType,
+					(*ListLiteral)(nil),
 				})
 			}
 			i++
@@ -2428,6 +2524,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated string literal '" + string(s[start:]) + "'",
 					i,
 					start,
+					KnownType,
+					(*StringLiteral)(nil),
 				})
 			}
 			i++
@@ -2442,6 +2540,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"invalid string literal '" + raw + "': " + err.Error(),
 					i,
 					start,
+					KnownType,
+					(*StringLiteral)(nil),
 				})
 			}
 
@@ -2486,6 +2586,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"invalid lazy expression, '@' should be followed by an expression",
 					i,
 					start,
+					KnownType,
+					(*LazyExpression)(nil),
 				})
 			}
 
@@ -2519,6 +2621,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					UNTERMINATED_BIN_EXPR + " missing operator",
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			}
 
@@ -2553,6 +2657,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NON_EXISTING_OPERATOR,
 						i,
 						openingParenIndex,
+						KnownType,
+						(*BinaryExpression)(nil),
 					})
 				}
 				if s[i] == '=' {
@@ -2563,6 +2669,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			case '=':
 				i++
@@ -2571,6 +2679,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NON_EXISTING_OPERATOR,
 						i,
 						openingParenIndex,
+						KnownType,
+						(*BinaryExpression)(nil),
 					})
 				}
 				if s[i] == '=' {
@@ -2581,6 +2691,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			case 'i':
 				i++
@@ -2589,6 +2701,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						UNTERMINATED_BIN_EXPR,
 						i,
 						openingParenIndex,
+						KnownType,
+						(*BinaryExpression)(nil),
 					})
 				}
 				if s[i] == 'n' {
@@ -2599,6 +2713,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			case 'k':
 				KEYOF_LEN := len("keyof")
@@ -2611,6 +2727,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			case '.':
 				operator = Dot
@@ -2627,6 +2745,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid binary expression, non existing operator",
 						i,
 						openingParenIndex,
+						KnownType,
+						(*BinaryExpression)(nil),
 					})
 				}
 			}
@@ -2643,6 +2763,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					UNTERMINATED_BIN_EXPR + " missing right operand",
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			}
 
@@ -2654,6 +2776,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					UNTERMINATED_BIN_EXPR + " missing closing parenthesis",
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			}
 
@@ -2662,6 +2786,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"invalid binary expression",
 					i,
 					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				})
 			}
 
@@ -2691,6 +2817,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"unterminated member/index expression",
 						i,
 						first.Base().Span.Start,
+						UnspecifiedCategory,
+						nil,
 					})
 				}
 
@@ -2702,6 +2830,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated index expression",
 							i,
 							first.Base().Span.Start,
+							KnownType,
+							nil,
 						})
 					}
 
@@ -2722,6 +2852,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated index/slice expression",
 							i,
 							first.Base().Span.Start,
+							UnspecifiedCategory,
+							nil,
 						})
 					}
 
@@ -2731,6 +2863,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								"invalid slice expression, a single colon should be present",
 								i,
 								first.Base().Span.Start,
+								KnownType,
+								(*SliceExpression)(nil),
 							})
 						}
 						isSliceExpr = true
@@ -2744,6 +2878,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated slice expression, missing end index",
 							i,
 							first.Base().Span.Start,
+							KnownType,
+							(*SliceExpression)(nil),
 						})
 					}
 
@@ -2758,6 +2894,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated index/slice expression, missing closing bracket ']'",
 							i,
 							first.Base().Span.Start,
+							UnspecifiedCategory,
+							nil,
 						})
 					}
 
@@ -2792,6 +2930,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"property name should start with a letter not '" + string(s[i]) + "'",
 							i,
 							first.Base().Span.Start,
+							KnownType,
+							(*MemberExpression)(nil),
 						})
 					}
 
@@ -2861,6 +3001,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated call, missing closing parenthesis ')'",
 					i,
 					first.Base().Span.Start,
+					KnownType,
+					(*Call)(nil),
 				})
 			}
 			i++
@@ -2885,6 +3027,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			fmt.Sprintf("an expression was expected: ...%s<<here>>%s...", left, right),
 			i,
 			first.Base().Span.Start,
+			UnspecifiedCategory,
+			nil,
 		})
 	}
 
@@ -2915,6 +3059,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated global const declarations",
 					i,
 					start,
+					KnownType,
+					(*GlobalConstantDeclarations)(nil),
 				})
 			}
 
@@ -2923,6 +3069,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"invalid global const declarations, expected opening parenthesis after 'const'",
 					i,
 					start,
+					KnownType,
+					(*GlobalConstantDeclarations)(nil),
 				})
 			}
 
@@ -2941,6 +3089,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid global const declarations, missing closing parenthesis",
 						i,
 						start,
+						KnownType,
+						(*GlobalConstantDeclarations)(nil),
 					})
 				}
 
@@ -2951,6 +3101,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid global const declarations, left hand sides must be global variable identifiers",
 						i,
 						start,
+						KnownType,
+						(*GlobalConstantDeclarations)(nil),
 					})
 				}
 
@@ -2961,6 +3113,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						fmt.Sprintf("invalid global const declarations, missing '=' after name %s", globvar.Name),
 						i,
 						start,
+						KnownType,
+						(*GlobalConstantDeclarations)(nil),
 					})
 				}
 
@@ -2972,6 +3126,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						fmt.Sprintf("invalid global const declarations, missing value after '$$%s ='", globvar.Name),
 						i,
 						start,
+						KnownType,
+						(*GlobalConstantDeclarations)(nil),
 					})
 				}
 
@@ -2981,6 +3137,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
 						i,
 						start,
+						KnownType,
+						(*GlobalConstantDeclarations)(nil),
 					})
 				}
 
@@ -3017,6 +3175,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					fmt.Sprintf("function name should be an identifier not a %T", idnt),
 					i,
 					start,
+					KnownType,
+					(*FunctionDeclaration)(nil),
 				})
 			}
 		}
@@ -3026,6 +3186,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"function : fn keyword (or function name) should be followed by '(' <param list> ')' ",
 				i,
 				start,
+				UnspecifiedCategory,
+				nil,
 			})
 		}
 
@@ -3047,6 +3209,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"function : the parameter list should contain variables separated by a comma",
 					i,
 					start,
+					UnspecifiedCategory,
+					nil,
 				})
 			}
 
@@ -3062,6 +3226,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"function : unterminated parameter list : missing closing parenthesis",
 				i,
 				start,
+				UnspecifiedCategory,
+				nil,
 			})
 		}
 
@@ -3070,6 +3236,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"function : invalid syntax",
 				i,
 				start,
+				UnspecifiedCategory,
+				nil,
 			})
 		}
 
@@ -3085,6 +3253,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				"function : parameter list should be followed by a block, not " + string(s[i]),
 				i,
 				start,
+				UnspecifiedCategory,
+				nil,
 			})
 		}
 
@@ -3136,6 +3306,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"unterminated if statement, missing block",
 						i,
 						expr.Base().Span.Start,
+						KnownType,
+						(*IfStatement)(nil),
 					})
 				}
 
@@ -3144,6 +3316,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"invalid if statement, test expression should be followed by a block, not " + string(s[i]),
 						i,
 						expr.Base().Span.Start,
+						KnownType,
+						(*IfStatement)(nil),
 					})
 				}
 
@@ -3162,6 +3336,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated if statement, missing block after 'else'",
 							i,
 							expr.Base().Span.Start,
+							KnownType,
+							(*IfStatement)(nil),
 						})
 					}
 
@@ -3170,6 +3346,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid if statement, else should be followed by a block, not " + string(s[i]),
 							i,
 							expr.Base().Span.Start,
+							KnownType,
+							(*IfStatement)(nil),
 						})
 					}
 
@@ -3199,6 +3377,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid for statement",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3207,6 +3387,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"for statement : key/index variale should be followed by a comma ',' , not " + string(s[i]),
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3218,6 +3400,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated for statement",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3228,6 +3412,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexVar),
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3238,6 +3424,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated for statement",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3246,6 +3434,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid for statement : missing 'in' keyword ",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3256,6 +3446,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"invalid for statement : 'in' keyword should be followed by a space",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 					eatSpace()
@@ -3265,6 +3457,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated for statement, missing value after 'in'",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3277,6 +3471,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"unterminated for statement, missing block",
 							i,
 							forStart,
+							KnownType,
+							(*ForStatement)(nil),
 						})
 					}
 
@@ -3303,6 +3499,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								"unterminated for statement, missing block",
 								i,
 								forStart,
+								KnownType,
+								(*ForStatement)(nil),
 							})
 						}
 
@@ -3322,12 +3520,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						fmt.Sprintf("invalid for statement : 'for' should be followed by a binary range expression, operator is %s", v.Operator.String()),
 						i,
 						forStart,
+						KnownType,
+						(*ForStatement)(nil),
 					})
 				default:
 					panic(ParsingError{
 						fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexVar),
 						i,
 						forStart,
+						KnownType,
+						(*ForStatement)(nil),
 					})
 				}
 
@@ -3337,10 +3539,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) {
+
+					if ev.Name == "switch" {
+						panic(ParsingError{
+							"unterminated switch statement: missing value",
+							i,
+							switchMatchStart,
+							KnownType,
+							(*SwitchStatement)(nil),
+						})
+					}
+
 					panic(ParsingError{
-						"unterminated switch statement: missing value",
+						"unterminated match statement: missing value",
 						i,
 						switchMatchStart,
+						KnownType,
+						(*MatchStatement)(nil),
 					})
 				}
 
@@ -3350,10 +3565,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) || s[i] != '{' {
+					if ev.Name == "switch" {
+						panic(ParsingError{
+							"unterminated switch statement : missing body",
+							i,
+							switchMatchStart,
+							KnownType,
+							(*SwitchStatement)(nil),
+						})
+					}
 					panic(ParsingError{
-						"unterminated switch statement : missing body",
+						"unterminated match statement : missing body",
 						i,
 						switchMatchStart,
+						KnownType,
+						(*MatchStatement)(nil),
 					})
 				}
 
@@ -3366,19 +3592,43 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					for i < len(s) && s[i] != '{' {
 						if i >= len(s) {
+							if ev.Name == "switch" {
+								panic(ParsingError{
+									"unterminated switch statement",
+									i,
+									switchMatchStart,
+									KnownType,
+									(*SwitchStatement)(nil),
+								})
+							}
+
 							panic(ParsingError{
-								"unterminated switch statement",
+								"unterminated match statement",
 								i,
 								switchMatchStart,
+								KnownType,
+								(*MatchStatement)(nil),
 							})
 						}
 						valueNode := parseExpression()
 						if !isSimpleValueLiteral(valueNode) {
+							if ev.Name == "switch" {
+								panic(ParsingError{
+									"invalid switch case : only simple value literals are supported (1, 1.0, /home, ..)",
+									i,
+									switchMatchStart,
+									KnownType,
+									(*SwitchStatement)(nil),
+								})
+							}
 							panic(ParsingError{
-								"invalid switch/match case : only simple value literals are supported (1, 1.0, /home, ..)",
+								"invalid match case : only simple value literals are supported (1, 1.0, /home, ..)",
 								i,
 								switchMatchStart,
+								KnownType,
+								(*MatchStatement)(nil),
 							})
+
 						}
 						valueNodes = append(valueNodes, valueNode)
 
@@ -3394,10 +3644,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 
 					if i >= len(s) || s[i] != '{' {
+						if ev.Name == "switch" {
+							panic(ParsingError{
+								"invalid switch case : missing block",
+								i,
+								switchMatchStart,
+								KnownType,
+								(*SwitchStatement)(nil),
+							})
+						}
 						panic(ParsingError{
-							"invalid switch case : missing block",
+							"invalid match case : missing block",
 							i,
 							switchMatchStart,
+							KnownType,
+							(*MatchStatement)(nil),
 						})
 					}
 
@@ -3419,11 +3680,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				if i >= len(s) || s[i] != '}' {
+					if ev.Name == "switch" {
+						panic(ParsingError{
+							"unterminated switch statement : missing closing body brace '}'",
+							i,
+							switchMatchStart,
+							KnownType,
+							(*SwitchStatement)(nil),
+						})
+					}
 					panic(ParsingError{
-						"unterminated switch statement : missing closing body brace '}'",
+						"unterminated match statement : missing closing body brace '}'",
 						i,
 						switchMatchStart,
+						KnownType,
+						(*MatchStatement)(nil),
 					})
+
 				}
 
 				i++
@@ -3462,6 +3735,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: import should be followed by an identifier",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 
 				}
@@ -3474,6 +3749,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: URL should be a URL literal",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 				}
 
@@ -3485,6 +3762,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: checksum should be a string literal",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 				}
 
@@ -3496,6 +3775,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: argument should be an object literal",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 				}
 
@@ -3506,6 +3787,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: argument should be followed by a the 'allow' keyword",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 				}
 
@@ -3517,6 +3800,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						"import statement: 'allow' keyword should be followed by an object literal (permissions)",
 						i,
 						importStart,
+						KnownType,
+						(*ImportStatement)(nil),
 					})
 				}
 
@@ -3552,6 +3837,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							"assign keyword should be followed by variables (assign $a $b = <value>)",
 							i,
 							expr.Base().Span.Start,
+							KnownType,
+							(*MultiAssignment)(nil),
 						})
 					}
 					vars = append(vars, e)
@@ -3561,9 +3848,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				if i >= len(s) {
 					panic(ParsingError{
-						"unterminated assign statement, missing '='",
+						"unterminated multi assign statement, missing '='",
 						i,
 						expr.Base().Span.Start,
+						KnownType,
+						(*MultiAssignment)(nil),
 					})
 				}
 
@@ -3598,6 +3887,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					"unterminated assignment, missing value after '='",
 					i,
 					expr.Base().Span.Start,
+					KnownType,
+					(*Assignment)(nil),
 				})
 			}
 			right := parseExpression()
