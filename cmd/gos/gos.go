@@ -463,9 +463,13 @@ func main() {
 
 			//EXECUTION
 
-			_, err = gopherscript.Eval(mod, state)
+			res, err := gopherscript.Eval(mod, state)
 			if err != nil {
 				fmt.Print(err, "\n")
+			} else {
+				if list, ok := res.(gopherscript.List); (!ok && res != nil) || len(list) != 0 {
+					fmt.Printf("%#v\n\r", res)
+				}
 			}
 		case "repl":
 			replFlags := flag.NewFlagSet("repl", flag.ExitOnError)
