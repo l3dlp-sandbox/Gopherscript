@@ -203,39 +203,6 @@ https://example.com/users/...
 sleep 100ms
 ```
 
-### Gopherscript types
-
-Basic types 
-
-```go
-string, bool, int, float64
-```
-
-Special string types
-```go
-type Path string
-type PathPattern string
-type URL string
-type HTTPHost string
-type HTTPHostPattern string
-type URLPattern string
-type JSONstring string
-```
-
-Complex types
-```go
-type Object map[string]interface{}
-type List []interface{}
-type KeyList []string
-type Func Node
-type ExternalValue struct {
-	state *State
-	value interface{}
-}
-```
-
-Any other type will be considered as a "Go value".
-
 ### Functions
 
 ```
