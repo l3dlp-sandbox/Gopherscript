@@ -1,0 +1,10 @@
+require {
+    use: {
+        globals: "*"
+        commands: {
+            echo: {}
+        }
+    }
+}
+
+ex echo "hello !"
