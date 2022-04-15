@@ -115,6 +115,10 @@ func (base NodeBase) Base() NodeBase {
 	return base
 }
 
+func (base NodeBase) IncludedIn(node Node) bool {
+	return base.Span.Start >= node.Base().Span.Start && base.Span.End <= node.Base().Span.End
+}
+
 type Module struct {
 	NodeBase
 	GlobalConstantDeclarations *GlobalConstantDeclarations //nil if no const declarations at the top of the module

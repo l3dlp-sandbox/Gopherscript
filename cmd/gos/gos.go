@@ -160,7 +160,7 @@ type CommandHistory struct {
 	Commands []string `json:"commands"`
 }
 
-func startShell(state *gopherscript.State) {
+func startShell(state *gopherscript.State, ctx *gopherscript.Context) {
 	old, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
@@ -321,8 +321,38 @@ func startShell(state *gopherscript.State) {
 
 				//print suggestions
 				moveCursorLineStart()
-				fmt.Printf("\n\r")
-				fmt.Printf("%s\n\r", strings.Join(names, " "))
+				fmt.Printf("\n\r%s\n\r", strings.Join(names, " "))
+
+				termenv.RestoreCursorPosition()
+				break
+			}
+
+			mod, err := gopherscript.ParseModule(string(input), "")
+			parsingErr, isParsingErr := err.(gopherscript.ParsingError)
+			if err != nil && !isParsingErr {
+				break
+			}
+
+			cursorIndex := len(input) - backspaceCount
+			suggestions := findSuggestions(ctx, mod, parsingErr, cursorIndex)
+
+			switch len(suggestions) {
+			case 0:
+			case 1:
+			default:
+				var texts []string
+				for _, sug := range suggestions {
+					texts = append(texts, sug.shownString)
+				}
+				termenv.SaveCursorPosition()
+
+				sort.Slice(texts, func(i, j int) bool {
+					return texts[i][0] < texts[j][0]
+				})
+
+				//print suggestions
+				moveCursorLineStart()
+				fmt.Printf("\n\r%s\n\r", strings.Join(texts, " "))
 
 				termenv.RestoreCursorPosition()
 			}
@@ -396,6 +426,99 @@ func moveFlagsStart(args []string) {
 			index++
 		}
 	}
+}
+
+func findLongestCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+
+	if len(strs) == 1 {
+		return strs[0]
+	}
+
+	var runeSlices [][]rune
+	for _, s := range strs {
+		runeSlices = append(runeSlices, []rune(s))
+	}
+
+	var prefix []rune
+	for i := 0; i < len(runeSlices[0]); i++ {
+		for j := 1; j < len(runeSlices); j++ {
+			if runeSlices[j][i] == runeSlices[0][i] {
+				continue
+			} else {
+				return string(prefix)
+			}
+		}
+		prefix = append(prefix, runeSlices[0][i])
+	}
+
+	return string(prefix)
+}
+
+type suggestion struct {
+	shownString string
+	value       string
+}
+
+func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsingErr gopherscript.ParsingError, cursorIndex int) []suggestion {
+
+	var suggestions []suggestion
+
+	if parsingErr.Message != "" {
+		//not supported yet
+		return nil
+	}
+
+	var nodeAtCursor gopherscript.Node
+
+	gopherscript.Walk(mod, nil, func(node, parent gopherscript.Node) error {
+		span := node.Base().Span
+
+		if span.Start > cursorIndex || span.End < cursorIndex {
+			return nil
+		}
+
+		if nodeAtCursor == nil || node.Base().IncludedIn(nodeAtCursor) {
+			nodeAtCursor = node
+		}
+
+		return nil
+	})
+
+	if nodeAtCursor == nil {
+		return nil
+	}
+
+	switch n := nodeAtCursor.(type) {
+	case *gopherscript.AbsolutePathLiteral:
+		dir := path.Dir(n.Value)
+		base := path.Base(n.Value)
+
+		if gopherscript.Path(n.Value).IsDirPath() {
+			base = ""
+		}
+
+		entries, err := fsLs(ctx, gopherscript.Path(dir+"/"))
+		if err != nil {
+			log.Println(err)
+			return nil
+		}
+
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name, base) {
+				pth := path.Join(dir, e.Name)
+				suggestions = append(suggestions, suggestion{
+					shownString: e.Name,
+					value:       pth,
+				})
+			}
+		}
+
+	}
+
+	return suggestions
 }
 
 func main() {
@@ -515,7 +638,7 @@ func main() {
 			if err != nil {
 				panic(fmt.Sprint("startup script failed:", err))
 			}
-			startShell(state)
+			startShell(state, ctx)
 		default:
 			panic(fmt.Sprint("unknown subcommand", os.Args[1]))
 		}
