@@ -2885,6 +2885,14 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, 1, res)
 	})
 
+	t.Run("variable assignment (lhs: identifier literal)", func(t *testing.T) {
+		n := MustParseModule(`a = 1; return $a`)
+		state := NewState(DEFAULT_TEST_CTX)
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, res)
+	})
+
 	t.Run("const global variable assignment", func(t *testing.T) {
 		n := MustParseModule(`
 			const (

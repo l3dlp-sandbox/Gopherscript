@@ -4550,6 +4550,14 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 
 			state.CurrentScope()[name] = right
+		case *IdentifierLiteral:
+			name := lhs.Name
+			right, err := Eval(n.Right, state)
+			if err != nil {
+				return nil, err
+			}
+
+			state.CurrentScope()[name] = right
 		case *GlobalVariable:
 			name := lhs.Name
 			scope := state.GlobalScope()
