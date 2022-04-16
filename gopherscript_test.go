@@ -241,6 +241,19 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("absolute path pattern literal : /... ", func(t *testing.T) {
+		n := MustParseModule("/...")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 4}},
+			Statements: []Node{
+				&AbsolutePathPatternLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 4}},
+					Value:    "/...",
+				},
+			},
+		}, n)
+	})
+
 	t.Run("absolute path pattern literal containg /... in the middle", func(t *testing.T) {
 		assert.Panics(t, func() {
 			MustParseModule("/a/.../ee")
