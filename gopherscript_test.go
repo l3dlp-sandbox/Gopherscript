@@ -816,6 +816,38 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("rate literal", func(t *testing.T) {
+		n := MustParseModule("1kB/s")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}},
+			Statements: []Node{
+				&RateLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+					},
+					Quantity: &QuantityLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 3}},
+						Raw:      "1kB",
+						Unit:     "kB",
+						Value:    1.0,
+					},
+					Unit: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{4, 5},
+						},
+						Name: "s",
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("unterminated rate literal", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("1kB/")
+		})
+	})
+
 	t.Run("empty string literal", func(t *testing.T) {
 		n := MustParseModule(`""`)
 		assert.EqualValues(t, &Module{
@@ -2948,6 +2980,13 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
+	})
+
+	t.Run("rate literal", func(t *testing.T) {
+		n := MustParseModule(`10kB/s`)
+		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		assert.NoError(t, err)
+		assert.EqualValues(t, ByteRate(10_000), res)
 	})
 
 	t.Run("global constants : empty", func(t *testing.T) {

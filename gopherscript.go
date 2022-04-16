@@ -197,6 +197,12 @@ type QuantityLiteral struct {
 	Unit  string
 }
 
+type RateLiteral struct {
+	NodeBase
+	Quantity *QuantityLiteral
+	Unit     *IdentifierLiteral
+}
+
 type StringLiteral struct {
 	NodeBase
 	Raw   string
@@ -2328,6 +2334,34 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Raw:   raw,
 					Value: fValue,
 					Unit:  unit,
+				}
+
+				if i < len(s) {
+					switch s[i] {
+					case '/':
+						i++
+						unit := parseExpression()
+						ident, ok := unit.(*IdentifierLiteral)
+						raw := string(s[start:i])
+
+						if !ok {
+							panic(ParsingError{
+								"invalid rate literal '" + raw + "', '/' should be immeditately followed by an identifier ('s' for example)",
+								i,
+								start,
+								KnownType,
+								(*IntLiteral)(nil),
+							})
+						}
+
+						return &RateLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{literal.Base().Span.Start, ident.Base().Span.End},
+							},
+							Quantity: literal.(*QuantityLiteral),
+							Unit:     ident,
+						}
+					}
 				}
 			}
 
@@ -4641,6 +4675,13 @@ func Walk(node, parent Node, fn func(Node, Node) error) error {
 		if err := Walk(n.Path, node, fn); err != nil {
 			return err
 		}
+	case *RateLiteral:
+		if err := Walk(n.Quantity, node, fn); err != nil {
+			return err
+		}
+		if err := Walk(n.Unit, node, fn); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -4660,6 +4701,20 @@ func Check(node Node) error {
 			default:
 				return errors.New("non supported unit: " + node.Unit)
 			}
+		case *RateLiteral:
+
+			unit1 := node.Quantity.Unit
+			unit2 := node.Unit.Name
+
+			switch unit2 {
+			case "s":
+				switch unit1 {
+				case "kB", "MB", "GB":
+					return nil
+				}
+			}
+
+			return errors.New("invalid rate literal")
 		case *ObjectLiteral:
 			indexKey := 0
 			keys := map[string]bool{}
@@ -4725,6 +4780,28 @@ func Check(node Node) error {
 	})
 }
 
+func getQuantity(value float64, unit string) interface{} {
+
+	switch unit {
+	case "s":
+		return reflect.ValueOf(time.Duration(value) * time.Second)
+	case "ms":
+		return reflect.ValueOf(time.Duration(value) * time.Millisecond)
+	case "%":
+		return value / 100
+	case "ln":
+		return LineCount(int(value))
+	case "kB":
+		return 1_000 * ByteCount(int(value))
+	case "MB":
+		return 1_000_000 * ByteCount(int(value))
+	case "GB":
+		return 1_000_000_000 * ByteCount(int(value))
+	default:
+		panic("unsupported unit " + unit)
+	}
+}
+
 func MustEval(node Node, state *State) interface{} {
 	res, err := Eval(node, state)
 	if err != nil {
@@ -4755,24 +4832,22 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 	case *QuantityLiteral:
 		//This implementation does not allow custom units.
 		//Should it be entirely external ? Should most common units be still handled here ?
-		switch n.Unit {
-		case "s":
-			return reflect.ValueOf(time.Duration(n.Value) * time.Second), nil
-		case "ms":
-			return reflect.ValueOf(time.Duration(n.Value) * time.Millisecond), nil
-		case "%":
-			return n.Value / 100, nil
-		case "ln":
-			return LineCount(int(n.Value)), nil
-		case "kB":
-			return 1_000 * ByteCount(int(n.Value)), nil
-		case "MB":
-			return 1_000_000 * ByteCount(int(n.Value)), nil
-		case "GB":
-			return 1_000_000_000 * ByteCount(int(n.Value)), nil
-		default:
-			panic("unsupported unit " + n.Unit)
+		return getQuantity(n.Value, n.Unit), nil
+	case *RateLiteral:
+		q, err := Eval(n.Quantity, state)
+		if err != nil {
+			return nil, err
 		}
+
+		switch qv := q.(type) {
+		case ByteCount:
+			if n.Unit.Name != "s" {
+				return nil, errors.New("invalid state")
+			}
+			return ByteRate(int(qv)), nil
+		}
+
+		return nil, errors.New("invalid state")
 	case *StringLiteral:
 		return n.Value, nil
 	case *IdentifierLiteral:
@@ -5817,3 +5892,4 @@ type QuantityRange struct {
 
 type ByteCount int
 type LineCount int
+type ByteRate int
