@@ -462,6 +462,35 @@ type suggestion struct {
 	value       string
 }
 
+func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
+
+	var suggestions []suggestion
+
+	dir := path.Dir(pth)
+	base := path.Base(pth)
+
+	if gopherscript.Path(pth).IsDirPath() {
+		base = ""
+	}
+
+	entries, err := fsLs(ctx, gopherscript.Path(dir+"/"))
+	if err != nil {
+		return nil
+	}
+
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name, base) {
+			pth := path.Join(dir, e.Name)
+			suggestions = append(suggestions, suggestion{
+				shownString: e.Name,
+				value:       pth,
+			})
+		}
+	}
+
+	return suggestions
+}
+
 func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsingErr gopherscript.ParsingError, cursorIndex int) []suggestion {
 
 	var suggestions []suggestion
@@ -492,29 +521,10 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 	}
 
 	switch n := nodeAtCursor.(type) {
+	case *gopherscript.RelativePathLiteral:
+		suggestions = findPathSuggestions(ctx, n.Value)
 	case *gopherscript.AbsolutePathLiteral:
-		dir := path.Dir(n.Value)
-		base := path.Base(n.Value)
-
-		if gopherscript.Path(n.Value).IsDirPath() {
-			base = ""
-		}
-
-		entries, err := fsLs(ctx, gopherscript.Path(dir+"/"))
-		if err != nil {
-			log.Println(err)
-			return nil
-		}
-
-		for _, e := range entries {
-			if strings.HasPrefix(e.Name, base) {
-				pth := path.Join(dir, e.Name)
-				suggestions = append(suggestions, suggestion{
-					shownString: e.Name,
-					value:       pth,
-				})
-			}
-		}
+		suggestions = findPathSuggestions(ctx, n.Value)
 
 	}
 
