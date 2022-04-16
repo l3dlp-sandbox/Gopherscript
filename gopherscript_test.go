@@ -1414,6 +1414,14 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("object literal with a too long key ", func(t *testing.T) {
+		s := strings.ReplaceAll("{ a : 1 }", "a", strings.Repeat("a", MAX_OBJECT_KEY_BYTE_LEN+1))
+
+		assert.Panics(t, func() {
+			MustParseModule(s)
+		})
+	})
+
 	t.Run("single line object literal { : integer} ", func(t *testing.T) {
 		n := MustParseModule("{ : 1 }")
 		assert.EqualValues(t, &Module{

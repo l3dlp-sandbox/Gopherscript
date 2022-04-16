@@ -23,6 +23,7 @@ import (
 
 const TRULY_MAX_STACK_HEIGHT = 10
 const DEFAULT_MAX_STACK_HEIGHT = 5
+const MAX_OBJECT_KEY_BYTE_LEN = 64
 const HTTP_URL_PATTERN = "^https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b([-a-zA-Z0-9@:%_+.~#?&//=]{0,100})$"
 const LOOSE_HTTP_EXPR_PATTERN = "^https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b([-a-zA-Z0-9@:%_+.~#?&//=$]{0,100})$"
 const LOOSE_HTTP_HOST_PATTERN_PATTERN = "^https?:\\/\\/(\\*|(www\\.)?[-a-zA-Z0-9.*]{1,32}\\.[a-zA-Z0-9*]{1,6})(:[0-9]{1,5})?$"
@@ -2360,6 +2361,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					unamedPropCount++
 					keys = append(keys, nil)
 					lastKeyName = strconv.Itoa(unamedPropCount)
+					if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+						panic(ParsingError{
+							"key is too long",
+							i,
+							openingBraceIndex,
+							KnownType,
+							(*ObjectLiteral)(nil),
+						})
+					}
 				} else {
 					for {
 						lastKey = parseExpression()
@@ -2373,6 +2383,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						default:
 							panic(ParsingError{
 								"Only identifiers and strings are valid object keys",
+								i,
+								openingBraceIndex,
+								KnownType,
+								(*ObjectLiteral)(nil),
+							})
+						}
+
+						if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+							panic(ParsingError{
+								"key is too long",
 								i,
 								openingBraceIndex,
 								KnownType,
