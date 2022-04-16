@@ -746,9 +746,6 @@ type HTTPHostPattern string
 type URLPattern string
 type Identifier string
 
-//special int types
-type LineCount int
-
 // ---------------------------
 
 func (pth Path) IsDirPath() bool {
@@ -4659,7 +4656,7 @@ func Check(node Node) error {
 		switch node := n.(type) {
 		case *QuantityLiteral:
 			switch node.Unit {
-			case "s", "ms", "%", "ln":
+			case "s", "ms", "%", "ln", "kB", "MB", "GB":
 			default:
 				return errors.New("non supported unit: " + node.Unit)
 			}
@@ -4767,6 +4764,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return n.Value / 100, nil
 		case "ln":
 			return LineCount(int(n.Value)), nil
+		case "kB":
+			return 1_000 * ByteCount(int(n.Value)), nil
+		case "MB":
+			return 1_000_000 * ByteCount(int(n.Value)), nil
+		case "GB":
+			return 1_000_000_000 * ByteCount(int(n.Value)), nil
 		default:
 			panic("unsupported unit " + n.Unit)
 		}
@@ -5811,3 +5814,6 @@ type QuantityRange struct {
 	Start        interface{}
 	End          interface{}
 }
+
+type ByteCount int
+type LineCount int
