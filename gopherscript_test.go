@@ -2797,17 +2797,18 @@ func TestRequirements(t *testing.T) {
 		name                string
 		inputModule         string
 		expectedPermissions []Permission
+		expectedLimitations []Limitation
 	}{
-		{"empty requirements", `require {}`, []Permission{}},
+		{"empty requirements", `require {}`, []Permission{}, []Limitation{}},
 		{"read_any_global", `require { read: {globals: "*"} }`, []Permission{
 			GlobalVarPermission{ReadPerm, "*"},
-		}},
+		}, []Limitation{}},
 		{"create_routine", `require { create: {routines: {}} }`, []Permission{
 			RoutinePermission{CreatePerm},
-		}},
+		}, []Limitation{}},
 		{"create_routine", `require { create: {routines: {}} }`, []Permission{
 			RoutinePermission{CreatePerm},
-		}},
+		}, []Limitation{}},
 		{"read_@const_var", `
 			const (
 				$$URL = https://example.com/
@@ -2817,14 +2818,24 @@ func TestRequirements(t *testing.T) {
 			}
 		`, []Permission{
 			HttpPermission{ReadPerm, URL("https://example.com/")},
+		}, []Limitation{}},
+		{"limitations", `
+			require { 
+				limits: {
+					"http/upload": 100kB/s
+				}
+			}
+		`, []Permission{}, []Limitation{
+			{Name: "http/upload", Rate: ByteRate(100_000)},
 		}},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mod := MustParseModule(testCase.inputModule)
-			perms := mod.Requirements.Object.Permissions(mod.GlobalConstantDeclarations, nil, nil)
+			perms, limitations := mod.Requirements.Object.PermissionsLimitations(mod.GlobalConstantDeclarations, nil, nil)
 			assert.EqualValues(t, testCase.expectedPermissions, perms)
+			assert.EqualValues(t, testCase.expectedLimitations, limitations)
 		})
 	}
 
@@ -2840,7 +2851,7 @@ func TestEval(t *testing.T) {
 
 		HttpPermission{ReadPerm, HTTPHostPattern("https://*")},
 		RoutinePermission{CreatePerm},
-	})
+	}, nil)
 
 	t.Run("integer literal", func(t *testing.T) {
 		n := MustParseModule("1")
@@ -3779,7 +3790,7 @@ func TestSpawnRoutine(t *testing.T) {
 	t.Run("a routine should have access to globals passed to it", func(t *testing.T) {
 		state := NewState(NewContext([]Permission{
 			RoutinePermission{CreatePerm},
-		}))
+		}, nil))
 		mod := MustParseModule(`
 			return $$x
 		`)
@@ -3798,7 +3809,7 @@ func TestSpawnRoutine(t *testing.T) {
 	t.Run("the result of a routine should be an ExternalValue if it is not simple", func(t *testing.T) {
 		state := NewState(NewContext([]Permission{
 			RoutinePermission{CreatePerm},
-		}))
+		}, nil))
 		mod := MustParseModule(`
 			return {a: 1}
 		`)
@@ -3942,4 +3953,21 @@ func TestTraverse(t *testing.T) {
 			assert.Equal(t, 2, callCount)
 		})
 	})
+}
+
+func TestLimiters(t *testing.T) {
+	ctx := NewContext(nil, []Limitation{
+		{Name: "fs/read", Rate: 1_000},
+	})
+
+	start := time.Now()
+	expectedTime := start.Add(time.Second)
+
+	//should not cause a wait
+	ctx.Take("fs/read", 1_000)
+	assert.WithinDuration(t, start, time.Now(), time.Millisecond)
+
+	//should cause a wait
+	ctx.Take("fs/read", 1_000)
+	assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
 }
