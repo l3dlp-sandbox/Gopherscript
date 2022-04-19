@@ -21,6 +21,7 @@ require {
         globals: "*"
         : https://*
         : https://localhost:8080
+        : /home/user/...
     }
     update: {
         globals: "*"
@@ -30,5 +31,7 @@ require {
     }
     delete: https://*
     provide: https://*
+    limits: {
+        "fs/write": 100kB/s
+    }
 }
-

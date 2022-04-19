@@ -4275,6 +4275,14 @@ func (ctx *Context) Take(name string, count int64) {
 	}
 }
 
+func (ctx *Context) GetRate(name string) ByteRate {
+	limiter, ok := ctx.limiters[name]
+	if ok {
+		return limiter.limitation.Rate
+	}
+	return -1
+}
+
 type State struct {
 	ScopeStack  []map[string]interface{}
 	ReturnValue *interface{}

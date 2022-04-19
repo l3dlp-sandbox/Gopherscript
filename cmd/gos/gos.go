@@ -3,6 +3,7 @@ package main
 import (
 	//STANDARD LIBRARY
 	"bufio"
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -59,6 +60,11 @@ const HTTP_OPTION_OBJECT_PROVIDED_TWICE = "http option object provided at least 
 const JSON_CTYPE = "application/json"
 const HTML_CTYPE = "text/html"
 const PLAIN_TEXT_CTYPE = "text/plain"
+
+const FS_WRITE_LIMIT_NAME = "fs/write"
+const FS_READ_LIMIT_NAME = "fs/read"
+
+const FS_WRITE_MIN_CHUNK_SIZE = 100_000
 
 var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -938,6 +944,9 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 			return result, nil
 		},
+		"mkbytes": func(ctx *gopherscript.Context, size int) ([]byte, error) {
+			return make([]byte, size), nil
+		},
 		"tojson":    toJSON,
 		"topjson":   toPrettyJSON,
 		"tojsonval": toJSONVal,
@@ -1030,6 +1039,11 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						return nil, errors.New("content provided at least twice")
 					}
 					content = strings.NewReader(v)
+				case []byte:
+					if content != nil {
+						return nil, errors.New("content provided at least twice")
+					}
+					content = bytes.NewReader(v)
 				default:
 					return nil, fmt.Errorf("invalid argument %#v", arg)
 				}
@@ -1345,7 +1359,7 @@ func fsMkdir(ctx *gopherscript.Context, arg interface{}) error {
 
 func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 	var fpath gopherscript.Path
-	var content string
+	var b []byte
 
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -1355,10 +1369,12 @@ func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 			}
 			fpath = v
 		case string:
-			if content != "" {
+			if b != nil {
 				return errors.New(CONTENT_ARG_PROVIDED_TWICE)
 			}
-			content = v
+			b = []byte(v)
+		case []byte:
+			b = v
 		default:
 			return errors.New("invalid argument " + fmt.Sprintf("%#v", v))
 		}
@@ -1368,12 +1384,12 @@ func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 		return errors.New("missing path argument")
 	}
 
-	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.CreatePerm, Entity: fpath}
+	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.CreatePerm, Entity: fpath.ToAbs()}
 	if err := ctx.CheckHasPermission(perm); err != nil {
 		return err
 	}
 
-	return os.WriteFile(string(fpath), []byte(content), DEFAULT_FILE_FMODE)
+	return __createFile(ctx, string(fpath), []byte(b))
 }
 
 func fsAppendToFile(ctx *gopherscript.Context, args ...interface{}) error {
@@ -1950,4 +1966,42 @@ func generateSelfSignedCertAndKey() (cert *pem.Block, key *pem.Block, err error)
 	}
 
 	return &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}, keyBlock, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func __createFile(ctx *gopherscript.Context, fpath string, b []byte) error {
+	rate := ctx.GetRate(FS_WRITE_LIMIT_NAME)
+	chunkSize := min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10)))
+	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, DEFAULT_FILE_FMODE)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for len(b) != 0 {
+		ctx.Take(FS_WRITE_LIMIT_NAME, int64(chunkSize))
+
+		_, err = f.Write(b[0:chunkSize])
+
+		if err != nil {
+			return err
+		}
+		b = b[chunkSize:]
+		chunkSize = min(len(b), chunkSize)
+	}
+
+	return nil
 }
