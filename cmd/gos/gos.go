@@ -65,6 +65,7 @@ const FS_WRITE_LIMIT_NAME = "fs/write"
 const FS_READ_LIMIT_NAME = "fs/read"
 
 const FS_WRITE_MIN_CHUNK_SIZE = 100_000
+const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 
 var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -1009,7 +1010,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				if res.IsDirPath() {
 					return fsLs(ctx, res)
 				} else {
-					b, err := os.ReadFile(string(res))
+					b, err := __readEntireFile(ctx, res)
 					if err != nil {
 						return nil, err
 					}
@@ -1384,12 +1385,7 @@ func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 		return errors.New("missing path argument")
 	}
 
-	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.CreatePerm, Entity: fpath.ToAbs()}
-	if err := ctx.CheckHasPermission(perm); err != nil {
-		return err
-	}
-
-	return __createFile(ctx, string(fpath), []byte(b))
+	return __createFile(ctx, fpath, []byte(b))
 }
 
 func fsAppendToFile(ctx *gopherscript.Context, args ...interface{}) error {
@@ -1982,7 +1978,13 @@ func max(a, b int) int {
 	return b
 }
 
-func __createFile(ctx *gopherscript.Context, fpath string, b []byte) error {
+func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) error {
+
+	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.CreatePerm, Entity: fpath.ToAbs()}
+	if err := ctx.CheckHasPermission(perm); err != nil {
+		return err
+	}
+
 	rate := ctx.GetRate(FS_WRITE_LIMIT_NAME)
 	chunkSize := min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10)))
 	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, DEFAULT_FILE_FMODE)
@@ -2004,4 +2006,42 @@ func __createFile(ctx *gopherscript.Context, fpath string, b []byte) error {
 	}
 
 	return nil
+}
+
+func __readEntireFile(ctx *gopherscript.Context, fpath gopherscript.Path) ([]byte, error) {
+	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.ReadPerm, Entity: fpath.ToAbs()}
+	if err := ctx.CheckHasPermission(perm); err != nil {
+		return nil, err
+	}
+
+	rate := ctx.GetRate(FS_READ_LIMIT_NAME)
+
+	f, err := os.Open(string(fpath))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	stat, _ := f.Stat()
+
+	chunk := make([]byte, min(int(stat.Size()), max(FS_READ_MIN_CHUNK_SIZE, int(rate/10))))
+	var b []byte
+	var totalN int64 = 0
+	n := len(chunk)
+
+	for {
+		ctx.Take(FS_READ_LIMIT_NAME, int64(n))
+		n, err = f.Read(chunk)
+		totalN += int64(n)
+
+		if totalN >= stat.Size() || err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		b = append(b, chunk[0:n]...)
+	}
+
+	return b, nil
 }
