@@ -1986,7 +1986,7 @@ func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) 
 	}
 
 	rate := ctx.GetRate(FS_WRITE_LIMIT_NAME)
-	chunkSize := min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10)))
+	chunkSize := min(int(rate), min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10))))
 	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, DEFAULT_FILE_FMODE)
 	if err != nil {
 		return err
@@ -2024,7 +2024,7 @@ func __readEntireFile(ctx *gopherscript.Context, fpath gopherscript.Path) ([]byt
 
 	stat, _ := f.Stat()
 
-	chunk := make([]byte, min(int(stat.Size()), max(FS_READ_MIN_CHUNK_SIZE, int(rate/10))))
+	chunk := make([]byte, min(int(rate), min(int(stat.Size()), max(FS_READ_MIN_CHUNK_SIZE, int(rate/10)))))
 	var b []byte
 	var totalN int64 = 0
 	n := len(chunk)

@@ -32,6 +32,7 @@ require {
     delete: https://*
     provide: https://*
     limits: {
+        "fs/read": 100kB/s
         "fs/write": 100kB/s
     }
 }

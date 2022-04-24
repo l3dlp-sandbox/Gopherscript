@@ -70,7 +70,7 @@ func TestCreateFile(t *testing.T) {
 			b := make([]byte, testCase.contentByteSize)
 
 			ctx := G.NewContext([]G.Permission{
-				G.FilesystemPermission{G.CreatePerm, tmpDir + "/..."},
+				G.FilesystemPermission{G.CreatePerm, fpath},
 			}, []G.Limitation{testCase.limitation})
 			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.Rate))
 
@@ -130,6 +130,12 @@ func TestReadEntireFile(t *testing.T) {
 			"<content's size> == 2 * (<rate> == 2 * FS_READ_MIN_CHUNK_SIZE), should take ~ 2s",
 			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
 			4 * FS_READ_MIN_CHUNK_SIZE,
+			2 * time.Second,
+		},
+		{
+			"<content's size> == FS_READ_MIN_CHUNK_SIZE == 2 * <rate>, should take ~ 2s",
+			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE / 2)},
+			FS_READ_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
 	}
