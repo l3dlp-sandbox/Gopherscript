@@ -152,12 +152,26 @@ require {
 
 There are several permission kinds: Create, Update, Read, Delete, Use, Consume, Provide.
 Some permission types are already provided: FilesystemPermission, HttpPermission, StackPermission, GlobalVarPermission.
-You can specify your own permissions by implementing the Permission interface
+You can specify your own permissions by implementing the Permission interface (Golang).
 
 ```go
 type Permission interface {
 	Kind() PermissionKind
 	Includes(Permission) bool
+}
+```
+
+Gopherscript also provides limitations to prevent a script to take all resources.
+In the example below writing to the filesystem is limited to 100 kB/s.
+
+```
+require {
+    
+    [...]
+
+    limits: {
+        "fs/write": 100kB/s
+    }
 }
 ```
 
