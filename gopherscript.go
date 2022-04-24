@@ -32,6 +32,7 @@ const LOOSE_HTTP_HOST_PATTERN_PATTERN = "^https?:\\/\\/(\\*|(www\\.)?[-a-zA-Z0-9
 const IMPLICIT_KEY_LEN_KEY = "__len"
 const GOPHERSCRIPT_MIMETYPE = "application/gopherscript"
 const RETURN_1_MODULE_HASH = "SG2a/7YNuwBjsD2OI6bM9jZM4gPcOp9W8g51DrQeyt4="
+const RETURN_GLOBAL_A_MODULE_HASH = "UYvV2gLwfuQ2D91v7PzQ8RMugUTcM0lOysCMqMqXfmg"
 const TOKEN_BUCKET_INTERVAL = 10 * time.Millisecond
 
 var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
@@ -45,7 +46,8 @@ var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
 var ERROR_INTERFACE_TYPE = reflect.TypeOf((*error)(nil)).Elem()
 var ITERABLE_INTERFACE_TYPE = reflect.TypeOf((*Iterable)(nil)).Elem()
 var MODULE_CACHE = map[string]string{
-	RETURN_1_MODULE_HASH: "return 1",
+	RETURN_1_MODULE_HASH:        "return 1",
+	RETURN_GLOBAL_A_MODULE_HASH: "return $$a",
 }
 
 func isKeyword(str string) bool {

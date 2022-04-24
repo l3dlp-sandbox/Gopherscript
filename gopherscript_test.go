@@ -2985,8 +2985,16 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, List{1}, res)
 	})
 
-	t.Run("$a = {count: 0}; $a.count = 1", func(t *testing.T) {
+	t.Run("member expression assignment : pre existing field", func(t *testing.T) {
 		n := MustParseModule(`$a = {count:0}; $a.count = 1; return $a.count`)
+		state := NewState(DEFAULT_TEST_CTX)
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, res)
+	})
+
+	t.Run("member expression assignment : non existing field", func(t *testing.T) {
+		n := MustParseModule(`$a = {}; $a.count = 1; return $a.count`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -3474,6 +3482,14 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, 1, res)
 	})
 
+	t.Run("member expression : '(' <object literal> ')' <propname>", func(t *testing.T) {
+		n := MustParseModule(`return ({a:1}).a`)
+		state := NewState(DEFAULT_TEST_CTX)
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, res)
+	})
+
 	t.Run("member expression : unexported field", func(t *testing.T) {
 		n := MustParseModule(`return $$val.secret`)
 		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
@@ -3523,11 +3539,22 @@ func TestEval(t *testing.T) {
 		}, res)
 	})
 
-	t.Run("import statement", func(t *testing.T) {
+	t.Run("import statement : no globals, no required permissions", func(t *testing.T) {
 		n := MustParseModule(strings.ReplaceAll(`
 			import importname https://modules.com/return_1.gos "<hash>" {} allow {}
 			return $$importname
 		`, "<hash>", RETURN_1_MODULE_HASH))
+		state := NewState(DEFAULT_TEST_CTX)
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 1, res)
+	})
+
+	t.Run("import statement : imported module returns $$a", func(t *testing.T) {
+		n := MustParseModule(strings.ReplaceAll(`
+			import importname https://modules.com/return_global_a.gos "<hash>" {a: 1} allow {read: {globals: "a"}}
+			return $$importname
+		`, "<hash>", RETURN_GLOBAL_A_MODULE_HASH))
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
