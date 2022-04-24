@@ -14,7 +14,7 @@ Like Gopherscript it is not production read yet. If you find a bug of want to su
 ## Installation
 
 ```
-go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.1.2
+go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.2.0
 ```
 
 ## Scripting
