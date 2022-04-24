@@ -221,20 +221,6 @@ https://example.com/users/...
 sleep 100ms
 ```
 
-### Functions
-
-```
-fn myfunc($x){
-    return ($x + 1)
-}
-
-$y = myfunc(1)
-myfunc 1 { }
-myfunc 1 { 
-
-}
-```
-
 ### Imports
 
 Syntax:
