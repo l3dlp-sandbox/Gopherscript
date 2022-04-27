@@ -1394,6 +1394,32 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("call expression with no paren : single argument that starts with a delimiter", func(t *testing.T) {
+		n := MustParseModule("print$ (1)")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 10}},
+			Statements: []Node{
+				&Call{
+					NodeBase: NodeBase{NodeSpan{0, 9}},
+					Must:     true,
+					Callee: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 5}},
+						Name:     "print",
+					},
+					Arguments: []Node{
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{8, 9},
+							},
+							Raw:   "1",
+							Value: 1,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("call expression with no paren : two arguments (literals)", func(t *testing.T) {
 		n := MustParseModule("print$ 1 2")
 		assert.EqualValues(t, &Module{

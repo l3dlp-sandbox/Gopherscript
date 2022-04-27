@@ -85,6 +85,15 @@ func isDelim(r rune) bool {
 	}
 }
 
+func isNotPairedOrClosingDelim(r rune) bool {
+	switch r {
+	case ',', ';', ':', ')', ']':
+		return true
+	default:
+		return false
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -2203,7 +2212,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			switch {
-			case s[i] == '"':
+			case s[i] == '"': //func_name"string"
 				call := &Call{
 					NodeBase: NodeBase{
 						Span: NodeSpan{identLike.Base().Span.Start, 0},
@@ -2217,7 +2226,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				call.Arguments = append(call.Arguments, str)
 				call.NodeBase.Span.End = str.Base().Span.End
 				return call
-			case s[i] == '(' && !isKeyword(name):
+			case s[i] == '(' && !isKeyword(name): //func_name(...
 				i++
 				eatSpace()
 
@@ -2249,7 +2258,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				call.NodeBase.Span.End = i
 
 				return call
-			case s[i] == '$':
+			case s[i] == '$': //funcname$ ...
 				i++
 				if i >= len(s) || (s[i] != '\t' && s[i] != ' ') {
 					panic(ParsingError{
@@ -2270,10 +2279,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Must:      true,
 				}
 
-				for i < len(s) && s[i] != '\n' && !isDelim(s[i]) {
+				for i < len(s) && s[i] != '\n' && !isNotPairedOrClosingDelim(s[i]) {
 					eatSpaceAndComments()
 
-					if s[i] == '\n' || isDelim(s[i]) {
+					if s[i] == '\n' || isNotPairedOrClosingDelim(s[i]) {
 						break
 					}
 
