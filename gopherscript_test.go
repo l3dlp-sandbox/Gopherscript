@@ -1362,6 +1362,12 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("call expression with no paren : no argument", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("print$ ")
+		})
+	})
+
 	t.Run("call expression with no paren : single argument", func(t *testing.T) {
 		n := MustParseModule("print$ 1")
 		assert.EqualValues(t, &Module{
@@ -1388,10 +1394,37 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("call expression with no paren : no argument", func(t *testing.T) {
-		assert.Panics(t, func() {
-			MustParseModule("print$ ")
-		})
+	t.Run("call expression with no paren : two arguments (literals)", func(t *testing.T) {
+		n := MustParseModule("print$ 1 2")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 10}},
+			Statements: []Node{
+				&Call{
+					NodeBase: NodeBase{NodeSpan{0, 10}},
+					Must:     true,
+					Callee: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 5}},
+						Name:     "print",
+					},
+					Arguments: []Node{
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{7, 8},
+							},
+							Raw:   "1",
+							Value: 1,
+						},
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{9, 10},
+							},
+							Raw:   "2",
+							Value: 2,
+						},
+					},
+				},
+			},
+		}, n)
 	})
 
 	t.Run("empty single linge object literal 1", func(t *testing.T) {
@@ -2348,6 +2381,36 @@ func TestMustParseModule(t *testing.T) {
 						Raw:   "1",
 						Value: 1,
 					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("lazy expression followed by another expression", func(t *testing.T) {
+		n := MustParseModule("@1 2")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 4},
+			},
+			Statements: []Node{
+				&LazyExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 2},
+					},
+					Expression: &IntLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{1, 2},
+						},
+						Raw:   "1",
+						Value: 1,
+					},
+				},
+				&IntLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{3, 4},
+					},
+					Raw:   "2",
+					Value: 2,
 				},
 			},
 		}, n)
