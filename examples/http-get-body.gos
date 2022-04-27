@@ -5,5 +5,5 @@ require {
     }
 }
 
-$body = http.getbody(https://debloat.dev/fakeapp/users/1)!
+body = http.getbody(https://debloat.dev/fakeapp/users/1)!
 log tostr($body)

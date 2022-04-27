@@ -5,5 +5,5 @@ require {
     }
 }
 
-$json = read(https://debloat.dev/fakeapp/users/1 mime"json")!
+json = read(https://debloat.dev/fakeapp/users/1 mime"json")!
 log $json

@@ -5,8 +5,8 @@ require {
     }
 }
 
-$res = http.get(https://debloat.dev/fakeapp/users/1)!
-$json = tostr(io.ReadAll($res.Body)!)
+res = http.get(https://debloat.dev/fakeapp/users/1)!
+json = tostr(io.ReadAll($res.Body)!)
 
 log $json
 

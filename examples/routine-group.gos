@@ -27,5 +27,5 @@ for (1 .. 2) {
     }
 }
 
-$results = $req_group.WaitAllResults()!
+results = $req_group.WaitAllResults()!
 log $results

@@ -20,6 +20,6 @@ fn handle($rw, $r){
     }
 }
 
-$server = http.serve(https://localhost:8080 $$handle)!
-$body = tostr(http.getbody(https://localhost:8080/)!)
+server = http.serve(https://localhost:8080 $$handle)!
+body = tostr(http.getbody(https://localhost:8080/)!)
 log $body

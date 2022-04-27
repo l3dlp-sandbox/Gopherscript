@@ -5,5 +5,5 @@ require {
     }
 }
 
-$res = http.delete(https://debloat.dev/fakeapp/users/1)!
+res = http.delete(https://debloat.dev/fakeapp/users/1)!
 log $res

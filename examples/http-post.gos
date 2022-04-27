@@ -5,7 +5,7 @@ require {
     }
 }
 
-$res = http.post(https://debloat.dev/fakeapp/users)!
-$body = tostr(io.ReadAll($res.Body)!)
+res = http.post(https://debloat.dev/fakeapp/users)!
+body = tostr(io.ReadAll($res.Body)!)
 
 log $body

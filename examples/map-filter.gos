@@ -10,7 +10,7 @@ $users = [
 ]
 
 
-$names = map(@$.name $users)!
-$names = filter(@($ == "Foo") $names)!
+names = map(@$.name $users)!
+names = filter(@($ == "Foo") $names)!
 
 log $names
