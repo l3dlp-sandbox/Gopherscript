@@ -1176,6 +1176,29 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("call without paren: one arg with a delimiter", func(t *testing.T) {
+		n := MustParseModule("print []")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 8}},
+			Statements: []Node{
+				&Call{
+					Must:     true,
+					NodeBase: NodeBase{NodeSpan{0, 8}},
+					Callee: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 5}},
+						Name:     "print",
+					},
+					Arguments: []Node{
+						&ListLiteral{
+							NodeBase: NodeBase{NodeSpan{6, 8}},
+							Elements: nil,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("call without paren: followed by a single line comment", func(t *testing.T) {
 		n := MustParseModule("print $a $b # comment")
 		assert.EqualValues(t, &Module{

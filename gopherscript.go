@@ -85,9 +85,9 @@ func isDelim(r rune) bool {
 	}
 }
 
-func isNotPairedOrClosingDelim(r rune) bool {
+func isNotPairedOrIsClosingDelim(r rune) bool {
 	switch r {
-	case ',', ';', ':', ')', ']':
+	case ',', ';', ':', ')', ']', '}':
 		return true
 	default:
 		return false
@@ -2282,10 +2282,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Must:      true,
 				}
 
-				for i < len(s) && s[i] != '\n' && !isNotPairedOrClosingDelim(s[i]) {
+				for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
 					eatSpaceAndComments()
 
-					if s[i] == '\n' || isNotPairedOrClosingDelim(s[i]) {
+					if s[i] == '\n' || isNotPairedOrIsClosingDelim(s[i]) {
 						break
 					}
 
@@ -4005,7 +4005,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			switch expr.(type) {
 			case *IdentifierLiteral, *IdentifierMemberExpression:
-				if !followedBySpace || s[i] == '\n' || (isDelim(s[i]) && s[i] != '(') {
+				if !followedBySpace || s[i] == '\n' || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(') {
 					break
 				}
 
@@ -4018,10 +4018,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Must:      true,
 				}
 
-				for i < len(s) && s[i] != '\n' && !isDelim(s[i]) {
+				for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
 					eatSpaceAndComments()
 
-					if s[i] == '\n' || isDelim(s[i]) {
+					if s[i] == '\n' || isNotPairedOrIsClosingDelim(s[i]) {
 						break
 					}
 
