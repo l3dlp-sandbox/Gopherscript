@@ -3495,6 +3495,20 @@ func TestEval(t *testing.T) {
 		assert.EqualValues(t, 3, res)
 	})
 
+	t.Run("call Go function : interface{} returned, should be wrapped and have right type", func(t *testing.T) {
+		n := MustParseModule(`
+			return (getuser()).Name
+		`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"getuser": func(ctx *Context) interface{} {
+				return User{Name: "Foo"}
+			},
+		})
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, res, "Foo")
+	})
+
 	t.Run("call declared non-void function : return in if", func(t *testing.T) {
 		n := MustParseModule(`fn f(){ if true { return 1 } }; return f()`)
 		state := NewState(DEFAULT_TEST_CTX)

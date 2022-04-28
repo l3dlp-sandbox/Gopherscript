@@ -1108,6 +1108,9 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 
 		switch len(resultValues) {
 		case 1:
+			if isExt {
+				return ExtValOf(resultValues[0], extState), nil
+			}
 			return ValOf(resultValues[0]), nil
 		}
 		results := make(List, 0, len(resultValues))
@@ -4117,7 +4120,7 @@ func ValOf(v interface{}) interface{} {
 		if isGopherVal(intf) {
 			return intf
 		}
-		return val
+		return reflect.ValueOf(intf)
 	default:
 		return reflect.ValueOf(v)
 	}
