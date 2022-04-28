@@ -680,6 +680,7 @@ const (
 	Equal
 	NotEqual
 	In
+	NotIn
 	Keyof
 	Dot //unused, present for symmetry
 	Range
@@ -688,7 +689,7 @@ const (
 
 var BINARY_OPERATOR_STRINGS = []string{
 	"+", "+.", "-", "-.", "*", "*.", "/", "/.", "++", "<", "<.", "<=", "<=", ">", ">.", ">=", ">=.", "==", "!=",
-	"in", "keyof", ".", "..", "..<",
+	"in", "not-in", "keyof", ".", "..", "..<",
 }
 
 func (operator BinaryOperator) String() string {
@@ -2820,6 +2821,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if len(s)-i >= KEYOF_LEN && string(s[i:i+KEYOF_LEN]) == "keyof" {
 					operator = Keyof
 					i += KEYOF_LEN - 1
+					break
+				}
+				panic(ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				})
+			case 'n':
+				NOTIN_LEN := len("not-in")
+				if len(s)-i >= NOTIN_LEN && string(s[i:i+NOTIN_LEN]) == "not-in" {
+					operator = NotIn
+					i += NOTIN_LEN - 1
 					break
 				}
 				panic(ParsingError{
@@ -5621,6 +5636,24 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				return nil, fmt.Errorf("invalid binary expression: cannot check if value is inside a %T", rightVal)
 			}
 			return false, nil
+		case NotIn:
+			switch rightVal := right.(type) {
+			case List:
+				for _, e := range rightVal {
+					if left == e {
+						return false, nil
+					}
+				}
+			case Object:
+				for _, v := range rightVal {
+					if left == v {
+						return false, nil
+					}
+				}
+			default:
+				return nil, fmt.Errorf("invalid binary expression: cannot check if value is inside a %T", rightVal)
+			}
+			return true, nil
 		case Keyof:
 			key, ok := left.(string)
 			if !ok {
