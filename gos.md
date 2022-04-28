@@ -8,13 +8,13 @@ Like Gopherscript it is not production read yet. If you find a bug of want to su
 
 - ``gos`` is a single file with less than 2K lines and very few dependencies. Features will be added but the file will NEVER have tens of thousand of lines.
   It is and will stay easy to understand and audit. If you want more functionnality see the [executables](./README.md##executables) section in the README.
-- the functions that have side effects (Golang functions) actively checks permissions before doing anything.
+- the functions that have side effects (Golang functions) actively check permissions before doing anything.
 
 
 ## Installation
 
 ```
-go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.2.1
+go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.2.2
 ```
 
 ## Scripting
