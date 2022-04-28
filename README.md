@@ -54,7 +54,7 @@ func main() {
 	grantedPerms := []gos.Permission{
 		gos.GlobalVarPermission{gos.UsePerm, "*"},
 	}
-	ctx := gos.NewContext(grantedPerms)
+	ctx := gos.NewContext(grantedPerms, nil)
 
     	//we create the initial state with the globals we want to expose
     	//the state can be re used several times (and with different modules)
