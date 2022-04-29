@@ -3049,7 +3049,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						})
 					}
 
-					for i < len(s) && isAlpha(s[i]) {
+					for i < len(s) && isIdentChar(s[i]) {
 						i++
 					}
 
