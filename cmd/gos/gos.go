@@ -945,6 +945,25 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 			return result, nil
 		},
+		"some": func(ctx *gopherscript.Context, node gopherscript.Node, list gopherscript.List) (bool, error) {
+			state.PushScope()
+			defer state.PopScope()
+
+			ok := false
+
+			for _, e := range list {
+				state.CurrentScope()[""] = e
+				res, err := gopherscript.Eval(node.(*gopherscript.LazyExpression).Expression, state)
+				if err != nil {
+					return false, err
+				}
+				if res.(bool) {
+					ok = true
+				}
+			}
+
+			return ok, nil
+		},
 		"mkbytes": func(ctx *gopherscript.Context, size int) ([]byte, error) {
 			return make([]byte, size), nil
 		},

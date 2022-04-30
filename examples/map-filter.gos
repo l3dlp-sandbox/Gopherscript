@@ -4,7 +4,7 @@ require {
     }
 }
 
-$users = [
+users = [
     { name: "Foo"} 
     { name: "Bar"}
 ]
