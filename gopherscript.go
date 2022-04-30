@@ -685,11 +685,13 @@ const (
 	Dot //unused, present for symmetry
 	Range
 	ExclEndRange
+	And
+	Or
 )
 
 var BINARY_OPERATOR_STRINGS = []string{
 	"+", "+.", "-", "-.", "*", "*.", "/", "/.", "++", "<", "<.", "<=", "<=", ">", ">.", ">=", ">=.", "==", "!=",
-	"in", "not-in", "keyof", ".", "..", "..<",
+	"in", "not-in", "keyof", ".", "..", "..<", "and", "or",
 }
 
 func (operator BinaryOperator) String() string {
@@ -2794,6 +2796,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					KnownType,
 					(*BinaryExpression)(nil),
 				})
+			case 'a':
+				AND_LEN := len("and")
+				if len(s)-i >= AND_LEN && string(s[i:i+AND_LEN]) == "and" {
+					operator = And
+					i += AND_LEN - 1
+					break
+				}
+				panic(ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				})
 			case 'i':
 				i++
 				if i >= len(s) {
@@ -2835,6 +2851,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if len(s)-i >= NOTIN_LEN && string(s[i:i+NOTIN_LEN]) == "not-in" {
 					operator = NotIn
 					i += NOTIN_LEN - 1
+					break
+				}
+				panic(ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				})
+			case 'o':
+				OR_LEN := len("or")
+				if len(s)-i >= OR_LEN && string(s[i:i+OR_LEN]) == "or" {
+					operator = Or
+					i += OR_LEN - 1
 					break
 				}
 				panic(ParsingError{
@@ -5674,6 +5704,10 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				End:          right.(int),
 				Step:         1,
 			}), nil
+		case And:
+			return left.(bool) && right.(bool), nil
+		case Or:
+			return left.(bool) || right.(bool), nil
 		default:
 			return nil, errors.New("invalid binary operator " + strconv.Itoa(int(n.Operator)))
 		}
