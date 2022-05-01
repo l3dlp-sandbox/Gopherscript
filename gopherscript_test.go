@@ -996,21 +996,21 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("multi assignement statement : assign var = var", func(t *testing.T) {
-		n := MustParseModule("assign $a = $b")
+	t.Run("multi assignement statement : assign <ident> = <var>", func(t *testing.T) {
+		n := MustParseModule("assign a = $b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 14}},
+			NodeBase: NodeBase{NodeSpan{0, 13}},
 			Statements: []Node{
 				&MultiAssignment{
-					NodeBase: NodeBase{NodeSpan{0, 14}},
+					NodeBase: NodeBase{NodeSpan{0, 13}},
 					Variables: []Node{
-						&Variable{
-							NodeBase: NodeBase{NodeSpan{7, 9}},
+						&IdentifierLiteral{
+							NodeBase: NodeBase{NodeSpan{7, 8}},
 							Name:     "a",
 						},
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{12, 14}},
+						NodeBase: NodeBase{NodeSpan{11, 13}},
 						Name:     "b",
 					},
 				},
@@ -1019,24 +1019,24 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("multi assignement statement : assign var var = var", func(t *testing.T) {
-		n := MustParseModule("assign $a $b = $c")
+		n := MustParseModule("assign a b = $c")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}},
+			NodeBase: NodeBase{NodeSpan{0, 15}},
 			Statements: []Node{
 				&MultiAssignment{
-					NodeBase: NodeBase{NodeSpan{0, 17}},
+					NodeBase: NodeBase{NodeSpan{0, 15}},
 					Variables: []Node{
-						&Variable{
-							NodeBase: NodeBase{NodeSpan{7, 9}},
+						&IdentifierLiteral{
+							NodeBase: NodeBase{NodeSpan{7, 8}},
 							Name:     "a",
 						},
-						&Variable{
-							NodeBase: NodeBase{NodeSpan{10, 12}},
+						&IdentifierLiteral{
+							NodeBase: NodeBase{NodeSpan{9, 10}},
 							Name:     "b",
 						},
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{15, 17}},
+						NodeBase: NodeBase{NodeSpan{13, 15}},
 						Name:     "c",
 					},
 				},
@@ -3199,7 +3199,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("multi assignement", func(t *testing.T) {
-		n := MustParseModule(`assign $a $b = [1, 2]; return [$a, $b]`)
+		n := MustParseModule(`assign a b = [1, 2]; return [$a, $b]`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)

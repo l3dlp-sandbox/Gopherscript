@@ -3976,9 +3976,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				for i < len(s) && s[i] != '=' {
 					eatSpace()
 					e := parseExpression()
-					if _, ok := e.(*Variable); !ok {
+					if _, ok := e.(*IdentifierLiteral); !ok {
 						panic(ParsingError{
-							"assign keyword should be followed by variables (assign $a $b = <value>)",
+							"assign keyword should be followed by identifiers (assign a b = <value>)",
 							i,
 							expr.Base().Span.Start,
 							KnownType,
@@ -5159,7 +5159,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		for i, var_ := range n.Variables {
 			elemValue := rightValue.Index(i)
 
-			keyValue := reflect.ValueOf(var_.(*Variable).Name)
+			keyValue := reflect.ValueOf(var_.(*IdentifierLiteral).Name)
 			scopeValue.SetMapIndex(keyValue, elemValue)
 		}
 
