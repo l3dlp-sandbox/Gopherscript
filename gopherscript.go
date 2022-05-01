@@ -623,10 +623,10 @@ type IfStatement struct {
 
 type ForStatement struct {
 	NodeBase
-	KeyIndexVar   *Variable //can be nil
-	ValueElemVar  *Variable //can be nil
-	Body          *Block
-	IteratedValue Node
+	KeyIndexIdent  *IdentifierLiteral //can be nil
+	ValueElemIdent *IdentifierLiteral //can be nil
+	Body           *Block
+	IteratedValue  Node
 }
 
 type Block struct {
@@ -3510,10 +3510,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case "for":
 				forStart := expr.Base().Span.Start
 				eatSpace()
-				keyIndexVar := parseExpression()
+				keyIndexIdent := parseExpression()
 
-				switch v := keyIndexVar.(type) {
-				case *Variable:
+				switch v := keyIndexIdent.(type) {
+				case *IdentifierLiteral:
 					eatSpace()
 
 					if i > len(s) {
@@ -3528,7 +3528,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					if s[i] != ',' {
 						panic(ParsingError{
-							"for statement : key/index variale should be followed by a comma ',' , not " + string(s[i]),
+							"for statement : key/index name should be followed by a comma ',' , not " + string(s[i]),
 							i,
 							forStart,
 							KnownType,
@@ -3549,11 +3549,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						})
 					}
 
-					valueElemVar := parseExpression()
+					valueElemIdent := parseExpression()
 
-					if _, isVar := valueElemVar.(*Variable); !isVar {
+					if _, isVar := valueElemIdent.(*IdentifierLiteral); !isVar {
 						panic(ParsingError{
-							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexVar),
+							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexIdent),
 							i,
 							forStart,
 							KnownType,
@@ -3626,15 +3626,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							Span: NodeSpan{ev.Span.Start, blk.Span.End},
 						},
-						KeyIndexVar:   keyIndexVar.(*Variable),
-						ValueElemVar:  valueElemVar.(*Variable),
-						Body:          blk,
-						IteratedValue: iteratedValue,
+						KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
+						ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+						Body:           blk,
+						IteratedValue:  iteratedValue,
 					}
 				case *BinaryExpression:
 					if v.Operator == Range || v.Operator == ExclEndRange {
-						iteratedValue := keyIndexVar
-						keyIndexVar = nil
+						iteratedValue := keyIndexIdent
+						keyIndexIdent = nil
 
 						eatSpace()
 
@@ -3654,10 +3654,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							NodeBase: NodeBase{
 								Span: NodeSpan{ev.Span.Start, blk.Span.End},
 							},
-							KeyIndexVar:   nil,
-							ValueElemVar:  nil,
-							Body:          blk,
-							IteratedValue: iteratedValue,
+							KeyIndexIdent:  nil,
+							ValueElemIdent: nil,
+							Body:           blk,
+							IteratedValue:  iteratedValue,
 						}
 					}
 					panic(ParsingError{
@@ -3669,7 +3669,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				default:
 					panic(ParsingError{
-						fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexVar),
+						fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexIdent),
 						i,
 						forStart,
 						KnownType,
@@ -4734,11 +4734,11 @@ func Walk(node, parent Node, fn func(Node, Node) error) error {
 			}
 		}
 	case *ForStatement:
-		if n.KeyIndexVar != nil {
-			if err := Walk(n.KeyIndexVar, node, fn); err != nil {
+		if n.KeyIndexIdent != nil {
+			if err := Walk(n.KeyIndexIdent, node, fn); err != nil {
 				return err
 			}
-			if err := Walk(n.ValueElemVar, node, fn); err != nil {
+			if err := Walk(n.ValueElemIdent, node, fn); err != nil {
 				return err
 			}
 		}
@@ -5457,13 +5457,13 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		var kVarname string
 		var eVarname string
 
-		if n.KeyIndexVar != nil {
-			kVarname = n.KeyIndexVar.Name
-			eVarname = n.ValueElemVar.Name
+		if n.KeyIndexIdent != nil {
+			kVarname = n.KeyIndexIdent.Name
+			eVarname = n.ValueElemIdent.Name
 		}
 
 		defer func() {
-			if n.KeyIndexVar != nil {
+			if n.KeyIndexIdent != nil {
 				state.CurrentScope()[kVarname] = nil
 				state.CurrentScope()[eVarname] = nil
 			}
@@ -5472,7 +5472,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		switch v := iteratedValue.(type) {
 		case Object:
 			for k, v := range v {
-				if n.KeyIndexVar != nil {
+				if n.KeyIndexIdent != nil {
 					state.CurrentScope()[kVarname] = k
 					state.CurrentScope()[eVarname] = v
 				}
@@ -5486,7 +5486,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 		case List:
 			for i, e := range v {
-				if n.KeyIndexVar != nil {
+				if n.KeyIndexIdent != nil {
 
 					state.CurrentScope()[kVarname] = i
 					state.CurrentScope()[eVarname] = e
@@ -5510,7 +5510,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				for it.HasNext() {
 					e := it.GetNext()
 
-					if n.KeyIndexVar != nil {
+					if n.KeyIndexIdent != nil {
 						state.CurrentScope()[kVarname] = index
 						state.CurrentScope()[eVarname] = e
 					}

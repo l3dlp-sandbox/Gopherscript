@@ -2094,37 +2094,37 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("single line empty for .. in statement", func(t *testing.T) {
-		n := MustParseModule("for $i, $u in $users { }")
+		n := MustParseModule("for i, u in $users { }")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
-				NodeSpan{0, 24},
+				NodeSpan{0, 22},
 			},
 			Statements: []Node{
 				&ForStatement{
 					NodeBase: NodeBase{
-						NodeSpan{0, 24},
+						NodeSpan{0, 22},
 					},
-					KeyIndexVar: &Variable{
+					KeyIndexIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
-							NodeSpan{4, 6},
+							NodeSpan{4, 5},
 						},
 						Name: "i",
 					},
-					ValueElemVar: &Variable{
+					ValueElemIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
-							NodeSpan{8, 10},
+							NodeSpan{7, 8},
 						},
 						Name: "u",
 					},
 					IteratedValue: &Variable{
 						NodeBase: NodeBase{
-							NodeSpan{14, 20},
+							NodeSpan{12, 18},
 						},
 						Name: "users",
 					},
 					Body: &Block{
 						NodeBase: NodeBase{
-							NodeSpan{21, 24},
+							NodeSpan{19, 22},
 						},
 						Statements: nil,
 					},
@@ -2144,8 +2144,8 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 					},
-					KeyIndexVar:  nil,
-					ValueElemVar: nil,
+					KeyIndexIdent:  nil,
+					ValueElemIdent: nil,
 					IteratedValue: &BinaryExpression{
 						NodeBase: NodeBase{
 							NodeSpan{4, 12},
@@ -3231,7 +3231,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("for statement : empty list", func(t *testing.T) {
-		n := MustParseModule(`$c = 0; for $i, $e in [] { $c = 1 }; return $c`)
+		n := MustParseModule(`$c = 0; for i, e in [] { $c = 1 }; return $c`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -3239,7 +3239,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("for statement : single elem list", func(t *testing.T) {
-		n := MustParseModule(`$c1 = 0; $c2 = 2; for $i, $e in [5] { $c1 = $i; $c2 = $e; }; return [$c1, $c2]`)
+		n := MustParseModule(`$c1 = 0; $c2 = 2; for i, e in [5] { $c1 = $i; $c2 = $e; }; return [$c1, $c2]`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -3247,7 +3247,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("for statement : two-elem list", func(t *testing.T) {
-		n := MustParseModule(`$c1 = 0; $c2 = 0; for $i, $e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
+		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -3255,7 +3255,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("for statement : two-elem list", func(t *testing.T) {
-		n := MustParseModule(`$c1 = 0; $c2 = 0; for $i, $e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
+		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -3263,7 +3263,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("for statement : integer range", func(t *testing.T) {
-		n := MustParseModule(`$c1 = 0; $c2 = 0; for $i, $e in (5 .. 6) { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
+		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in (5 .. 6) { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
