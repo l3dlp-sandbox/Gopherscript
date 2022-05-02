@@ -4366,11 +4366,20 @@ func (ctx *Context) GetRate(name string) ByteRate {
 	return -1
 }
 
+type IterationChange int
+
+const (
+	NoIterationChange IterationChange = iota
+	BreakIteration
+	ContinueIteration
+)
+
 type State struct {
 	ScopeStack  []map[string]interface{}
 	ReturnValue *interface{}
-	ctx         *Context
-	constants   map[string]int
+	IterationChange
+	ctx       *Context
+	constants map[string]int
 }
 
 func (state State) GlobalScope() map[string]interface{} {
@@ -5162,6 +5171,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		state.ReturnValue = &value
 		return nil, nil
+	case *BreakStatement:
+		state.IterationChange = BreakIteration
+		return nil, nil
+	case *ContinueStatement:
+		state.IterationChange = ContinueIteration
+		return nil, nil
 	case *Call:
 		return CallFunc(n.Callee, state, n.Arguments, n.Must)
 	case *Assignment:
@@ -5268,6 +5283,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		state.ReturnValue = nil
 		defer func() {
 			state.ReturnValue = nil
+			state.IterationChange = NoIterationChange
 			state.PopScope()
 		}()
 
@@ -5314,6 +5330,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			Statements:   n.Statements,
 		}), nil
 	case *Block:
+	loop:
 		for _, stmt := range n.Statements {
 			_, err := Eval(stmt, state)
 			if err != nil {
@@ -5322,6 +5339,11 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 			if state.ReturnValue != nil {
 				return nil, nil
+			}
+
+			switch state.IterationChange {
+			case BreakIteration, ContinueIteration:
+				break loop
 			}
 		}
 		return nil, nil
@@ -5569,6 +5591,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		switch v := iteratedValue.(type) {
 		case Object:
+		obj_iteration:
 			for k, v := range v {
 				if n.KeyIndexIdent != nil {
 					state.CurrentScope()[kVarname] = k
@@ -5581,8 +5604,15 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				if state.ReturnValue != nil {
 					return nil, nil
 				}
+
+				switch state.IterationChange {
+				case BreakIteration, ContinueIteration:
+					state.IterationChange = NoIterationChange
+					break obj_iteration
+				}
 			}
 		case List:
+		list_iteration:
 			for i, e := range v {
 				if n.KeyIndexIdent != nil {
 
@@ -5596,6 +5626,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				if state.ReturnValue != nil {
 					return nil, nil
 				}
+
+				switch state.IterationChange {
+				case BreakIteration, ContinueIteration:
+					state.IterationChange = NoIterationChange
+					break list_iteration
+				}
 			}
 		default:
 			val := ToReflectVal(v)
@@ -5605,6 +5641,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				it := iterable.Iterator()
 				index := 0
 
+			iteration:
 				for it.HasNext() {
 					e := it.GetNext()
 
@@ -5618,6 +5655,11 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 					}
 					if state.ReturnValue != nil {
 						return nil, nil
+					}
+					switch state.IterationChange {
+					case BreakIteration, ContinueIteration:
+						state.IterationChange = NoIterationChange
+						break iteration
 					}
 					index++
 				}

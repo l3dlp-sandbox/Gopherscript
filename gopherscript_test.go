@@ -3382,6 +3382,24 @@ func TestEval(t *testing.T) {
 		assert.EqualValues(t, List{1, 11}, res)
 	})
 
+	t.Run("for statement : break statement", func(t *testing.T) {
+		n := MustParseModule(`
+			$c1 = 0; $c2 = 0; 
+			for i, e in (5 .. 6) { 
+				$c1 = ($c1 + $i); 
+				if ($i == 1) { 
+					break 
+				} 
+				$c2 = ($c2 + $e); 
+			}; 
+			return [$c1, $c2]
+		`)
+		state := NewState(DEFAULT_TEST_CTX)
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, List{1, 5}, res)
+	})
+
 	t.Run("for <expr> statement", func(t *testing.T) {
 		n := MustParseModule(`$c = 0; for (1 .. 2) { $c = ($c + 1) }; return $c`)
 		state := NewState(DEFAULT_TEST_CTX)
