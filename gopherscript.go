@@ -639,6 +639,16 @@ type ReturnStatement struct {
 	Expr Node
 }
 
+type BreakStatement struct {
+	NodeBase
+	Label *IdentifierLiteral //can be nil
+}
+
+type ContinueStatement struct {
+	NodeBase
+	Label *IdentifierLiteral //can be nil
+}
+
 type SwitchStatement struct {
 	NodeBase
 	Discriminant Node
@@ -3970,6 +3980,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Expr: returnValue,
 				}
+			case "break":
+				return &BreakStatement{
+					NodeBase: NodeBase{
+						Span: ev.Span,
+					},
+					Label: nil,
+				}
+			case "continue":
+				return &ContinueStatement{
+					NodeBase: NodeBase{
+						Span: ev.Span,
+					},
+					Label: nil,
+				}
 			case "assign":
 				var vars []Node
 
@@ -4752,6 +4776,18 @@ func Walk(node, parent Node, fn func(Node, Node) error) error {
 	case *ReturnStatement:
 		if err := Walk(n.Expr, node, fn); err != nil {
 			return err
+		}
+	case *BreakStatement:
+		if n.Label != nil {
+			if err := Walk(n.Label, node, fn); err != nil {
+				return err
+			}
+		}
+	case *ContinueStatement:
+		if n.Label != nil {
+			if err := Walk(n.Label, node, fn); err != nil {
+				return err
+			}
 		}
 	case *SwitchStatement:
 		if err := Walk(n.Discriminant, node, fn); err != nil {

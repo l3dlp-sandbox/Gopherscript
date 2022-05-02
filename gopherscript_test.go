@@ -2133,6 +2133,100 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("for .. in with break statement", func(t *testing.T) {
+		n := MustParseModule("for i, u in $users { break }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 28},
+			},
+			Statements: []Node{
+				&ForStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 28},
+					},
+					KeyIndexIdent: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{4, 5},
+						},
+						Name: "i",
+					},
+					ValueElemIdent: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{7, 8},
+						},
+						Name: "u",
+					},
+					IteratedValue: &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{12, 18},
+						},
+						Name: "users",
+					},
+					Body: &Block{
+						NodeBase: NodeBase{
+							NodeSpan{19, 28},
+						},
+						Statements: []Node{
+							&BreakStatement{
+								NodeBase: NodeBase{
+									NodeSpan{21, 26},
+								},
+								Label: nil,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("for .. in with continue statement", func(t *testing.T) {
+		n := MustParseModule("for i, u in $users { continue }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 31},
+			},
+			Statements: []Node{
+				&ForStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 31},
+					},
+					KeyIndexIdent: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{4, 5},
+						},
+						Name: "i",
+					},
+					ValueElemIdent: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{7, 8},
+						},
+						Name: "u",
+					},
+					IteratedValue: &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{12, 18},
+						},
+						Name: "users",
+					},
+					Body: &Block{
+						NodeBase: NodeBase{
+							NodeSpan{19, 31},
+						},
+						Statements: []Node{
+							&ContinueStatement{
+								NodeBase: NodeBase{
+									NodeSpan{21, 29},
+								},
+								Label: nil,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("single line empty for <expr> statement", func(t *testing.T) {
 		n := MustParseModule("for (1 .. 2) { }")
 		assert.EqualValues(t, &Module{
