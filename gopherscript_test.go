@@ -2901,6 +2901,24 @@ func TestCheck(t *testing.T) {
 		`)
 		assert.NoError(t, Check(n))
 	})
+
+	t.Run("assignment with a function's name", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(){}
+
+			$$f = 0
+		`)
+		assert.Error(t, Check(n))
+	})
+
+	t.Run("function declaration with the same name as a global variable assignment", func(t *testing.T) {
+		n := MustParseModule(`
+			$$f = 0
+
+			fn f(){}
+		`)
+		assert.Error(t, Check(n))
+	})
 }
 
 func TestRequirements(t *testing.T) {

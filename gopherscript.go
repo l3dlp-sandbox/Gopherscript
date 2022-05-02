@@ -4826,6 +4826,12 @@ func Check(node Node) error {
 	//key: *Module|*EmbeddedModule
 	fnDecls := make(map[Node]map[string]int)
 
+	//key: *Module|*EmbeddedModule|*Block
+	globalVars := make(map[Node]map[string]int)
+
+	//key: *Module|*EmbeddedModule|*Block
+	localVars := make(map[Node]map[string]int)
+
 	return Walk(node, nil, func(n Node, parent Node) error {
 
 		switch node := n.(type) {
@@ -4890,14 +4896,71 @@ func Check(node Node) error {
 			default:
 				return errors.New("invalid spawn expression: the expression should be a global func call, an embedded module or a variable (that can be global)")
 			}
+		case *Assignment, *MultiAssignment:
+			var names []string
+
+			switch assignment := n.(type) {
+			case *Assignment:
+
+				switch left := assignment.Left.(type) {
+
+				case *GlobalVariable:
+					fns, ok := fnDecls[parent]
+					if ok {
+						_, alreadyUsed := fns[left.Name]
+						if alreadyUsed {
+							return fmt.Errorf("invalid global variable assignment: '%s' is a declared function's name", left.Name)
+						}
+					}
+
+					variables, ok := globalVars[parent]
+
+					if !ok {
+						variables = make(map[string]int)
+						globalVars[parent] = variables
+					}
+
+					variables[left.Name] = 0
+				case *Variable:
+					names = append(names, left.Name)
+				case *IdentifierLiteral:
+					names = append(names, left.Name)
+				}
+
+			case *MultiAssignment:
+				for _, variable := range assignment.Variables {
+					names = append(names, variable.(*IdentifierLiteral).Name)
+				}
+			}
+
+			for _, name := range names {
+				variables, ok := localVars[parent]
+
+				if !ok {
+					variables = make(map[string]int)
+					localVars[parent] = variables
+				}
+
+				variables[name] = 0
+			}
+
 		case *FunctionDeclaration:
 
 			switch parent.(type) {
 			case *Module, *EmbeddedModule:
 				fns, ok := fnDecls[parent]
+				vars, globalOk := globalVars[parent]
+
 				if !ok {
 					fns = make(map[string]int)
 					fnDecls[parent] = fns
+				}
+
+				if globalOk {
+					_, alreadyUsed := vars[node.Name.Name]
+					if alreadyUsed {
+						return fmt.Errorf("invalid function declaration: a global variable named '%s' exist", node.Name.Name)
+					}
 				}
 
 				_, alreadyDeclared := fns[node.Name.Name]
@@ -4915,7 +4978,6 @@ func Check(node Node) error {
 }
 
 func getQuantity(value float64, unit string) interface{} {
-
 	switch unit {
 	case "s":
 		return reflect.ValueOf(time.Duration(value) * time.Second)
