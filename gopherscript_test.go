@@ -3013,6 +3013,42 @@ func TestCheck(t *testing.T) {
 		`)
 		assert.Error(t, Check(n))
 	})
+
+	t.Run("break statement : direct child of a for statement", func(t *testing.T) {
+		n := MustParseModule(`
+			for i, e in [] {
+				break
+			}
+		`)
+		assert.NoError(t, Check(n))
+	})
+
+	t.Run("break statement : in an if statement in a for statement", func(t *testing.T) {
+		n := MustParseModule(`
+			for i, e in [] {
+				if true {
+					break
+				}
+			}
+		`)
+		assert.NoError(t, Check(n))
+	})
+
+	t.Run("break statement : direct child of a module", func(t *testing.T) {
+		n := MustParseModule(`
+			break
+		`)
+		assert.Error(t, Check(n))
+	})
+
+	t.Run("break statement : direct child of an embedded module", func(t *testing.T) {
+		n := MustParseModule(`
+			sr nil {
+				break
+			}
+		`)
+		assert.Error(t, Check(n))
+	})
 }
 
 func TestRequirements(t *testing.T) {
