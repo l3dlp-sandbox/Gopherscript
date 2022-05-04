@@ -592,7 +592,7 @@ func main() {
 			requiredPermissions, limitations := mod.Requirements.Object.PermissionsLimitations(mod.GlobalConstantDeclarations, nil, nil)
 
 			if perms == "required" {
-				ctx = gopherscript.NewContext(requiredPermissions, limitations)
+				ctx = gopherscript.NewContext(requiredPermissions, nil, limitations)
 			} else if len(requiredPermissions) != 0 {
 				panic("some required permissions are not granted. Did you use -p=required ?")
 			}
@@ -648,7 +648,7 @@ func main() {
 				log.Panicln("failed to parse & check startup file:", err)
 			}
 			requiredPermissions, limitations := startupMod.Requirements.Object.PermissionsLimitations(startupMod.GlobalConstantDeclarations, nil, nil)
-			ctx := gopherscript.NewContext(requiredPermissions, limitations)
+			ctx := gopherscript.NewContext(requiredPermissions, nil, limitations)
 			state := NewState(ctx)
 
 			_, err = gopherscript.Eval(startupMod, state)

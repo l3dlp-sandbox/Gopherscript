@@ -394,7 +394,7 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 
 	var state *State
 	if globalConsts != nil {
-		state = NewState(NewContext([]Permission{GlobalVarPermission{ReadPerm, "*"}}, nil))
+		state = NewState(NewContext([]Permission{GlobalVarPermission{ReadPerm, "*"}}, nil, nil))
 		globalScope := state.GlobalScope()
 		for _, nameValueNodes := range globalConsts.NamesValues {
 			globalScope[nameValueNodes[0].(*GlobalVariable).Name] = MustEval(nameValueNodes[1], nil)
@@ -1235,7 +1235,7 @@ func spawnRoutine(state *State, globals map[string]interface{}, moduleOrExpr Nod
 		routineCtx = NewContext([]Permission{
 			GlobalVarPermission{ReadPerm, "*"},
 			GlobalVarPermission{UsePerm, "*"},
-		}, nil)
+		}, nil, nil)
 		routineCtx.limiters = state.ctx.limiters
 	}
 
@@ -4271,12 +4271,13 @@ type Limiter struct {
 }
 
 type Context struct {
-	grantedPermissions []Permission
-	limiters           map[string]*Limiter
-	stackPermission    StackPermission
+	grantedPermissions   []Permission
+	forbiddenPermissions []Permission
+	limiters             map[string]*Limiter
+	stackPermission      StackPermission
 }
 
-func NewContext(permissions []Permission, limitations []Limitation) *Context {
+func NewContext(permissions []Permission, forbiddenPermissions []Permission, limitations []Limitation) *Context {
 
 	var stackPermission = StackPermission{maxHeight: DEFAULT_MAX_STACK_HEIGHT}
 	//check permissions
@@ -4301,14 +4302,23 @@ func NewContext(permissions []Permission, limitations []Limitation) *Context {
 		}
 	}
 
-	return &Context{
-		grantedPermissions: permissions,
-		limiters:           limiters,
-		stackPermission:    stackPermission,
+	ctx := &Context{
+		grantedPermissions:   permissions,
+		forbiddenPermissions: forbiddenPermissions,
+		limiters:             limiters,
+		stackPermission:      stackPermission,
 	}
+
+	return ctx
 }
 
 func (ctx *Context) HasPermission(perm Permission) bool {
+	for _, forbiddenPerm := range ctx.forbiddenPermissions {
+		if forbiddenPerm.Includes(perm) {
+			return false
+		}
+	}
+
 	for _, grantedPerm := range ctx.grantedPermissions {
 		if grantedPerm.Includes(perm) {
 			return true
@@ -4332,6 +4342,7 @@ func (ctx *Context) CheckHasPermission(perm Permission) error {
 func (ctx *Context) Without(removedPerms []Permission) (*Context, error) {
 
 	var perms []Permission
+	var forbiddenPerms []Permission
 
 top:
 	for _, perm := range ctx.grantedPermissions {
@@ -4339,14 +4350,12 @@ top:
 			if removedPerm.Includes(perm) {
 				continue top
 			}
-			if perm.Includes(removedPerm) {
-				return nil, fmt.Errorf("cannot created new context with removed permission %s", removedPerm.String())
-			}
 		}
+
 		perms = append(perms, perm)
 	}
 
-	newCtx := NewContext(perms, nil)
+	newCtx := NewContext(perms, forbiddenPerms, nil)
 	newCtx.limiters = ctx.limiters
 	return newCtx, nil
 }
@@ -4454,7 +4463,7 @@ func NewState(ctx *Context, args ...map[string]interface{}) *State {
 	}
 
 	if state.ctx == nil {
-		state.ctx = NewContext(nil, []Limitation{
+		state.ctx = NewContext(nil, nil, []Limitation{
 			{"http/upload", ByteRate(100_000)},
 			{"http/download", ByteRate(100_000)},
 			{"fs/read", ByteRate(1_000_000)},
@@ -5419,7 +5428,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		globals := map[string]interface{}(argObj.(Object))
 
-		routineCtx := NewContext(perms, nil)
+		routineCtx := NewContext(perms, nil, nil)
 		routineCtx.limiters = state.ctx.limiters
 
 		routine, err := spawnRoutine(state, globals, mod, routineCtx)
@@ -5513,7 +5522,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 					return nil, fmt.Errorf("spawn: cannot allow permission: %s", err.Error())
 				}
 			}
-			ctx = NewContext(perms, nil)
+			ctx = NewContext(perms, nil, nil)
 			ctx.limiters = state.ctx.limiters
 		}
 

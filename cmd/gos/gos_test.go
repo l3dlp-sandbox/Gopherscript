@@ -71,7 +71,7 @@ func TestCreateFile(t *testing.T) {
 
 			ctx := G.NewContext([]G.Permission{
 				G.FilesystemPermission{G.CreatePerm, fpath},
-			}, []G.Limitation{testCase.limitation})
+			}, nil, []G.Limitation{testCase.limitation})
 			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.Rate))
 
 			start := time.Now()
@@ -151,7 +151,7 @@ func TestReadEntireFile(t *testing.T) {
 			//read it
 			ctx := G.NewContext([]G.Permission{
 				G.FilesystemPermission{G.ReadPerm, G.Path(fpath)},
-			}, []G.Limitation{testCase.limitation})
+			}, nil, []G.Limitation{testCase.limitation})
 			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.Rate))
 
 			start := time.Now()

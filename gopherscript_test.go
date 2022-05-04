@@ -3111,7 +3111,7 @@ func TestEval(t *testing.T) {
 
 		HttpPermission{ReadPerm, HTTPHostPattern("https://*")},
 		RoutinePermission{CreatePerm},
-	}, nil)
+	}, nil, nil)
 
 	t.Run("integer literal", func(t *testing.T) {
 		n := MustParseModule("1")
@@ -4084,6 +4084,17 @@ func TestFilesystemPermission(t *testing.T) {
 	}
 }
 
+func TestForbiddenPermissions(t *testing.T) {
+
+	readGoFiles := FilesystemPermission{ReadPerm, PathPattern("./*.go")}
+	readFile := FilesystemPermission{ReadPerm, Path("./file.go")}
+
+	ctx := NewContext([]Permission{readGoFiles}, []Permission{readFile}, nil)
+
+	assert.True(t, ctx.HasPermission(readGoFiles))
+	assert.False(t, ctx.HasPermission(readFile))
+}
+
 func TestStackPermission(t *testing.T) {
 	perm1 := StackPermission{maxHeight: 1}
 	assert.True(t, perm1.Includes(perm1))
@@ -4109,7 +4120,7 @@ func TestSpawnRoutine(t *testing.T) {
 	t.Run("a routine should have access to globals passed to it", func(t *testing.T) {
 		state := NewState(NewContext([]Permission{
 			RoutinePermission{CreatePerm},
-		}, nil))
+		}, nil, nil))
 		mod := MustParseModule(`
 			return $$x
 		`)
@@ -4128,7 +4139,7 @@ func TestSpawnRoutine(t *testing.T) {
 	t.Run("the result of a routine should be an ExternalValue if it is not simple", func(t *testing.T) {
 		state := NewState(NewContext([]Permission{
 			RoutinePermission{CreatePerm},
-		}, nil))
+		}, nil, nil))
 		mod := MustParseModule(`
 			return {a: 1}
 		`)
@@ -4275,7 +4286,7 @@ func TestTraverse(t *testing.T) {
 }
 
 func TestLimiters(t *testing.T) {
-	ctx := NewContext(nil, []Limitation{
+	ctx := NewContext(nil, nil, []Limitation{
 		{Name: "fs/read", Rate: 1_000},
 	})
 
