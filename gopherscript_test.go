@@ -2921,6 +2921,10 @@ func (user User) GetName(ctx *Context) string {
 	return user.Name
 }
 
+func (user User) GetNameNoCtx() string {
+	return user.Name
+}
+
 func TestCheck(t *testing.T) {
 
 	t.Run("object literal with two implict keys", func(t *testing.T) {
@@ -3078,6 +3082,21 @@ func TestRequirements(t *testing.T) {
 			}
 		`, []Permission{
 			HttpPermission{ReadPerm, URL("https://example.com/")},
+		}, []Limitation{}},
+		{"call_contextless_func_and_method", `
+			require { 
+				use: {
+					contextless: {
+						: f,
+						User: {
+							Name: {}
+						}
+					}
+				}
+			}
+		`, []Permission{
+			ContextlessCallPermission{ReceiverTypeName: "", FuncMethodName: "f"},
+			ContextlessCallPermission{ReceiverTypeName: "User", FuncMethodName: "Name"},
 		}, []Limitation{}},
 		{"limitations", `
 			require { 
@@ -4082,6 +4101,21 @@ func TestFilesystemPermission(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestContextlessCallPermission(t *testing.T) {
+
+	funCallPerm := ContextlessCallPermission{FuncMethodName: "f", ReceiverTypeName: ""}
+	funCallPerm2 := ContextlessCallPermission{FuncMethodName: "g", ReceiverTypeName: ""}
+	methodCallPerm := ContextlessCallPermission{FuncMethodName: "f", ReceiverTypeName: "User"}
+
+	assert.True(t, funCallPerm.Includes(funCallPerm))
+	assert.True(t, methodCallPerm.Includes(methodCallPerm))
+
+	assert.False(t, methodCallPerm.Includes(funCallPerm))
+	assert.False(t, funCallPerm.Includes(methodCallPerm))
+	assert.False(t, funCallPerm.Includes(funCallPerm2))
+	assert.False(t, funCallPerm2.Includes(funCallPerm))
 }
 
 func TestForbiddenPermissions(t *testing.T) {

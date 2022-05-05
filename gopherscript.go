@@ -448,11 +448,11 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 					case "globals":
 						globalReqNodes := make([]Node, 0)
 
-						switch gvn := p.Value.(type) {
+						switch valueNode := p.Value.(type) {
 						case *ListLiteral:
-							globalReqNodes = append(globalReqNodes, gvn.Elements...)
+							globalReqNodes = append(globalReqNodes, valueNode.Elements...)
 						default:
-							globalReqNodes = append(globalReqNodes, gvn)
+							globalReqNodes = append(globalReqNodes, valueNode)
 						}
 
 						for _, gn := range globalReqNodes {
@@ -465,6 +465,48 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 								Kind_: permKind,
 								Name:  nameOrAny.Value,
 							})
+						}
+					case "contextless":
+						if permKind != UsePerm {
+							log.Panic("permission 'contextless' should be in the 'use' section of permissions")
+						}
+						contextlessDesc, isObjLit := p.Value.(*ObjectLiteral)
+						if !isObjLit {
+							log.Panicln("invalid requirements, 'contextless' should have an object literal value")
+						}
+
+						for _, ctxlessProp := range contextlessDesc.Properties {
+
+							if ctxlessProp.HasImplicitKey() { //a function's name
+								identLit, ok := ctxlessProp.Value.(*IdentifierLiteral)
+								if !ok {
+									log.Panicln("invalid requirements, 'contextless' description: implicity key props should be function names (identifiers)")
+								}
+								perms = append(perms, ContextlessCallPermission{
+									FuncMethodName: identLit.Name,
+								})
+								continue
+							}
+
+							//else: receiver type
+							receiverTypeName := ctxlessProp.Name()
+							objLit, ok := ctxlessProp.Value.(*ObjectLiteral)
+							if !ok {
+								log.Panicln("invalid requirements, 'contextless' description: non-implicit-key props should be object literals")
+							}
+
+							for _, receiverDescProp := range objLit.Properties {
+								terminalDesc, isObjLit := receiverDescProp.Value.(*ObjectLiteral)
+								if !isObjLit || receiverDescProp.HasImplicitKey() {
+									log.Panicf("invalid requirements, 'contextless' description: description of receiver type '%s': only implicit-key props with an object literal value are allwoed\n", receiverTypeName)
+								}
+								perms = append(perms, ContextlessCallPermission{
+									FuncMethodName:   receiverDescProp.Name(),
+									ReceiverTypeName: receiverTypeName,
+								})
+
+								_ = terminalDesc //future use
+							}
 						}
 					case "routines":
 						switch p.Value.(type) {
@@ -967,14 +1009,24 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		}
 
 		for _, idents := range c.PropertyNames {
-			v, err = memb(v, idents.Name)
+			v, _, err = memb(v, idents.Name)
 			if err != nil {
 				return nil, err
 			}
 		}
 		callee = v
-	case *Variable, *MemberExpression:
+	case *Variable:
 		callee, err = Eval(calleeNode, state)
+		if err != nil {
+			return nil, err
+		}
+	case *MemberExpression:
+		left, err := Eval(c.Left, state)
+		if err != nil {
+			return nil, err
+		}
+
+		callee, _, err = memb(left, c.PropertyName.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -4277,6 +4329,12 @@ type Context struct {
 	stackPermission      StackPermission
 }
 
+type ContextConfig struct {
+	grantedPermissions   []Permission
+	forbiddenPermissions []Permission
+	limitations          []Limitation
+}
+
 func NewContext(permissions []Permission, forbiddenPermissions []Permission, limitations []Limitation) *Context {
 
 	var stackPermission = StackPermission{maxHeight: DEFAULT_MAX_STACK_HEIGHT}
@@ -4407,15 +4465,15 @@ func (state *State) PopScope() {
 	state.ScopeStack = state.ScopeStack[:len(state.ScopeStack)-1]
 }
 
-func memb(value interface{}, name string) (interface{}, error) {
+func memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
 	switch v := value.(type) {
 	case Object:
-		return v[name], nil
+		return v[name], nil, nil
 	case ExternalValue:
 		if obj, ok := v.value.(Object); !ok {
-			return nil, errors.New("member expression: external value: only objects supported")
+			return nil, nil, errors.New("member expression: external value: only objects supported")
 		} else {
-			return ExtValOf(obj[name], v.state), nil
+			return ExtValOf(obj[name], v.state), nil, nil
 		}
 	case reflect.Value:
 
@@ -4430,7 +4488,7 @@ func memb(value interface{}, name string) (interface{}, error) {
 		case reflect.Struct:
 			fieldValue := v.FieldByName(name)
 			if fieldValue.IsValid() {
-				return ValOf(fieldValue), nil
+				return ValOf(fieldValue), nil, nil
 			}
 			fallthrough
 		case reflect.Interface:
@@ -4440,16 +4498,17 @@ func memb(value interface{}, name string) (interface{}, error) {
 					method = ptr.MethodByName(name)
 				}
 				if !method.IsValid() {
-					return nil, errors.New("property ." + name + " does not exist")
+					return nil, nil, errors.New("property ." + name + " does not exist")
 				}
 			}
-			return method, nil
+			receiverType := v.Type()
+			return method, &receiverType, nil
 		default:
-			return nil, errors.New("Cannot get property ." + name + " for a value of kind " + v.Kind().String())
+			return nil, nil, errors.New("Cannot get property ." + name + " for a value of kind " + v.Kind().String())
 		}
 
 	default:
-		return nil, errors.New("cannot get property of non object/Go value")
+		return nil, nil, errors.New("cannot get property of non object/Go value")
 	}
 }
 
@@ -5932,7 +5991,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		return memb(left, n.PropertyName.Name)
+		res, _, err := memb(left, n.PropertyName.Name)
+		return res, err
 	case *IndexExpression:
 		list, err := Eval(n.Indexed, state)
 		if err != nil {
@@ -6173,6 +6233,38 @@ func (perm HttpPermission) Includes(otherPerm Permission) bool {
 
 func (perm HttpPermission) String() string {
 	return fmt.Sprintf("[%s %s]", perm.Kind_, perm.Entity)
+}
+
+type ContextlessCallPermission struct {
+	FuncMethodName   string
+	ReceiverTypeName string
+}
+
+func (perm ContextlessCallPermission) Kind() PermissionKind {
+	return UsePerm
+}
+
+func (perm ContextlessCallPermission) Includes(otherPerm Permission) bool {
+
+	otherCallPerm, ok := otherPerm.(ContextlessCallPermission)
+	if !ok || perm.Kind() != otherCallPerm.Kind() {
+		return false
+	}
+
+	return otherCallPerm.ReceiverTypeName == perm.ReceiverTypeName && otherCallPerm.FuncMethodName == perm.FuncMethodName
+}
+
+func (perm ContextlessCallPermission) String() string {
+	b := bytes.NewBufferString("[call contextless:")
+
+	if perm.ReceiverTypeName != "" {
+		b.WriteString(perm.ReceiverTypeName + ".")
+	}
+
+	b.WriteString(perm.FuncMethodName)
+	b.WriteString("]")
+
+	return b.String()
 }
 
 type Iterable interface {
