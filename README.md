@@ -9,7 +9,7 @@ If you prefer to use Discord I am active in this [server about Golang](https://d
 
 ## Security & Minimalism
 
-- The codebase is small on purpose (a single Go file with less than 6K lines and only std lib dependencies). See [Implementation](#implementation).
+- The codebase is small on purpose (a single Go file with less than 7K lines and only std lib dependencies). See [Implementation](#implementation).
 - The default global scope has ZERO variables/functions and there are no "builtin modules" to import. (only add what you need from Golang)
 - A strict but extensive permission system allows you to precisely control what is allowed (almost no permissions by default). 
   For more details go to the [permission section](#permissions).
