@@ -40,7 +40,8 @@ import (
 	"golang.org/x/term"
 )
 
-const BACKSPACE_CODE = 127
+const BACKSPACE_CODE = 8
+const DEL_CODE = 127
 const CTRL_BACKSPACE_CODE = 23
 const ENTER_CODE = 13
 const CTRL_C_CODE = 3
@@ -122,7 +123,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 
 	if len(runeSlice) == 1 {
 		switch runeSlice[0] {
-		case BACKSPACE_CODE:
+		case DEL_CODE, BACKSPACE_CODE:
 			return Backspace
 		case CTRL_BACKSPACE_CODE:
 			return CtrlBackspace
