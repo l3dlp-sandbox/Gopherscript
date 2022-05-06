@@ -2925,6 +2925,10 @@ func (user User) GetNameNoCtx() string {
 	return user.Name
 }
 
+func ctxlessFunc() int {
+	return 3
+}
+
 func TestCheck(t *testing.T) {
 
 	t.Run("object literal with two implict keys", func(t *testing.T) {
@@ -3701,6 +3705,54 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 3, res)
+	})
+
+	t.Run("call Go function : contextless, missing permission", func(t *testing.T) {
+		n := MustParseModule(`return gofunc()`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"gofunc": ctxlessFunc,
+		})
+
+		_, err := Eval(n, state)
+		assert.Error(t, err)
+	})
+
+	t.Run("call Go function : contextless, granted permission", func(t *testing.T) {
+		n := MustParseModule(`return gofunc()`)
+		ctx, _ := DEFAULT_TEST_CTX.NewWith([]Permission{
+			ContextlessCallPermission{FuncMethodName: "ctxlessFunc", ReceiverTypeName: ""},
+		})
+		state := NewState(ctx, map[string]interface{}{
+			"gofunc": ctxlessFunc,
+		})
+
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 3, res)
+	})
+
+	t.Run("call Go method : contextless, missing permission", func(t *testing.T) {
+		n := MustParseModule(`return gomethod()`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"gomethod": User{Name: "Foo"}.GetNameNoCtx,
+		})
+
+		_, err := Eval(n, state)
+		assert.Error(t, err)
+	})
+
+	t.Run("call Go method : contextless, granted permission", func(t *testing.T) {
+		n := MustParseModule(`return $$user.GetNameNoCtx()`)
+		ctx, _ := DEFAULT_TEST_CTX.NewWith([]Permission{
+			ContextlessCallPermission{FuncMethodName: "GetNameNoCtx", ReceiverTypeName: "User"},
+		})
+		state := NewState(ctx, map[string]interface{}{
+			"user": User{Name: "Foo"},
+		})
+
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, "Foo", res)
 	})
 
 	t.Run("call Go function : interface{} returned, should be wrapped and have right type", func(t *testing.T) {

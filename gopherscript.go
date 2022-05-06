@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -985,6 +986,8 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 	}
 
 	var callee interface{}
+	var optReceiverType *reflect.Type
+	var methodName string
 	var err error
 
 	//we first get the callee
@@ -994,6 +997,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		if err != nil {
 			return nil, err
 		}
+		methodName = c.Name
 		callee = state.GlobalScope()[c.Name]
 	case *IdentifierMemberExpression:
 		name := c.Left.(*IdentifierLiteral).Name
@@ -1009,7 +1013,8 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		}
 
 		for _, idents := range c.PropertyNames {
-			v, _, err = memb(v, idents.Name)
+			methodName = idents.Name
+			v, optReceiverType, err = memb(v, idents.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -1026,7 +1031,8 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 			return nil, err
 		}
 
-		callee, _, err = memb(left, c.PropertyName.Name)
+		methodName = c.PropertyName.Name
+		callee, optReceiverType, err = memb(left, c.PropertyName.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -1084,23 +1090,47 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		//GO FUNCTION
 
 		fnVal := f.(reflect.Value)
-
 		fnValType := fnVal.Type()
 
 		if fnVal.Kind() != reflect.Func {
 			log.Panicf("cannot call %#v\n", f)
 		}
 
-		if fnValType.NumIn() == 0 || !CTX_PTR_TYPE.AssignableTo(fnValType.In(0)) {
-			log.Panicln("cannot call a function whose first parameter is not a Context")
-		}
-
+		isfirstArgCtx := false
 		var ctx *Context = state.ctx
 		if isExt {
 			ctx = extState.ctx
 		}
 
-		args = append(List{ctx}, args...)
+		if fnValType.NumIn() == 0 || !CTX_PTR_TYPE.AssignableTo(fnValType.In(0)) {
+			var funcName string
+
+			var receiverTypeName string
+			if optReceiverType == nil {
+				fullNameParts := strings.Split(runtime.FuncForPC(fnVal.Pointer()).Name(), ".")
+				funcName = strings.TrimSuffix(fullNameParts[len(fullNameParts)-1], "-fm")
+			} else {
+				receiverTypeName = (*optReceiverType).Name()
+				funcName = methodName
+			}
+
+			if err := ctx.CheckHasPermission(ContextlessCallPermission{
+				ReceiverTypeName: receiverTypeName,
+				FuncMethodName:   funcName,
+			}); err != nil {
+
+				if optReceiverType == nil {
+					return nil, fmt.Errorf("cannot call contextless function with name '%s': %s", funcName, err.Error())
+				}
+				return nil, fmt.Errorf("cannot call contextless method: receiver '%s', name '%s': %s", receiverTypeName, funcName, err.Error())
+			}
+		} else {
+			isfirstArgCtx = true
+		}
+
+		if isfirstArgCtx {
+			args = append(List{ctx}, args...)
+		}
 
 		if len(args) != fnValType.NumIn() && (!fnValType.IsVariadic() || len(args) < fnValType.NumIn()-1) {
 			return nil, fmt.Errorf("invalid number of arguments : %v, %v was expected", len(args), fnValType.NumIn())
@@ -4325,6 +4355,7 @@ type Limiter struct {
 type Context struct {
 	grantedPermissions   []Permission
 	forbiddenPermissions []Permission
+	limitations          []Limitation
 	limiters             map[string]*Limiter
 	stackPermission      StackPermission
 }
@@ -4363,6 +4394,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 	ctx := &Context{
 		grantedPermissions:   permissions,
 		forbiddenPermissions: forbiddenPermissions,
+		limitations:          limitations,
 		limiters:             limiters,
 		stackPermission:      stackPermission,
 	}
@@ -4396,8 +4428,29 @@ func (ctx *Context) CheckHasPermission(perm Permission) error {
 	return nil
 }
 
+//Creates a new Context  with additional permissions
+func (ctx *Context) NewWith(additionalPerms []Permission) (*Context, error) {
+
+	var perms []Permission = make([]Permission, len(ctx.grantedPermissions))
+	copy(perms, ctx.grantedPermissions)
+
+top:
+	for _, additonalPerm := range additionalPerms {
+		for _, perm := range perms {
+			if perm.Includes(additonalPerm) {
+				continue top
+			}
+		}
+
+		perms = append(perms, additonalPerm)
+	}
+
+	newCtx := NewContext(perms, ctx.forbiddenPermissions, ctx.limitations)
+	return newCtx, nil
+}
+
 //Creates a new Context  with the permissions passed as argument removed.
-func (ctx *Context) Without(removedPerms []Permission) (*Context, error) {
+func (ctx *Context) NewWithout(removedPerms []Permission) (*Context, error) {
 
 	var perms []Permission
 	var forbiddenPerms []Permission
@@ -5527,7 +5580,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		switch n.ExprOrVar.(type) {
 		case *Call:
 			if n.GrantedPermissions == nil {
-				newCtx, err := state.ctx.Without([]Permission{
+				newCtx, err := state.ctx.NewWithout([]Permission{
 					GlobalVarPermission{ReadPerm, "*"},
 					GlobalVarPermission{UpdatePerm, "*"},
 					GlobalVarPermission{CreatePerm, "*"},
@@ -6255,7 +6308,7 @@ func (perm ContextlessCallPermission) Includes(otherPerm Permission) bool {
 }
 
 func (perm ContextlessCallPermission) String() string {
-	b := bytes.NewBufferString("[call contextless:")
+	b := bytes.NewBufferString("[call contextless: ")
 
 	if perm.ReceiverTypeName != "" {
 		b.WriteString(perm.ReceiverTypeName + ".")
