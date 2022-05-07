@@ -2000,7 +2000,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				}
 
-				if !isAlpha(s[i]) {
+				if !isAlpha(s[i]) && s[i] != '_' {
 					panic(ParsingError{
 						"property name should start with a letter not '" + string(s[i]) + "'",
 						i,
@@ -3161,7 +3161,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						Index:   startIndex,
 					}
 				} else {
-					if !isAlpha(s[i]) {
+					if !isAlpha(s[i]) && s[i] != '_' {
 						panic(ParsingError{
 							"property name should start with a letter not '" + string(s[i]) + "'",
 							i,
