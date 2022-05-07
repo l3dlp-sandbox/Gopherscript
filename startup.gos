@@ -36,3 +36,7 @@ require {
         "fs/write": 100kB/s
     }
 }
+
+return {
+    builtin-commands: [cd]
+}

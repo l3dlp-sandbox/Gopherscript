@@ -81,6 +81,16 @@ func replaceNewLinesRawMode(s string) string {
 	return strings.ReplaceAll(s, "\n", "\n\x1b[1E")
 }
 
+func strSliceContains(strings []string, str string) bool {
+	for _, e := range strings {
+		if e == str {
+			return true
+		}
+	}
+
+	return false
+}
+
 type SpecialCode int
 
 const (
@@ -168,7 +178,7 @@ type CommandHistory struct {
 	Commands []string `json:"commands"`
 }
 
-func startShell(state *gopherscript.State, ctx *gopherscript.Context) {
+func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REPLConfiguration) {
 	old, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
@@ -374,7 +384,9 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context) {
 			termenv.ClearLine()
 			termenv.CursorNextLine(1)
 
-			switch inputString {
+			splitted := strings.Split(inputString, " ")
+
+			switch splitted[0] {
 			case "clear":
 				reset()
 				termenv.ClearScreen()
@@ -539,6 +551,34 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 	return suggestions
 }
 
+type REPLConfiguration struct {
+	builtinCommands []string
+}
+
+func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
+	var config REPLConfiguration
+
+	for k, v := range obj {
+		switch k {
+		case "builtin-commands":
+			BUILTIN_COMMAND_LIST_ERR := "invalid configuration: builtin-commands should be a list of identifiers"
+			list, isList := v.(gopherscript.List)
+			if !isList {
+				return config, errors.New(BUILTIN_COMMAND_LIST_ERR)
+			}
+			for _, cmd := range list {
+				ident, ok := cmd.(gopherscript.Identifier)
+				if !ok {
+					return config, errors.New(BUILTIN_COMMAND_LIST_ERR)
+				}
+				config.builtinCommands = append(config.builtinCommands, string(ident))
+			}
+		}
+	}
+
+	return config, nil
+}
+
 func main() {
 
 	switch len(os.Args) {
@@ -639,6 +679,8 @@ func main() {
 				panic("no startup file found in homedir and none was specified (-c <file>). You can fix this by copying the startup.gos file from the Gopherscript repository to your home directory.")
 			}
 
+			//we read, parse and evaluate the startup script
+
 			b, err := os.ReadFile(startupScriptPath)
 			if err != nil {
 				panic(fmt.Sprint("failed to read startup file ", startupScriptPath, ":", err))
@@ -652,11 +694,38 @@ func main() {
 			ctx := gopherscript.NewContext(requiredPermissions, nil, limitations)
 			state := NewState(ctx)
 
-			_, err = gopherscript.Eval(startupMod, state)
+			startupResult, err := gopherscript.Eval(startupMod, state)
 			if err != nil {
 				panic(fmt.Sprint("startup script failed:", err))
 			}
-			startShell(state, ctx)
+
+			//REPL configuration
+
+			var config REPLConfiguration
+
+			switch r := startupResult.(type) {
+			case gopherscript.Object:
+				config, err = makeConfiguration(r)
+				if strSliceContains(config.builtinCommands, "cd") {
+					state.GlobalScope()["cd"] = gopherscript.ValOf(func(ctx *gopherscript.Context, newdir gopherscript.Path) error {
+						if !newdir.IsDirPath() {
+							return errors.New("cd: the path must be a directory path")
+						}
+
+						if err := os.Chdir(string(newdir)); err != nil {
+							return errors.New("cd: " + err.Error())
+						}
+						return nil
+					})
+				}
+			case nil:
+			default:
+				panic(fmt.Sprintf("startup script should return an Object or nothing (nil), not a(n) %T", r))
+			}
+
+			//--------------------------
+
+			startShell(state, ctx, config)
 		default:
 			panic(fmt.Sprint("unknown subcommand", os.Args[1]))
 		}
@@ -1266,6 +1335,7 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) ([]FileInfo, error) {
 	resultFileInfo := make([]FileInfo, 0)
 
 	if pth != "" {
+
 		perm := gopherscript.FilesystemPermission{
 			Kind_:  gopherscript.ReadPerm,
 			Entity: pth,
