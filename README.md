@@ -7,6 +7,8 @@ Gopherscript is not production ready yet : if you find a bug or want to suggest 
 Join the official community on [Revolt](https://app.revolt.chat/invite/cJQPeQkc).
 If you prefer to use Discord I am active in this [server about Golang](https://discord.gg/dZwwfECx).
 
+![image](https://user-images.githubusercontent.com/84961291/163572856-5ca4ddd5-3bd0-44d6-a73e-efde341a9bd7.png)
+
 ## Security & Minimalism
 
 - The codebase is small on purpose (a single Go file with less than 7K lines and only std lib dependencies). See [Implementation](#implementation).
@@ -97,10 +99,6 @@ You can learn more about the interactions between Gopherscript and Golang [here]
 ## Features
 
 The most important features are described in this section. If you want to learn Gopherscript or want to know more details about specific features you can go on the wiki.
-
-### Basic
-
-![image](https://user-images.githubusercontent.com/84961291/163572856-5ca4ddd5-3bd0-44d6-a73e-efde341a9bd7.png)
 
 <!--
 
