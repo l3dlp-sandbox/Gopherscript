@@ -902,7 +902,7 @@ func (patt URLPattern) Prefix() string {
 //type : reflect.Value
 
 type Matcher interface {
-	IsMatcherFor(interface{}) bool
+	Test(interface{}) bool
 }
 
 func (patt PathPattern) IsMatcherFor(v interface{}) bool {
@@ -1523,7 +1523,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
-	eatSpaceAndNewLineAndSemiColonAndComment := func() {
+	eatSpaceNewLineSemiColonComment := func() {
 		for i < len(s) {
 			switch s[i] {
 			case ' ', '\t', '\n', ';':
@@ -1536,13 +1536,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
-	eatSpaceAndNewlineAndComma := func() {
+	eatSpaceNewlineComma := func() {
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == ',') {
 			i++
 		}
 	}
 
-	eatSpaceAndComma := func() {
+	eatSpaceComma := func() {
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == ',') {
 			i++
 		}
@@ -1568,14 +1568,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		var stmts []Node
 
 		for i < len(s) && s[i] != '}' {
-			eatSpaceAndNewLineAndSemiColonAndComment()
+			eatSpaceNewLineSemiColonComment()
 
 			if i < len(s) && s[i] == '}' {
 				break
 			}
 
 			stmts = append(stmts, parseStatement())
-			eatSpaceAndNewLineAndSemiColonAndComment()
+			eatSpaceNewLineSemiColonComment()
 		}
 
 		if i >= len(s) {
@@ -2080,7 +2080,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		var idents []*IdentifierLiteral
 
 		for i < len(s) && s[i] != '}' {
-			eatSpaceAndComma()
+			eatSpaceComma()
 
 			if i >= len(s) {
 				panic(ParsingError{
@@ -2104,7 +2104,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				})
 			}
 
-			eatSpaceAndComma()
+			eatSpaceComma()
 		}
 
 		if i >= len(s) {
@@ -2231,11 +2231,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 					requirements := parseRequirements()
 
-					eatSpaceAndNewLineAndSemiColonAndComment()
+					eatSpaceNewLineSemiColonComment()
 
 					for i < len(s) && s[i] != '}' {
 						stmts = append(stmts, parseStatement())
-						eatSpaceAndNewLineAndSemiColonAndComment()
+						eatSpaceNewLineSemiColonComment()
 					}
 
 					if i >= len(s) || s[i] != '}' {
@@ -2337,11 +2337,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				for i < len(s) && s[i] != ')' {
-					eatSpaceAndNewlineAndComma()
+					eatSpaceNewlineComma()
 					arg := parseExpression()
 
 					call.Arguments = append(call.Arguments, arg)
-					eatSpaceAndNewlineAndComma()
+					eatSpaceNewlineComma()
 				}
 
 				if i < len(s) {
@@ -2514,7 +2514,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var properties []ObjectProperty
 
 			for i < len(s) && s[i] != '}' {
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 
 				if i < len(s) && s[i] == '}' {
 					break
@@ -2649,7 +2649,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				}
 
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 			}
 
 			if i >= len(s) {
@@ -2675,7 +2675,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			var elements []Node
 			for i < len(s) && s[i] != ']' {
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 
 				if i < len(s) && s[i] == ']' {
 					break
@@ -2684,7 +2684,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				e := parseExpression()
 				elements = append(elements, e)
 
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 			}
 
 			if i >= len(s) || s[i] != ']' {
@@ -3220,7 +3220,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			for i < len(s) && s[i] != ')' {
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 
 				if i >= len(s) || s[i] == ')' {
 					break
@@ -3229,7 +3229,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				arg := parseExpression()
 
 				call.Arguments = append(call.Arguments, arg)
-				eatSpaceAndNewlineAndComma()
+				eatSpaceNewlineComma()
 			}
 
 			if i >= len(s) || s[i] != ')' {
@@ -3432,7 +3432,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		var parameters []FunctionParameter
 
 		for i < len(s) && s[i] != ')' {
-			eatSpaceAndNewlineAndComma()
+			eatSpaceNewlineComma()
 
 			if i < len(s) && s[i] == ')' {
 				break
@@ -3454,7 +3454,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Var: varNode.(*IdentifierLiteral),
 			})
 
-			eatSpaceAndNewlineAndComma()
+			eatSpaceNewlineComma()
 		}
 
 		if i >= len(s) {
@@ -3822,7 +3822,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 
 				for i < len(s) && s[i] != '}' {
-					eatSpaceAndNewLineAndSemiColonAndComment()
+					eatSpaceNewLineSemiColonComment()
 
 					var valueNodes []Node
 
@@ -3912,7 +3912,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						switchCases = append(switchCases, switchCase)
 					}
 
-					eatSpaceAndNewLineAndSemiColonAndComment()
+					eatSpaceNewLineSemiColonComment()
 				}
 
 				if i >= len(s) || s[i] != '}' {
@@ -4202,17 +4202,17 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	var stmts []Node
 
-	eatSpaceAndNewLineAndSemiColonAndComment()
+	eatSpaceNewLineSemiColonComment()
 	globalConstDecls := parseGlobalConstantDeclarations()
 
-	eatSpaceAndNewLineAndSemiColonAndComment()
+	eatSpaceNewLineSemiColonComment()
 	requirements := parseRequirements()
 
-	eatSpaceAndNewLineAndSemiColonAndComment()
+	eatSpaceNewLineSemiColonComment()
 
 	for i < len(s) {
 		stmts = append(stmts, parseStatement())
-		eatSpaceAndNewLineAndSemiColonAndComment()
+		eatSpaceNewLineSemiColonComment()
 	}
 
 	mod.Requirements = requirements
@@ -5901,7 +5901,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				return nil, fmt.Errorf("match statement: value of type %T does not implement Matcher interface nor has the same type as value as the discriminant", m)
 			}
 
-			if matcher.IsMatcherFor(discriminant) {
+			if matcher.Test(discriminant) {
 				_, err := Eval(switchCase.Block, state)
 				if err != nil {
 					return nil, err
