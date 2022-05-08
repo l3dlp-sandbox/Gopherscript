@@ -48,24 +48,24 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("const declarations : (single) valid lhs & rhs", func(t *testing.T) {
-		n := MustParseModule("const ( $$a = 1 )")
+		n := MustParseModule("const ( a = 1 )")
 		assert.EqualValues(t, &Module{
-			NodeBase:     NodeBase{NodeSpan{0, 17}},
+			NodeBase:     NodeBase{NodeSpan{0, 15}},
 			Statements:   nil,
 			Requirements: nil,
 			GlobalConstantDeclarations: &GlobalConstantDeclarations{
-				NodeBase: NodeBase{NodeSpan{0, 17}},
+				NodeBase: NodeBase{NodeSpan{0, 15}},
 				NamesValues: [][2]Node{
 					{
-						&GlobalVariable{
+						&IdentifierLiteral{
 							NodeBase: NodeBase{
-								NodeSpan{8, 11},
+								NodeSpan{8, 9},
 							},
 							Name: "a",
 						},
 						&IntLiteral{
 							NodeBase: NodeBase{
-								NodeSpan{14, 15},
+								NodeSpan{12, 13},
 							},
 							Raw:   "1",
 							Value: 1,
@@ -3079,7 +3079,7 @@ func TestRequirements(t *testing.T) {
 		}, []Limitation{}},
 		{"read_@const_var", `
 			const (
-				$$URL = https://example.com/
+				URL = https://example.com/
 			)
 			require { 
 				read: $$URL
@@ -3243,7 +3243,7 @@ func TestEval(t *testing.T) {
 	t.Run("const global variable assignment", func(t *testing.T) {
 		n := MustParseModule(`
 			const (
-				$$A = 1
+				A = 1
 			)
 
 			require {
@@ -3304,7 +3304,7 @@ func TestEval(t *testing.T) {
 	t.Run("global constants : single", func(t *testing.T) {
 		n := MustParseModule(`
 			const (
-				$$a = 1
+				a = 1
 			)
 		`)
 		state := NewState(DEFAULT_TEST_CTX)

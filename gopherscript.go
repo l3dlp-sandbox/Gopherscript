@@ -398,7 +398,7 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 		state = NewState(NewContext([]Permission{GlobalVarPermission{ReadPerm, "*"}}, nil, nil))
 		globalScope := state.GlobalScope()
 		for _, nameValueNodes := range globalConsts.NamesValues {
-			globalScope[nameValueNodes[0].(*GlobalVariable).Name] = MustEval(nameValueNodes[1], nil)
+			globalScope[nameValueNodes[0].(*IdentifierLiteral).Name] = MustEval(nameValueNodes[1], nil)
 		}
 	} else {
 		state = runningState
@@ -3331,10 +3331,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				lhs := parseExpression()
-				globvar, ok := lhs.(*GlobalVariable)
+				globvar, ok := lhs.(*IdentifierLiteral)
 				if !ok {
 					panic(ParsingError{
-						"invalid global const declarations, left hand sides must be global variable identifiers",
+						"invalid global const declarations, left hand sides must be identifiers",
 						i,
 						start,
 						KnownType,
@@ -5444,7 +5444,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		if n.GlobalConstantDeclarations != nil {
 			globalScope := state.GlobalScope()
 			for _, nameValueNodes := range n.GlobalConstantDeclarations.NamesValues {
-				name := nameValueNodes[0].(*GlobalVariable).Name
+				name := nameValueNodes[0].(*IdentifierLiteral).Name
 				globalScope[name] = MustEval(nameValueNodes[1], nil)
 				state.constants[name] = 0
 			}
