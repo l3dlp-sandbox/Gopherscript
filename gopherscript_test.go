@@ -2436,21 +2436,21 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("function expression : single parameter, empty body ", func(t *testing.T) {
-		n := MustParseModule("fn($x){}")
+		n := MustParseModule("fn(x){}")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
-				NodeSpan{0, 8},
+				NodeSpan{0, 7},
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
-						NodeSpan{0, 8},
+						NodeSpan{0, 7},
 					},
 					Parameters: []FunctionParameter{
 						{
-							Var: &Variable{
+							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
-									NodeSpan{3, 5},
+									NodeSpan{3, 4},
 								},
 								Name: "x",
 							},
@@ -2458,7 +2458,7 @@ func TestMustParseModule(t *testing.T) {
 					},
 					Body: &Block{
 						NodeBase: NodeBase{
-							NodeSpan{6, 8},
+							NodeSpan{5, 7},
 						},
 						Statements: nil,
 					},
@@ -2468,29 +2468,29 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("function expression : two parameters, empty body ", func(t *testing.T) {
-		n := MustParseModule("fn($x,$n){}")
+		n := MustParseModule("fn(x,n){}")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
-				NodeSpan{0, 11},
+				NodeSpan{0, 9},
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
-						NodeSpan{0, 11},
+						NodeSpan{0, 9},
 					},
 					Parameters: []FunctionParameter{
 						{
-							Var: &Variable{
+							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
-									NodeSpan{3, 5},
+									NodeSpan{3, 4},
 								},
 								Name: "x",
 							},
 						},
 						{
-							Var: &Variable{
+							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
-									NodeSpan{6, 8},
+									NodeSpan{5, 6},
 								},
 								Name: "n",
 							},
@@ -2498,7 +2498,7 @@ func TestMustParseModule(t *testing.T) {
 					},
 					Body: &Block{
 						NodeBase: NodeBase{
-							NodeSpan{9, 11},
+							NodeSpan{7, 9},
 						},
 						Statements: nil,
 					},

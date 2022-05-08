@@ -777,7 +777,7 @@ type FunctionDeclaration struct {
 }
 
 type FunctionParameter struct {
-	Var *Variable
+	Var *IdentifierLiteral
 }
 
 type Requirements struct {
@@ -3440,7 +3440,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			varNode := parseExpression()
 
-			if _, ok := varNode.(*Variable); !ok {
+			if _, ok := varNode.(*IdentifierLiteral); !ok {
 				panic(ParsingError{
 					"function : the parameter list should contain variables separated by a comma",
 					i,
@@ -3451,7 +3451,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			parameters = append(parameters, FunctionParameter{
-				Var: varNode.(*Variable),
+				Var: varNode.(*IdentifierLiteral),
 			})
 
 			eatSpaceAndNewlineAndComma()
