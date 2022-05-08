@@ -25,7 +25,7 @@ If you find Gopherscript too restrictive don't worry ! A ``lax`` mode might be i
 
 You can use the ``gos`` executable to execute scripts or launch a REPL:
 ```
-go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.3.3
+go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.3.4
 ```
 See the documentation [here](./gos.md).
 You can also use Gopherscript as a library and only add whay you need to the global scope (see the example further below).
