@@ -40,7 +40,7 @@ var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
 var LOOSE_HTTP_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_EXPR_PATTERN)
 var isSpace = regexp.MustCompile(`^\s+`).MatchString
-var KEYWORDS = []string{"if", "else", "require", "for", "assign", "fn", "switch", "match", "import", "sr"}
+var KEYWORDS = []string{"if", "else", "require", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
 var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "use", "consume", "provide"}
 
 var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
