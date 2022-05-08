@@ -3022,6 +3022,17 @@ func TestCheck(t *testing.T) {
 		assert.Error(t, Check(n))
 	})
 
+	t.Run("assignement of a constant", func(t *testing.T) {
+		n := MustParseModule(`
+			const (
+				a = 1
+			)
+
+			$$a = 0
+		`)
+		assert.Error(t, Check(n))
+	})
+
 	t.Run("break statement : direct child of a for statement", func(t *testing.T) {
 		n := MustParseModule(`
 			for i, e in [] {

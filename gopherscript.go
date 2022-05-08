@@ -4994,13 +4994,17 @@ func Walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, []Node) 
 	return nil
 }
 
+type globalVarInfo struct {
+	isConst bool
+}
+
 func Check(node Node) error {
 
 	//key: *Module|*EmbeddedModule
 	fnDecls := make(map[Node]map[string]int)
 
 	//key: *Module|*EmbeddedModule|*Block
-	globalVars := make(map[Node]map[string]int)
+	globalVars := make(map[Node]map[string]globalVarInfo)
 
 	//key: *Module|*EmbeddedModule|*Block
 	localVars := make(map[Node]map[string]int)
@@ -5071,6 +5075,23 @@ func Check(node Node) error {
 			default:
 				return errors.New("invalid spawn expression: the expression should be a global func call, an embedded module or a variable (that can be global)")
 			}
+		case *GlobalConstantDeclarations:
+			for _, nameAndValue := range node.NamesValues {
+				name := nameAndValue[0].(*IdentifierLiteral).Name
+
+				variables, ok := globalVars[parent]
+
+				if !ok {
+					variables = make(map[string]globalVarInfo)
+					globalVars[parent] = variables
+				}
+
+				_, alreadyUsed := variables[name]
+				if alreadyUsed {
+					return fmt.Errorf("invalid constant declaration: '%s' is already used", name)
+				}
+				variables[name] = globalVarInfo{isConst: true}
+			}
 		case *Assignment, *MultiAssignment:
 			var names []string
 
@@ -5091,11 +5112,19 @@ func Check(node Node) error {
 					variables, ok := globalVars[parent]
 
 					if !ok {
-						variables = make(map[string]int)
+						variables = make(map[string]globalVarInfo)
 						globalVars[parent] = variables
 					}
 
-					variables[left.Name] = 0
+					varInfo, alreadyDefined := variables[left.Name]
+					if alreadyDefined {
+						if varInfo.isConst {
+							return fmt.Errorf("invalid global variable assignment: '%s' is a constant", left.Name)
+						}
+					} else {
+						variables[left.Name] = globalVarInfo{isConst: false}
+					}
+
 				case *Variable:
 					names = append(names, left.Name)
 				case *IdentifierLiteral:
