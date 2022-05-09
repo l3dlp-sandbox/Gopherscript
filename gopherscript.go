@@ -850,6 +850,27 @@ type Identifier string
 
 // ---------------------------
 
+func (obj Object) GetOrDefault(key string, defaultVal interface{}) interface{} {
+	v, ok := obj[key]
+	if !ok {
+		return defaultVal
+	}
+	return v
+}
+
+func (list List) ContainsSimple(v interface{}) bool {
+	if !IsSimpleGopherVal(v) {
+		panic("only simple values are expected")
+	}
+
+	for _, e := range list {
+		if v == e {
+			return true
+		}
+	}
+	return false
+}
+
 func (pth Path) IsDirPath() bool {
 	return pth[len(pth)-1] == '/'
 }
