@@ -905,7 +905,7 @@ type Matcher interface {
 	Test(interface{}) bool
 }
 
-func (patt PathPattern) IsMatcherFor(v interface{}) bool {
+func (patt PathPattern) Test(v interface{}) bool {
 	switch other := v.(type) {
 	case Path:
 		if patt.IsPrefixPattern() {
@@ -923,7 +923,7 @@ func (patt PathPattern) IsMatcherFor(v interface{}) bool {
 	}
 }
 
-func (patt HTTPHostPattern) IsMatcherFor(v interface{}) bool {
+func (patt HTTPHostPattern) Test(v interface{}) bool {
 	var url_ string
 
 	switch other := v.(type) {
@@ -963,7 +963,7 @@ func (patt HTTPHostPattern) IsMatcherFor(v interface{}) bool {
 	return err == nil && ok
 }
 
-func (patt URLPattern) IsMatcherFor(v interface{}) bool {
+func (patt URLPattern) Test(v interface{}) bool {
 	switch other := v.(type) {
 	case HTTPHostPattern, HTTPHost:
 		return false
@@ -6221,7 +6221,7 @@ func (perm FilesystemPermission) Includes(otherPerm Permission) bool {
 		otherPath, ok := otherFsPerm.Entity.(Path)
 		return ok && e == otherPath
 	case PathPattern:
-		return e.IsMatcherFor(otherFsPerm.Entity)
+		return e.Test(otherFsPerm.Entity)
 	}
 
 	return false
@@ -6293,7 +6293,7 @@ func (perm HttpPermission) Includes(otherPerm Permission) bool {
 		otherURL, ok := otherHttpPerm.Entity.(URL)
 		return ok && e == otherURL
 	case URLPattern:
-		return e.IsMatcherFor(otherHttpPerm.Entity)
+		return e.Test(otherHttpPerm.Entity)
 	case HTTPHost:
 		host := strings.ReplaceAll(string(e), "https://", "")
 		switch other := otherHttpPerm.Entity.(type) {
@@ -6307,7 +6307,7 @@ func (perm HttpPermission) Includes(otherPerm Permission) bool {
 			return e == other
 		}
 	case HTTPHostPattern:
-		return e.IsMatcherFor(otherHttpPerm.Entity)
+		return e.Test(otherHttpPerm.Entity)
 	}
 
 	return false
