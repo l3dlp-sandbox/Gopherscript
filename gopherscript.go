@@ -4232,7 +4232,7 @@ func IsSimpleGopherVal(v interface{}) bool {
 	}
 }
 
-func isGopherVal(v interface{}) bool {
+func IsGopherVal(v interface{}) bool {
 	switch v.(type) {
 	case string, JSONstring, bool, int, float64, Object, List, Func, ExternalValue,
 		Identifier, Path, PathPattern, URL, HTTPHost, HTTPHostPattern, URLPattern:
@@ -4262,13 +4262,13 @@ func ExtValOf(v interface{}, state *State) interface{} {
 //Unwraps any reflect.Value that wraps a Gopherscript value.
 //Wraps its argument in a reflect.Value if it is not a Gopherscript value.
 func ValOf(v interface{}) interface{} {
-	if isGopherVal(v) {
+	if IsGopherVal(v) {
 		return v
 	}
 	switch val := v.(type) {
 	case reflect.Value:
 		intf := val.Interface()
-		if isGopherVal(intf) {
+		if IsGopherVal(intf) {
 			return intf
 		}
 		return reflect.ValueOf(intf)
