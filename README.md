@@ -21,7 +21,7 @@ If you prefer to use Discord I am active in this [server about Golang](https://d
 
 If you find Gopherscript too restrictive don't worry ! A ``lax`` mode might be introduced in the future.
 
-Have a look at the [features section](##features) and the wiki !
+Have a look at the [features section](#features) and the wiki !
 
 ## Installation & Usage
 
