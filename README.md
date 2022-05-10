@@ -39,7 +39,8 @@ If you use VSCode you can install the extension of ID ``xbsd.gopherscript`` . If
 
 ### Example 
 
-Example of using Gopherscript as a library from Golang:
+<details>
+	<summary> Example of using Gopherscript as a library from Golang: </summary>
 
 ```go
 package main
@@ -94,6 +95,8 @@ func main() {
 	log.Printf("%#v", res)
 }
 ```
+	
+</details>
 
 You can learn more about the interactions between Gopherscript and Golang [here](https://github.com/debloat-dev/Gopherscript/wiki/Advanced#interaction-with-golang).
 
