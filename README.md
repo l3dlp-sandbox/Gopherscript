@@ -5,7 +5,6 @@ It features a fined-grain permission system and enforces a strong isolation of d
 Gopherscript is not production ready yet : if you find a bug or want to suggest a feature create an issue please !
 
 Join the official community on [Revolt](https://app.revolt.chat/invite/cJQPeQkc).
-If you prefer to use Discord I am active in this [server about Golang](https://discord.gg/dZwwfECx).
 
 ![image](https://user-images.githubusercontent.com/84961291/163572856-5ca4ddd5-3bd0-44d6-a73e-efde341a9bd7.png)
 
