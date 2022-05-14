@@ -1842,15 +1842,6 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			})
 		}
 
-		if strings.Contains(_url, "?") {
-			panic(ParsingError{
-				"URLs with a query parts are not supported yet'" + _url,
-				i,
-				start,
-				URLlike,
-				nil,
-			})
-		}
 		span := NodeSpan{ident.Span.Start, i}
 
 		if !HTTP_URL_REGEX.MatchString(_url) {
@@ -1957,6 +1948,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if isPrefixPattern {
+			if strings.Contains(_url, "?") {
+				panic(ParsingError{
+					"URL pattern literals with a query part are not supported yet'" + _url,
+					i,
+					start,
+					URLlike,
+					nil,
+				})
+			}
 			return &URLPatternLiteral{
 				NodeBase: NodeBase{
 					Span: span,
@@ -1972,6 +1972,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Value: _url,
 			}
+		}
+
+		if strings.Contains(_url, "?") {
+			panic(ParsingError{
+				"HTTP host literals cannot contain a query part",
+				i,
+				start,
+				URLlike,
+				nil,
+			})
 		}
 
 		return &HTTPHostLiteral{
@@ -6312,6 +6322,18 @@ func (perm HttpPermission) Includes(otherPerm Permission) bool {
 	switch e := perm.Entity.(type) {
 	case URL:
 		otherURL, ok := otherHttpPerm.Entity.(URL)
+		parsedURL, _ := url.Parse(string(e))
+
+		if parsedURL.RawQuery == "" {
+			parsedURL.ForceQuery = false
+
+			otherParsedURL, _ := url.Parse(string(otherURL))
+			otherParsedURL.RawQuery = ""
+			otherParsedURL.ForceQuery = false
+
+			return parsedURL.String() == otherParsedURL.String()
+		}
+
 		return ok && e == otherURL
 	case URLPattern:
 		return e.Test(otherHttpPerm.Entity)

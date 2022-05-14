@@ -644,6 +644,32 @@ func TestMustParseModule(t *testing.T) {
 		})
 	})
 
+	t.Run("URL literal : empty query", func(t *testing.T) {
+		n := MustParseModule(`https://example.com/?`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 21}},
+			Statements: []Node{
+				&URLLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 21}},
+					Value:    "https://example.com/?",
+				},
+			},
+		}, n)
+	})
+
+	t.Run("URL literal : not empty query", func(t *testing.T) {
+		n := MustParseModule(`https://example.com/?a=1`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 24}},
+			Statements: []Node{
+				&URLLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 24}},
+					Value:    "https://example.com/?a=1",
+				},
+			},
+		}, n)
+	})
+
 	t.Run("URL pattern literal : prefix pattern, root", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/...`)
 		assert.EqualValues(t, &Module{
@@ -4104,6 +4130,7 @@ func TestEval(t *testing.T) {
 func TestHttpPermission(t *testing.T) {
 
 	ENTITIES := List{
+		URL("https://localhost:443/?a=1"),
 		URL("https://localhost:443/"),
 		HTTPHost("https://localhost:443"),
 		HTTPHostPattern("https://*"),
