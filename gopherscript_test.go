@@ -753,7 +753,7 @@ func TestMustParseModule(t *testing.T) {
 		})
 	})
 
-	t.Run("URL expression : no query, single trailing interpolation", func(t *testing.T) {
+	t.Run("URL expression : no query, single trailing path interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/$path$`)
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 26}},
@@ -776,6 +776,121 @@ func TestMustParseModule(t *testing.T) {
 									NodeSpan{20, 26},
 								},
 								Name: "path",
+							},
+						},
+					},
+					QueryParams: []Node{},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("URL expression : no path interpolation, single trailing query interpolation", func(t *testing.T) {
+		n := MustParseModule(`https://example.com/?v=$x$`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 26}},
+			Statements: []Node{
+				&URLExpression{
+					NodeBase: NodeBase{NodeSpan{0, 26}},
+					Raw:      "https://example.com/?v=$x$",
+					HostPart: "https://example.com",
+					Path: &AbsolutePathExpression{
+						NodeBase: NodeBase{NodeSpan{19, 20}},
+						Slices: []Node{
+							&PathSlice{
+								NodeBase: NodeBase{
+									NodeSpan{19, 20},
+								},
+								Value: "/",
+							},
+						},
+					},
+					QueryParams: []Node{
+						&URLQueryParameter{
+							NodeBase: NodeBase{
+								NodeSpan{21, 26},
+							},
+							Name: "v",
+							Value: []Node{
+								&URLQueryParameterSlice{
+									NodeBase: NodeBase{
+										NodeSpan{23, 23},
+									},
+									Value: "",
+								},
+								&Variable{
+									NodeBase: NodeBase{
+										NodeSpan{23, 26},
+									},
+									Name: "x",
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("URL expression : no path interpolation, two query interpolations", func(t *testing.T) {
+		n := MustParseModule(`https://example.com/?v=$x$&w=$y$`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 32}},
+			Statements: []Node{
+				&URLExpression{
+					NodeBase: NodeBase{NodeSpan{0, 32}},
+					Raw:      "https://example.com/?v=$x$&w=$y$",
+					HostPart: "https://example.com",
+					Path: &AbsolutePathExpression{
+						NodeBase: NodeBase{NodeSpan{19, 20}},
+						Slices: []Node{
+							&PathSlice{
+								NodeBase: NodeBase{
+									NodeSpan{19, 20},
+								},
+								Value: "/",
+							},
+						},
+					},
+					QueryParams: []Node{
+						&URLQueryParameter{
+							NodeBase: NodeBase{
+								NodeSpan{21, 26},
+							},
+							Name: "v",
+							Value: []Node{
+								&URLQueryParameterSlice{
+									NodeBase: NodeBase{
+										NodeSpan{23, 23},
+									},
+									Value: "",
+								},
+								&Variable{
+									NodeBase: NodeBase{
+										NodeSpan{23, 26},
+									},
+									Name: "x",
+								},
+							},
+						},
+						&URLQueryParameter{
+							NodeBase: NodeBase{
+								NodeSpan{27, 32},
+							},
+							Name: "w",
+							Value: []Node{
+								&URLQueryParameterSlice{
+									NodeBase: NodeBase{
+										NodeSpan{29, 29},
+									},
+									Value: "",
+								},
+								&Variable{
+									NodeBase: NodeBase{
+										NodeSpan{29, 32},
+									},
+									Name: "y",
+								},
 							},
 						},
 					},
@@ -3252,13 +3367,34 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, HTTPHostPattern("https://*.example.com"), res)
 	})
 
-	t.Run("URL expression", func(t *testing.T) {
+	t.Run("URL expression, single path interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/$path$`)
 		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX, map[string]interface{}{
 			"path": "/index.html",
 		}))
 		assert.NoError(t, err)
 		assert.Equal(t, URL("https://example.com/index.html"), res)
+	})
+
+	t.Run("URL expression, query with no interpolation", func(t *testing.T) {
+		n := MustParseModule(`return https://example.com/?v=a`)
+		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		assert.NoError(t, err)
+		assert.Equal(t, URL("https://example.com/?v=a"), res)
+	})
+
+	t.Run("URL expression, single query interpolation", func(t *testing.T) {
+		n := MustParseModule(`x = "a"; return https://example.com/?v=$x$`)
+		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		assert.NoError(t, err)
+		assert.Equal(t, URL("https://example.com/?v=a"), res)
+	})
+
+	t.Run("URL expression, two query interpolations", func(t *testing.T) {
+		n := MustParseModule(`x = "a"; y = "b"; return https://example.com/?v=$x$&w=$y$`)
+		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		assert.NoError(t, err)
+		assert.Equal(t, URL("https://example.com/?v=a&w=b"), res)
 	})
 
 	t.Run("variable assignment", func(t *testing.T) {

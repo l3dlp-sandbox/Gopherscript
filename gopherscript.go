@@ -276,9 +276,26 @@ type AbsolutePathExpression struct {
 
 type URLExpression struct {
 	NodeBase
-	Raw      string
-	HostPart string
-	Path     *AbsolutePathExpression
+	Raw         string
+	HostPart    string
+	Path        *AbsolutePathExpression
+	QueryParams []Node
+}
+
+type URLQueryExpression struct {
+	NodeBase
+	Parameters map[string][]Node
+}
+
+type URLQueryParameter struct {
+	NodeBase
+	Name  string
+	Value []Node
+}
+
+type URLQueryParameterSlice struct {
+	NodeBase
+	Value string
 }
 
 type PathSlice struct {
@@ -1645,13 +1662,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		return count
 	}
 
-	parsePathExpressionSlices := func(start int, end int) []Node {
+	parsePathExpressionSlices := func(start int, exclEnd int) []Node {
 		slices := make([]Node, 0)
 		index := start
 		sliceStart := start
 		inInterpolation := false
 
-		for index < end {
+		for index < exclEnd {
 
 			if inInterpolation {
 				if s[index] == '$' {
@@ -1679,6 +1696,73 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				slice := string(s[sliceStart:index]) //previous cannot be an interpolation
 
 				slices = append(slices, &PathSlice{
+					NodeBase: NodeBase{
+						NodeSpan{sliceStart, index},
+					},
+					Value: slice,
+				})
+
+				sliceStart = index
+				inInterpolation = true
+			}
+			index++
+		}
+
+		if inInterpolation {
+			panic(ParsingError{
+				"unterminated path interpolation",
+				i,
+				-1,
+				UnspecifiedCategory,
+				nil,
+			})
+		}
+
+		if sliceStart != index {
+			slices = append(slices, &PathSlice{
+				NodeBase: NodeBase{
+					NodeSpan{sliceStart, index},
+				},
+				Value: string(s[sliceStart:index]),
+			})
+		}
+		return slices
+	}
+
+	parseQueryExpressionSlices := func(start int, exclEnd int) []Node {
+		slices := make([]Node, 0)
+		index := start
+		sliceStart := start
+		inInterpolation := false
+
+		for index < exclEnd {
+
+			if inInterpolation {
+				if s[index] == '$' {
+					name := string(s[sliceStart+1 : index])
+
+					slices = append(slices, &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{sliceStart, index + 1},
+						},
+						Name: name,
+					})
+					inInterpolation = false
+					sliceStart = index + 1
+				} else if !isIdentChar(s[index]) {
+					panic(ParsingError{
+						"a query parameter interpolation should contain an identifier without spaces, example: $name$ ",
+						i,
+						-1,
+						UnspecifiedCategory,
+						nil,
+					})
+				}
+
+			} else if s[index] == '$' {
+				slice := string(s[sliceStart:index]) //previous cannot be an interpolation
+
+				slices = append(slices, &URLQueryParameterSlice{
 					NodeBase: NodeBase{
 						NodeSpan{sliceStart, index},
 					},
@@ -1909,7 +1993,85 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					pathStart++
 				}
 
-				slices := parsePathExpressionSlices(pathStart, i)
+				pathExclEnd := i
+				queryParams := make([]Node, 0)
+
+				if strings.Contains(_url, "?") {
+					pathExclEnd = start + strings.Index(_url, "?")
+
+					_, err := url.ParseQuery(string(s[pathExclEnd+1 : start+len(_url)]))
+					if err != nil {
+						panic(ParsingError{
+							"invalid query",
+							i,
+							start,
+							URLlike,
+							(*URLExpression)(nil),
+						})
+					}
+
+					j := pathExclEnd + 1
+					queryEnd := start + len(_url)
+
+					for j < queryEnd {
+						keyStart := j
+						for j < queryEnd && s[j] != '=' {
+							j++
+						}
+						if j > queryEnd {
+							panic(ParsingError{
+								"invalid query: missing '=' after key " + string(s[keyStart:j]),
+								i,
+								start,
+								URLlike,
+								(*URLExpression)(nil),
+							})
+						}
+
+						key := string(s[keyStart:j])
+						j++
+
+						//check key
+
+						if strings.Contains(key, "$") {
+							panic(ParsingError{
+								"invalid query: keys cannot contain '$': key " + string(s[keyStart:j]),
+								i,
+								start,
+								URLlike,
+								(*URLExpression)(nil),
+							})
+						}
+
+						//value
+
+						valueStart := j
+						slices := make([]Node, 0)
+
+						if j < queryEnd && s[j] != '&' {
+
+							for j < queryEnd && s[j] != '&' {
+								j++
+							}
+							slices = parseQueryExpressionSlices(valueStart, j)
+						}
+
+						queryParams = append(queryParams, &URLQueryParameter{
+							NodeBase: NodeBase{
+								NodeSpan{keyStart, j},
+							},
+							Name:  key,
+							Value: slices,
+						})
+
+						if j < queryEnd && s[j] == '&' {
+							j++
+						}
+					}
+
+				}
+
+				slices := parsePathExpressionSlices(pathStart, pathExclEnd)
 
 				return &URLExpression{
 					NodeBase: NodeBase{span},
@@ -1917,10 +2079,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					HostPart: string(s[span.Start:pathStart]),
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{
-							NodeSpan{pathStart, i},
+							NodeSpan{pathStart, pathExclEnd},
 						},
 						Slices: slices,
 					},
+					QueryParams: queryParams,
 				}
 			}
 		}
@@ -5316,6 +5479,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return PathPattern(n.Value), nil
 	case *PathSlice:
 		return n.Value, nil
+	case *URLQueryParameterSlice:
+		return n.Value, nil
 	case *AbsolutePathExpression:
 
 		pth := ""
@@ -5355,7 +5520,32 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		if err != nil {
 			return nil, err
 		}
-		return URL(n.HostPart + string(pth.(Path))), nil
+
+		queryBuff := bytes.NewBufferString("")
+		if len(n.QueryParams) != 0 {
+			queryBuff.WriteRune('?')
+		}
+
+		for i, p := range n.QueryParams {
+
+			if i != 0 {
+				queryBuff.WriteRune('&')
+			}
+
+			param := p.(*URLQueryParameter)
+			queryBuff.Write([]byte(param.Name))
+			queryBuff.WriteRune('=')
+
+			for _, slice := range param.Value {
+				val, err := Eval(slice, state)
+				if err != nil {
+					return nil, err
+				}
+				queryBuff.WriteString(val.(string))
+			}
+		}
+
+		return URL(n.HostPart + string(pth.(Path)) + queryBuff.String()), nil
 	case *NilLiteral:
 		return nil, nil
 	case *Variable:
