@@ -64,6 +64,7 @@ const PLAIN_TEXT_CTYPE = "text/plain"
 
 const FS_WRITE_LIMIT_NAME = "fs/write"
 const FS_READ_LIMIT_NAME = "fs/read"
+const FS_NEW_FILE_LIMIT_NAME = "fs/new-file"
 
 const FS_WRITE_MIN_CHUNK_SIZE = 100_000
 const FS_READ_MIN_CHUNK_SIZE = 1_000_000
@@ -2074,6 +2075,8 @@ func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) 
 	if err := ctx.CheckHasPermission(perm); err != nil {
 		return err
 	}
+
+	ctx.Take(FS_NEW_FILE_LIMIT_NAME, 1)
 
 	rate := ctx.GetRate(FS_WRITE_LIMIT_NAME)
 	chunkSize := min(int(rate), min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10))))

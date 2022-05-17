@@ -444,6 +444,12 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 						Rate: MustEval(node, state).(ByteRate),
 					}
 					limitations = append(limitations, limitation)
+				case *IntLiteral:
+					limitation := Limitation{
+						Name:  limitProp.Name(),
+						Total: int64(node.Value),
+					}
+					limitations = append(limitations, limitation)
 				default:
 					log.Panicln("invalid requirements, limits: only byte rate literals are supported for now.")
 				}
@@ -4537,8 +4543,9 @@ func (err NotAllowedError) Error() string {
 }
 
 type Limitation struct {
-	Name string
-	Rate ByteRate
+	Name  string
+	Rate  ByteRate
+	Total int64
 }
 
 type Limiter struct {
@@ -4577,11 +4584,22 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 	limiters := map[string]*Limiter{}
 
 	for _, l := range limitations {
+
+		var increment int64 = 0
+		if l.Rate != 0 {
+			increment = int64(l.Rate) / 100
+		}
+
+		var cap int64 = int64(l.Rate)
+		if cap == 0 {
+			cap = l.Total
+		}
+
 		limiters[l.Name] = &Limiter{
 			limitation: l,
 			//Buckets all have the same tick interval. Calculating the interval from the rate
 			//can result in small values (< 5ms) that are too precise and cause issues.
-			bucket: newBucket(TOKEN_BUCKET_INTERVAL, int64(l.Rate), int64(l.Rate)/100),
+			bucket: newBucket(TOKEN_BUCKET_INTERVAL, cap, increment),
 		}
 	}
 
@@ -4668,6 +4686,9 @@ top:
 func (ctx *Context) Take(name string, count int64) {
 	limiter, ok := ctx.limiters[name]
 	if ok {
+		if limiter.limitation.Total != 0 && limiter.bucket.avail < count {
+			panic(fmt.Errorf("cannot take %v tokens from bucket (%s), only %v token(s) available", count, name, limiter.bucket.avail))
+		}
 		limiter.bucket.Take(count)
 	}
 }
@@ -4770,10 +4791,10 @@ func NewState(ctx *Context, args ...map[string]interface{}) *State {
 
 	if state.ctx == nil {
 		state.ctx = NewContext(nil, nil, []Limitation{
-			{"http/upload", ByteRate(100_000)},
-			{"http/download", ByteRate(100_000)},
-			{"fs/read", ByteRate(1_000_000)},
-			{"fs/write", ByteRate(100_000)},
+			{"http/upload", ByteRate(100_000), 0},
+			{"http/download", ByteRate(100_000), 0},
+			{"fs/read", ByteRate(1_000_000), 0},
+			{"fs/write", ByteRate(100_000), 0},
 		})
 	}
 
