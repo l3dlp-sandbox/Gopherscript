@@ -4712,7 +4712,6 @@ func (ctx *Context) Take(name string, count int64) {
 		if limiter.limitation.Total != 0 && limiter.bucket.avail < scaledCount {
 			panic(fmt.Errorf("cannot take %v tokens from bucket (%s), only %v token(s) available", count, name, limiter.bucket.avail/TOKEN_BUCKET_CAPACITY_SCALE))
 		}
-		log.Println(name, "avail=", limiter.bucket.avail, "count=", count)
 		limiter.bucket.Take(scaledCount)
 	}
 }

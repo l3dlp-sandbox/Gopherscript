@@ -67,6 +67,8 @@ const FS_READ_LIMIT_NAME = "fs/read"
 const FS_TOTAL_NEW_FILE_LIMIT_NAME = "fs/total-new-file"
 const FS_NEW_FILE_RATE_LIMIT_NAME = "fs/new-file"
 
+const HTTP_REQUEST_RATE_LIMIT_NAME = "http/request"
+
 const FS_WRITE_MIN_CHUNK_SIZE = 100_000
 const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 
@@ -1701,6 +1703,8 @@ func httpGet(ctx *gopherscript.Context, args ...interface{}) (*http.Response, er
 		return nil, err
 	}
 
+	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
+
 	client := getOrMakeHttpClient(opts)
 	req, err := http.NewRequest("GET", string(URL), nil)
 
@@ -1762,6 +1766,8 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 	if err := ctx.CheckHasPermission(perm); err != nil {
 		return nil, err
 	}
+
+	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
 
 	client := getOrMakeHttpClient(opts)
 	req, err := http.NewRequest("POST", string(URL), body)
@@ -1825,6 +1831,8 @@ func httpPatch(ctx *gopherscript.Context, args ...interface{}) (*http.Response, 
 		return nil, err
 	}
 
+	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
+
 	client := getOrMakeHttpClient(opts)
 	req, err := http.NewRequest("PATCH", string(URL), body)
 
@@ -1874,6 +1882,8 @@ func httpDelete(ctx *gopherscript.Context, args ...interface{}) (*http.Response,
 	if err := ctx.CheckHasPermission(perm); err != nil {
 		return nil, err
 	}
+
+	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
 
 	client := getOrMakeHttpClient(opts)
 	req, err := http.NewRequest("DELETE", string(URL), nil)
