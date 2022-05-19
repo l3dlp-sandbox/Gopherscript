@@ -34,7 +34,8 @@ const IMPLICIT_KEY_LEN_KEY = "__len"
 const GOPHERSCRIPT_MIMETYPE = "application/gopherscript"
 const RETURN_1_MODULE_HASH = "SG2a/7YNuwBjsD2OI6bM9jZM4gPcOp9W8g51DrQeyt4="
 const RETURN_GLOBAL_A_MODULE_HASH = "UYvV2gLwfuQ2D91v7PzQ8RMugUTcM0lOysCMqMqXfmg"
-const TOKEN_BUCKET_INTERVAL = 10 * time.Millisecond
+const TOKEN_BUCKET_CAPACITY_SCALE = 100
+const TOKEN_BUCKET_INTERVAL = time.Second / TOKEN_BUCKET_CAPACITY_SCALE
 
 var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
@@ -441,8 +442,18 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 				case *RateLiteral:
 					limitation := Limitation{
 						Name: limitProp.Name(),
-						Rate: MustEval(node, state).(ByteRate),
 					}
+					rate := MustEval(node, state)
+
+					switch r := rate.(type) {
+					case ByteRate:
+						limitation.ByteRate = r
+					case SimpleRate:
+						limitation.SimpleRate = r
+					default:
+						log.Panicf("not a valid rate type %T\n", r)
+					}
+
 					limitations = append(limitations, limitation)
 				case *IntLiteral:
 					limitation := Limitation{
@@ -4543,9 +4554,10 @@ func (err NotAllowedError) Error() string {
 }
 
 type Limitation struct {
-	Name  string
-	Rate  ByteRate
-	Total int64
+	Name       string
+	SimpleRate SimpleRate
+	ByteRate   ByteRate
+	Total      int64
 }
 
 type Limiter struct {
@@ -4585,12 +4597,20 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 
 	for _, l := range limitations {
 
-		var increment int64 = 0
-		if l.Rate != 0 {
-			increment = int64(l.Rate) / 100
+		var increment int64 = 1
+		if l.ByteRate != 0 {
+			increment = int64(l.ByteRate)
 		}
 
-		var cap int64 = int64(l.Rate)
+		if l.SimpleRate != 0 {
+			increment = int64(l.SimpleRate)
+		}
+
+		var cap int64 = int64(l.SimpleRate)
+		if cap == 0 {
+			cap = int64(l.ByteRate)
+		}
+
 		if cap == 0 {
 			cap = l.Total
 		}
@@ -4599,7 +4619,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 			limitation: l,
 			//Buckets all have the same tick interval. Calculating the interval from the rate
 			//can result in small values (< 5ms) that are too precise and cause issues.
-			bucket: newBucket(TOKEN_BUCKET_INTERVAL, cap, increment),
+			bucket: newBucket(TOKEN_BUCKET_INTERVAL, TOKEN_BUCKET_CAPACITY_SCALE*cap, increment),
 		}
 	}
 
@@ -4684,19 +4704,23 @@ top:
 }
 
 func (ctx *Context) Take(name string, count int64) {
+
+	scaledCount := TOKEN_BUCKET_CAPACITY_SCALE * count
+
 	limiter, ok := ctx.limiters[name]
 	if ok {
-		if limiter.limitation.Total != 0 && limiter.bucket.avail < count {
-			panic(fmt.Errorf("cannot take %v tokens from bucket (%s), only %v token(s) available", count, name, limiter.bucket.avail))
+		if limiter.limitation.Total != 0 && limiter.bucket.avail < scaledCount {
+			panic(fmt.Errorf("cannot take %v tokens from bucket (%s), only %v token(s) available", count, name, limiter.bucket.avail/TOKEN_BUCKET_CAPACITY_SCALE))
 		}
-		limiter.bucket.Take(count)
+		log.Println(name, "avail=", limiter.bucket.avail, "count=", count)
+		limiter.bucket.Take(scaledCount)
 	}
 }
 
 func (ctx *Context) GetRate(name string) ByteRate {
 	limiter, ok := ctx.limiters[name]
 	if ok {
-		return limiter.limitation.Rate
+		return limiter.limitation.ByteRate
 	}
 	return -1
 }
@@ -4791,10 +4815,10 @@ func NewState(ctx *Context, args ...map[string]interface{}) *State {
 
 	if state.ctx == nil {
 		state.ctx = NewContext(nil, nil, []Limitation{
-			{"http/upload", ByteRate(100_000), 0},
-			{"http/download", ByteRate(100_000), 0},
-			{"fs/read", ByteRate(1_000_000), 0},
-			{"fs/write", ByteRate(100_000), 0},
+			{"http/upload", 0, ByteRate(100_000), 0},
+			{"http/download", 0, ByteRate(100_000), 0},
+			{"fs/read", 0, ByteRate(1_000_000), 0},
+			{"fs/write", 0, ByteRate(100_000), 0},
 		})
 	}
 
@@ -5231,7 +5255,7 @@ func Check(node Node) error {
 		switch node := n.(type) {
 		case *QuantityLiteral:
 			switch node.Unit {
-			case "s", "ms", "%", "ln", "kB", "MB", "GB":
+			case "x", "s", "ms", "%", "ln", "kB", "MB", "GB":
 			default:
 				return errors.New("non supported unit: " + node.Unit)
 			}
@@ -5243,7 +5267,7 @@ func Check(node Node) error {
 			switch unit2 {
 			case "s":
 				switch unit1 {
-				case "kB", "MB", "GB":
+				case "x", "kB", "MB", "GB":
 					return nil
 				}
 			}
@@ -5421,6 +5445,8 @@ func Check(node Node) error {
 
 func getQuantity(value float64, unit string) interface{} {
 	switch unit {
+	case "x":
+		return value
 	case "s":
 		return reflect.ValueOf(time.Duration(value) * time.Second)
 	case "ms":
@@ -5480,12 +5506,17 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		switch qv := q.(type) {
 		case ByteCount:
 			if n.Unit.Name != "s" {
-				return nil, errors.New("invalid state")
+				return nil, errors.New("invalid unit " + n.Unit.Name)
 			}
 			return ByteRate(int(qv)), nil
+		case float64:
+			if n.Unit.Name != "s" {
+				return nil, errors.New("invalid unit " + n.Unit.Name)
+			}
+			return SimpleRate(int(qv)), nil
 		}
 
-		return nil, errors.New("invalid state")
+		return nil, fmt.Errorf("invalid quantity type: %T", q)
 	case *StringLiteral:
 		return n.Value, nil
 	case *IdentifierLiteral:
@@ -6662,6 +6693,7 @@ type QuantityRange struct {
 type ByteCount int
 type LineCount int
 type ByteRate int
+type SimpleRate int
 
 //LIMITATIONS
 

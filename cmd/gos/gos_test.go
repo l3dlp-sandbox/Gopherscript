@@ -26,38 +26,38 @@ func TestCreateFile(t *testing.T) {
 	}{
 		{
 			"<content's size> == <rate> == FS_WRITE_MIN_CHUNK_SIZE, should take ~ 1s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
 			FS_WRITE_MIN_CHUNK_SIZE,
 			time.Second,
 		},
 		{
 			"<content's size> == half of (<rate> == FS_WRITE_MIN_CHUNK_SIZE), should take ~ 0.5s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
 			FS_WRITE_MIN_CHUNK_SIZE / 2,
 			time.Second / 2,
 		},
 		{
 			"<content's size> == 2 * (<rate> == FS_WRITE_MIN_CHUNK_SIZE), should take ~ 2s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(FS_WRITE_MIN_CHUNK_SIZE)},
 			2 * FS_WRITE_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
 
 		{
 			"<content's size> == <rate> == 2 * FS_WRITE_MIN_CHUNK_SIZE, should take ~ 1s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
 			2 * FS_WRITE_MIN_CHUNK_SIZE,
 			time.Second,
 		},
 		{
 			"<content's size> == half of (<rate> == 2 * FS_WRITE_MIN_CHUNK_SIZE), should take ~ 0.5s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
 			FS_WRITE_MIN_CHUNK_SIZE,
 			time.Second / 2,
 		},
 		{
 			"<content's size> == 2 * (<rate> == 2 * FS_WRITE_MIN_CHUNK_SIZE), should take ~ 2s",
-			G.Limitation{Name: FS_WRITE_LIMIT_NAME, Rate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_WRITE_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_WRITE_MIN_CHUNK_SIZE)},
 			4 * FS_WRITE_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
@@ -72,7 +72,7 @@ func TestCreateFile(t *testing.T) {
 			ctx := G.NewContext([]G.Permission{
 				G.FilesystemPermission{G.CreatePerm, fpath},
 			}, nil, []G.Limitation{testCase.limitation})
-			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.Rate))
+			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.ByteRate))
 
 			start := time.Now()
 			assert.NoError(t, __createFile(ctx, fpath, b))
@@ -98,43 +98,43 @@ func TestReadEntireFile(t *testing.T) {
 	}{
 		{
 			"<content's size> == <rate> == FS_READ_MIN_CHUNK_SIZE, should take ~ 1s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
 			FS_READ_MIN_CHUNK_SIZE,
 			time.Second,
 		},
 		{
 			"<content's size> == half of (<rate> == FS_READ_MIN_CHUNK_SIZE), should take ~ 0.5s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
 			FS_READ_MIN_CHUNK_SIZE / 2,
 			time.Second / 2,
 		},
 		{
 			"<content's size> == 2 * (<rate> == FS_READ_MIN_CHUNK_SIZE), should take ~ 2s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE)},
 			2 * FS_READ_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
 		{
 			"<content's size> == <rate> == 2 * FS_READ_MIN_CHUNK_SIZE, should take ~ 1s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
 			2 * FS_READ_MIN_CHUNK_SIZE,
 			time.Second,
 		},
 		{
 			"<content's size> == half of (<rate> == 2 * FS_READ_MIN_CHUNK_SIZE), should take ~ 0.5s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
 			FS_READ_MIN_CHUNK_SIZE,
 			time.Second / 2,
 		},
 		{
 			"<content's size> == 2 * (<rate> == 2 * FS_READ_MIN_CHUNK_SIZE), should take ~ 2s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(2 * FS_READ_MIN_CHUNK_SIZE)},
 			4 * FS_READ_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
 		{
 			"<content's size> == FS_READ_MIN_CHUNK_SIZE == 2 * <rate>, should take ~ 2s",
-			G.Limitation{Name: FS_READ_LIMIT_NAME, Rate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE / 2)},
+			G.Limitation{Name: FS_READ_LIMIT_NAME, ByteRate: G.ByteRate(FS_READ_MIN_CHUNK_SIZE / 2)},
 			FS_READ_MIN_CHUNK_SIZE,
 			2 * time.Second,
 		},
@@ -152,7 +152,7 @@ func TestReadEntireFile(t *testing.T) {
 			ctx := G.NewContext([]G.Permission{
 				G.FilesystemPermission{G.ReadPerm, G.Path(fpath)},
 			}, nil, []G.Limitation{testCase.limitation})
-			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.Rate))
+			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.ByteRate))
 
 			start := time.Now()
 			_, err = __readEntireFile(ctx, fpath)

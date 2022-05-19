@@ -3258,10 +3258,12 @@ func TestRequirements(t *testing.T) {
 			require { 
 				limits: {
 					"http/upload": 100kB/s
+					"fs/new-file": 100x/s
 				}
 			}
 		`, []Permission{}, []Limitation{
-			{Name: "http/upload", Rate: ByteRate(100_000)},
+			{Name: "http/upload", ByteRate: ByteRate(100_000)},
+			{Name: "fs/new-file", SimpleRate: SimpleRate(100)},
 		}},
 	}
 
@@ -3457,11 +3459,18 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, 1, res)
 	})
 
-	t.Run("rate literal", func(t *testing.T) {
+	t.Run("rate literal : byte rate", func(t *testing.T) {
 		n := MustParseModule(`10kB/s`)
 		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
 		assert.NoError(t, err)
 		assert.EqualValues(t, ByteRate(10_000), res)
+	})
+
+	t.Run("rate literal : simple rate", func(t *testing.T) {
+		n := MustParseModule(`10x/s`)
+		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		assert.NoError(t, err)
+		assert.EqualValues(t, SimpleRate(10), res)
 	})
 
 	t.Run("global constants : empty", func(t *testing.T) {
@@ -4547,17 +4556,42 @@ func TestTraverse(t *testing.T) {
 
 func TestLimiters(t *testing.T) {
 	ctx := NewContext(nil, nil, []Limitation{
-		{Name: "fs/read", Rate: 1_000},
+		{Name: "fs/read", ByteRate: 1_000},
+		{Name: "fs/read-file", SimpleRate: 1},
+		{Name: "fs/total-read-file", Total: 1},
 	})
 
 	start := time.Now()
-	expectedTime := start.Add(time.Second)
+
+	//BYTE RATE
 
 	//should not cause a wait
 	ctx.Take("fs/read", 1_000)
 	assert.WithinDuration(t, start, time.Now(), time.Millisecond)
 
+	expectedTime := time.Now().Add(time.Second)
+
 	//should cause a wait
 	ctx.Take("fs/read", 1_000)
 	assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
+
+	//SIMPLE RATE
+
+	start = time.Now()
+	expectedTime = start.Add(time.Second)
+
+	ctx.Take("fs/read-file", 1)
+	assert.WithinDuration(t, start, time.Now(), time.Millisecond)
+
+	//should cause a wait
+	ctx.Take("fs/read-file", 1)
+	assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
+
+	//TOTAL
+
+	ctx.Take("fs/total-read-file", 1)
+
+	assert.Panics(t, func() {
+		ctx.Take("fs/total-read-file", 1)
+	})
 }

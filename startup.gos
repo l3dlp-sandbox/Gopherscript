@@ -34,6 +34,8 @@ require {
     limits: {
         "fs/read": 100kB/s
         "fs/write": 100kB/s
+        "fs/total-new-file": 100000
+        "fs/new-file": 100x/s
     }
 }
 
