@@ -1736,6 +1736,8 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 				return nil, errors.New("MIME type provided at least twice")
 			}
 			contentType = argVal
+		case string:
+			body = strings.NewReader(argVal)
 		case io.Reader:
 			if body != nil {
 				return nil, errors.New("body provided at least twice")
