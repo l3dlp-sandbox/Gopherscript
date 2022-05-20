@@ -37,6 +37,10 @@ const RETURN_GLOBAL_A_MODULE_HASH = "UYvV2gLwfuQ2D91v7PzQ8RMugUTcM0lOysCMqMqXfmg
 const TOKEN_BUCKET_CAPACITY_SCALE = 100
 const TOKEN_BUCKET_INTERVAL = time.Second / TOKEN_BUCKET_CAPACITY_SCALE
 
+const EXECUTION_TOTAL_LIMIT_NAME = "execution/total-time"
+const COMPUTE_TIME_TOTAL_LIMIT_NAME = "execution/total-compute-time"
+const IO_TIME_TOTAL_LIMIT_NAME = "execution/total-io-time"
+
 var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
 var LOOSE_HTTP_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_EXPR_PATTERN)
@@ -98,6 +102,13 @@ func isNotPairedOrIsClosingDelim(r rune) bool {
 
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
 		return a
 	}
 	return b
@@ -461,6 +472,18 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 						Total: int64(node.Value),
 					}
 					limitations = append(limitations, limitation)
+				case *QuantityLiteral:
+					limitation := Limitation{
+						Name: limitProp.Name(),
+					}
+					total := MustEval(node, state)
+					switch d := total.(type) {
+					case time.Duration:
+						limitation.Total = int64(d)
+					default:
+						log.Panicf("not a valid total type %T\n", d)
+					}
+
 				default:
 					log.Panicln("invalid requirements, limits: only byte rate literals are supported for now.")
 				}
@@ -4554,18 +4577,29 @@ func (err NotAllowedError) Error() string {
 }
 
 type Limitation struct {
-	Name       string
-	SimpleRate SimpleRate
-	ByteRate   ByteRate
-	Total      int64
+	Name        string
+	SimpleRate  SimpleRate
+	ByteRate    ByteRate
+	Total       int64
+	DecrementFn func() int64
 }
 
 type Limiter struct {
 	limitation Limitation
 	bucket     *TokenBucket
+	contexts   []*Context
 }
 
+type LoadType int
+
+const (
+	ComputeLoad LoadType = iota
+	IOLoad
+)
+
 type Context struct {
+	executionStartTime   time.Time
+	currentLoadType      LoadType
 	grantedPermissions   []Permission
 	forbiddenPermissions []Permission
 	limitations          []Limitation
@@ -4595,7 +4629,14 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 
 	limiters := map[string]*Limiter{}
 
+	ctx := &Context{}
+
 	for _, l := range limitations {
+
+		_, alreadyExist := limiters[l.Name]
+		if alreadyExist {
+			log.Panicf("context creation: duplicate limit '%s'\n", l.Name)
+		}
 
 		var increment int64 = 1
 		if l.ByteRate != 0 {
@@ -4616,14 +4657,16 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 		}
 
 		limiters[l.Name] = &Limiter{
+			contexts:   []*Context{ctx},
 			limitation: l,
 			//Buckets all have the same tick interval. Calculating the interval from the rate
 			//can result in small values (< 5ms) that are too precise and cause issues.
-			bucket: newBucket(TOKEN_BUCKET_INTERVAL, TOKEN_BUCKET_CAPACITY_SCALE*cap, increment),
+			bucket: newBucket(TOKEN_BUCKET_INTERVAL, TOKEN_BUCKET_CAPACITY_SCALE*cap, increment, l.DecrementFn),
 		}
 	}
 
-	ctx := &Context{
+	*ctx = Context{
+		executionStartTime:   time.Now(),
 		grantedPermissions:   permissions,
 		forbiddenPermissions: forbiddenPermissions,
 		limitations:          limitations,
@@ -4814,10 +4857,10 @@ func NewState(ctx *Context, args ...map[string]interface{}) *State {
 
 	if state.ctx == nil {
 		state.ctx = NewContext(nil, nil, []Limitation{
-			{"http/upload", 0, ByteRate(100_000), 0},
-			{"http/download", 0, ByteRate(100_000), 0},
-			{"fs/read", 0, ByteRate(1_000_000), 0},
-			{"fs/write", 0, ByteRate(100_000), 0},
+			{"http/upload", 0, ByteRate(100_000), 0, nil},
+			{"http/download", 0, ByteRate(100_000), 0, nil},
+			{"fs/read", 0, ByteRate(1_000_000), 0, nil},
+			{"fs/write", 0, ByteRate(100_000), 0, nil},
 		})
 	}
 
@@ -6710,6 +6753,7 @@ type TokenBucket struct {
 	cap               int64
 	avail             int64
 	increment         int64
+	decrementFn       func() int64
 }
 
 type waitingJob struct {
@@ -6721,7 +6765,7 @@ type waitingJob struct {
 
 // newBucket returns a new token bucket with specified fill interval and
 // capability. The bucket is initially full.
-func newBucket(interval time.Duration, cap int64, inc int64) *TokenBucket {
+func newBucket(interval time.Duration, cap int64, inc int64, decrementFn func() int64) *TokenBucket {
 	if interval < 0 {
 		panic(fmt.Sprintf("ratelimit: interval %v should > 0", interval))
 	}
@@ -6739,6 +6783,7 @@ func newBucket(interval time.Duration, cap int64, inc int64) *TokenBucket {
 		avail:             cap,
 		increment:         inc,
 		ticker:            time.NewTicker(interval),
+		decrementFn:       decrementFn,
 	}
 
 	go tb.adjustDaemon()
@@ -6852,8 +6897,8 @@ func (tb *TokenBucket) waitAndTakeMaxDuration(need, use int64, max time.Duration
 	}
 }
 
-// Destory destorys the token bucket and stop the inner channels.
-func (tb *TokenBucket) Destory() {
+// Destroy destroys the token bucket and stop the inner channels.
+func (tb *TokenBucket) Destroy() {
 	tb.ticker.Stop()
 }
 
@@ -6865,7 +6910,11 @@ func (tb *TokenBucket) adjustDaemon() {
 		tb.tokenMutex.Lock()
 
 		if tb.avail < tb.cap {
-			tb.avail += tb.increment
+			tb.avail = max64(0, tb.avail+tb.increment)
+		}
+
+		if tb.decrementFn != nil {
+			tb.avail = max64(0, tb.avail-tb.decrementFn()*TOKEN_BUCKET_CAPACITY_SCALE)
 		}
 
 		element := tb.getFrontWaitingJob()

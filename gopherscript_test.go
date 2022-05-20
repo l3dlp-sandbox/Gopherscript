@@ -4555,43 +4555,74 @@ func TestTraverse(t *testing.T) {
 }
 
 func TestLimiters(t *testing.T) {
-	ctx := NewContext(nil, nil, []Limitation{
-		{Name: "fs/read", ByteRate: 1_000},
-		{Name: "fs/read-file", SimpleRate: 1},
-		{Name: "fs/total-read-file", Total: 1},
+
+	t.Run("byte rate", func(t *testing.T) {
+		ctx := NewContext(nil, nil, []Limitation{
+			{Name: "fs/read", ByteRate: 1_000},
+		})
+
+		start := time.Now()
+
+		//BYTE RATE
+
+		//should not cause a wait
+		ctx.Take("fs/read", 1_000)
+		assert.WithinDuration(t, start, time.Now(), time.Millisecond)
+
+		expectedTime := time.Now().Add(time.Second)
+
+		//should cause a wait
+		ctx.Take("fs/read", 1_000)
+		assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
 	})
 
-	start := time.Now()
+	t.Run("simple rate", func(t *testing.T) {
+		ctx := NewContext(nil, nil, []Limitation{
+			{Name: "fs/read-file", SimpleRate: 1},
+		})
 
-	//BYTE RATE
+		start := time.Now()
+		expectedTime := start.Add(time.Second)
 
-	//should not cause a wait
-	ctx.Take("fs/read", 1_000)
-	assert.WithinDuration(t, start, time.Now(), time.Millisecond)
+		ctx.Take("fs/read-file", 1)
+		assert.WithinDuration(t, start, time.Now(), time.Millisecond)
 
-	expectedTime := time.Now().Add(time.Second)
+		//should cause a wait
+		ctx.Take("fs/read-file", 1)
+		assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
 
-	//should cause a wait
-	ctx.Take("fs/read", 1_000)
-	assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
+	})
 
-	//SIMPLE RATE
+	t.Run("total", func(t *testing.T) {
+		ctx := NewContext(nil, nil, []Limitation{
+			{Name: "fs/total-read-file", Total: 1},
+		})
 
-	start = time.Now()
-	expectedTime = start.Add(time.Second)
-
-	ctx.Take("fs/read-file", 1)
-	assert.WithinDuration(t, start, time.Now(), time.Millisecond)
-
-	//should cause a wait
-	ctx.Take("fs/read-file", 1)
-	assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
-
-	//TOTAL
-
-	ctx.Take("fs/total-read-file", 1)
-
-	assert.Panics(t, func() {
 		ctx.Take("fs/total-read-file", 1)
+
+		assert.Panics(t, func() {
+			ctx.Take("fs/total-read-file", 1)
+		})
 	})
+
+	t.Run("auto decrement", func(t *testing.T) {
+		i := 0
+		ctx := NewContext(nil, nil, []Limitation{
+			{
+				Name:  "test",
+				Total: 100,
+				DecrementFn: func() int64 {
+					i++
+					return 1
+				},
+			},
+		})
+
+		capacity := int64(100 * TOKEN_BUCKET_CAPACITY_SCALE)
+
+		assert.Equal(t, capacity, ctx.limiters["test"].bucket.avail)
+		time.Sleep(time.Second)
+		assert.InDelta(t, int64(0), ctx.limiters["test"].bucket.avail, float64(capacity/5))
+	})
+
 }
