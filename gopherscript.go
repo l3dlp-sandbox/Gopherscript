@@ -6139,8 +6139,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				index := 0
 
 			iteration:
-				for it.HasNext() {
-					e := it.GetNext()
+				for it.HasNext(state.ctx) {
+					e := it.GetNext(state.ctx)
 
 					if n.KeyIndexIdent != nil {
 						state.CurrentScope()[kVarname] = index
@@ -6681,8 +6681,8 @@ type Iterable interface {
 }
 
 type Iterator interface {
-	HasNext() bool
-	GetNext() interface{}
+	HasNext(*Context) bool
+	GetNext(*Context) interface{}
 }
 
 type IntRange struct {
@@ -6708,15 +6708,15 @@ type IntRangeIterator struct {
 	next   int
 }
 
-func (it IntRangeIterator) HasNext() bool {
+func (it IntRangeIterator) HasNext(*Context) bool {
 	if it.range_.inclusiveEnd {
 		return it.next <= it.range_.End
 	}
 	return it.next < it.range_.End
 }
 
-func (it *IntRangeIterator) GetNext() interface{} {
-	if !it.HasNext() {
+func (it *IntRangeIterator) GetNext(ctx *Context) interface{} {
+	if !it.HasNext(ctx) {
 		log.Panicln("no next value in int range iterator")
 	}
 
