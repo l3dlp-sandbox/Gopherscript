@@ -1,0 +1,15 @@
+require {
+    use: {globals: "*"}
+    limits: {
+        "execution/total-time": 1s
+    }
+}
+
+sleep 1s
+log 1
+
+sleep 1s
+log 2
+
+sleep 1s
+log 3

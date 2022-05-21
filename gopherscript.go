@@ -447,6 +447,8 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 				log.Panicln("invalid requirements, limits should be an object literal:", name)
 			}
 
+			//add limits
+
 			for _, limitProp := range limitObjLiteral.Properties {
 
 				switch node := limitProp.Value.(type) {
@@ -476,17 +478,34 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 					limitation := Limitation{
 						Name: limitProp.Name(),
 					}
-					total := MustEval(node, state)
+					total := UnwrapReflectVal(MustEval(node, state))
+
 					switch d := total.(type) {
 					case time.Duration:
 						limitation.Total = int64(d)
 					default:
 						log.Panicf("not a valid total type %T\n", d)
 					}
-
+					limitations = append(limitations, limitation)
 				default:
 					log.Panicln("invalid requirements, limits: only byte rate literals are supported for now.")
 				}
+			}
+
+			//check & postprocess limits
+
+			for i, l := range limitations {
+				switch l.Name {
+				case EXECUTION_TOTAL_LIMIT_NAME:
+					if l.Total == 0 {
+						log.Panicf("invalid requirements, limits: %s should have a total value\n", EXECUTION_TOTAL_LIMIT_NAME)
+					}
+					l.DecrementFn = func(lastDecrementTime time.Time) int64 {
+						v := TOKEN_BUCKET_CAPACITY_SCALE * time.Since(lastDecrementTime)
+						return v.Nanoseconds()
+					}
+				}
+				limitations[i] = l
 			}
 
 			continue
@@ -1057,6 +1076,8 @@ func samePointer(a, b interface{}) bool {
 }
 
 func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (interface{}, error) {
+	state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
+
 	stackHeight := 1 + len(state.ScopeStack)
 
 	if !state.ctx.stackPermission.includes(StackPermission{maxHeight: stackHeight}) {
@@ -4581,7 +4602,7 @@ type Limitation struct {
 	SimpleRate  SimpleRate
 	ByteRate    ByteRate
 	Total       int64
-	DecrementFn func() int64
+	DecrementFn func(time.Time) int64
 }
 
 type Limiter struct {
@@ -6090,6 +6111,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		case Object:
 		obj_iteration:
 			for k, v := range v {
+				state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
+
 				if n.KeyIndexIdent != nil {
 					state.CurrentScope()[kVarname] = k
 					state.CurrentScope()[eVarname] = v
@@ -6111,6 +6134,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		case List:
 		list_iteration:
 			for i, e := range v {
+				state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
+
 				if n.KeyIndexIdent != nil {
 
 					state.CurrentScope()[kVarname] = i
@@ -6134,12 +6159,15 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			val := ToReflectVal(v)
 
 			if val.IsValid() && val.Type().Implements(ITERABLE_INTERFACE_TYPE) {
+				state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
+
 				iterable := val.Interface().(Iterable)
 				it := iterable.Iterator()
 				index := 0
 
 			iteration:
 				for it.HasNext(state.ctx) {
+					state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
 					e := it.GetNext(state.ctx)
 
 					if n.KeyIndexIdent != nil {
@@ -6753,7 +6781,8 @@ type TokenBucket struct {
 	cap               int64
 	avail             int64
 	increment         int64
-	decrementFn       func() int64
+	decrementFn       func(time.Time) int64
+	lastDecrementTime time.Time
 }
 
 type waitingJob struct {
@@ -6765,7 +6794,7 @@ type waitingJob struct {
 
 // newBucket returns a new token bucket with specified fill interval and
 // capability. The bucket is initially full.
-func newBucket(interval time.Duration, cap int64, inc int64, decrementFn func() int64) *TokenBucket {
+func newBucket(interval time.Duration, cap int64, inc int64, decrementFn func(time.Time) int64) *TokenBucket {
 	if interval < 0 {
 		panic(fmt.Sprintf("ratelimit: interval %v should > 0", interval))
 	}
@@ -6784,6 +6813,7 @@ func newBucket(interval time.Duration, cap int64, inc int64, decrementFn func() 
 		increment:         inc,
 		ticker:            time.NewTicker(interval),
 		decrementFn:       decrementFn,
+		lastDecrementTime: time.Now(),
 	}
 
 	go tb.adjustDaemon()
@@ -6914,9 +6944,10 @@ func (tb *TokenBucket) adjustDaemon() {
 		}
 
 		if tb.decrementFn != nil {
-			tb.avail = max64(0, tb.avail-tb.decrementFn()*TOKEN_BUCKET_CAPACITY_SCALE)
+			tb.avail = max64(0, tb.avail-tb.decrementFn(tb.lastDecrementTime))
 		}
 
+		tb.lastDecrementTime = time.Now()
 		element := tb.getFrontWaitingJob()
 
 		if element != nil {

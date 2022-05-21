@@ -4606,23 +4606,22 @@ func TestLimiters(t *testing.T) {
 	})
 
 	t.Run("auto decrement", func(t *testing.T) {
-		i := 0
 		ctx := NewContext(nil, nil, []Limitation{
 			{
 				Name:  "test",
-				Total: 100,
-				DecrementFn: func() int64 {
-					i++
-					return 1
+				Total: int64(time.Second),
+				DecrementFn: func(lastDecrementTime time.Time) int64 {
+					v := TOKEN_BUCKET_CAPACITY_SCALE * time.Since(lastDecrementTime)
+					return v.Nanoseconds()
 				},
 			},
 		})
 
-		capacity := int64(100 * TOKEN_BUCKET_CAPACITY_SCALE)
+		capacity := int64(time.Second * TOKEN_BUCKET_CAPACITY_SCALE)
 
 		assert.Equal(t, capacity, ctx.limiters["test"].bucket.avail)
 		time.Sleep(time.Second)
-		assert.InDelta(t, int64(0), ctx.limiters["test"].bucket.avail, float64(capacity/5))
+		assert.InDelta(t, int64(0), ctx.limiters["test"].bucket.avail, float64(capacity/20))
 	})
 
 }
