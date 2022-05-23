@@ -5478,6 +5478,7 @@ func Check(node Node) error {
 				return errors.New("invalid function declaration: a function declaration should be a top level statement in a module (embedded or not)")
 			}
 		case *BreakStatement, *ContinueStatement:
+
 			forStmtIndex := -1
 
 			//we search for the last for statement in the ancestor chain
@@ -5499,6 +5500,17 @@ func Check(node Node) error {
 				default:
 					return fmt.Errorf("invalid break/continue statement: should be in a for statement")
 				}
+			}
+		case *Variable:
+			variables, ok := localVars[parent]
+
+			if !ok {
+				return fmt.Errorf("local variable %s is not defined", node.Name)
+			}
+
+			_, exist := variables[node.Name]
+			if exist {
+				return fmt.Errorf("local variable %s is not defined", node.Name)
 			}
 		}
 
