@@ -16,7 +16,7 @@ switch 0 {
 
 match / {
     /* {
-        log "/..."
+        log "/*"
     }
 
     /e* {

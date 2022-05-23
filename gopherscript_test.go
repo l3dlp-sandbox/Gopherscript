@@ -3217,6 +3217,14 @@ func TestCheck(t *testing.T) {
 		assert.Error(t, Check(n))
 	})
 
+	t.Run("local variable in a module : defined", func(t *testing.T) {
+		n := MustParseModule(`
+			a = 1
+			$a
+		`)
+		assert.NoError(t, Check(n))
+	})
+
 	t.Run("local variable in an embedded module : undefined", func(t *testing.T) {
 		n := MustParseModule(`
 			a = 1
@@ -3236,6 +3244,26 @@ func TestCheck(t *testing.T) {
 		`)
 		assert.Error(t, Check(n))
 	})
+
+	t.Run("local variable in a function : defined", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(){
+				a = 1
+				$a
+			}
+		`)
+		assert.NoError(t, Check(n))
+	})
+
+	t.Run("argument variable in a function", func(t *testing.T) {
+		n := MustParseModule(`
+			fn f(a){
+				$a
+			}
+		`)
+		assert.NoError(t, Check(n))
+	})
+
 }
 
 func TestRequirements(t *testing.T) {

@@ -1,5 +1,5 @@
 const (
-    $$DIR_PATH = /tmp/toto
+    DIR_PATH = /tmp/toto
 )
 
 require {

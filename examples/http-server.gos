@@ -10,7 +10,7 @@ require {
 }
 
 
-fn handle($rw, $r){
+fn handle(rw, r){
     match $r.Path {
         / {
             $rw.WriteJSON({ 

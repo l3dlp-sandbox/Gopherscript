@@ -147,6 +147,15 @@ func (base NodeBase) IncludedIn(node Node) bool {
 	return base.Span.Start >= node.Base().Span.Start && base.Span.End <= node.Base().Span.End
 }
 
+func isScopeContainerNode(node Node) bool {
+	switch node.(type) {
+	case *Module, *EmbeddedModule, *FunctionExpression:
+		return true
+	default:
+		return false
+	}
+}
+
 type Module struct {
 	NodeBase
 	GlobalConstantDeclarations *GlobalConstantDeclarations //nil if no const declarations at the top of the module
@@ -4995,7 +5004,7 @@ func traverse(v interface{}, fn func(interface{}) (TraversalAction, error), conf
 	return nil
 }
 
-func Walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, []Node) error) error {
+func Walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []Node) error) error {
 	//refactor with panics ?
 
 	if ancestorChain != nil {
@@ -5005,7 +5014,14 @@ func Walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, []Node) 
 		}()
 	}
 
-	if err := fn(node, parent, *ancestorChain); err != nil {
+	var scopeNode = parent
+	for _, a := range *ancestorChain {
+		if isScopeContainerNode(a) {
+			scopeNode = a
+		}
+	}
+
+	if err := fn(node, parent, scopeNode, *ancestorChain); err != nil {
 		return err
 	}
 
@@ -5313,7 +5329,7 @@ func Check(node Node) error {
 
 	parentChain := make([]Node, 0)
 
-	return Walk(node, nil, &parentChain, func(n Node, parent Node, ancestorChain []Node) error {
+	return Walk(node, nil, &parentChain, func(n, parent, scopeNode Node, ancestorChain []Node) error {
 
 		switch node := n.(type) {
 		case *QuantityLiteral:
@@ -5403,7 +5419,7 @@ func Check(node Node) error {
 				switch left := assignment.Left.(type) {
 
 				case *GlobalVariable:
-					fns, ok := fnDecls[parent]
+					fns, ok := fnDecls[scopeNode]
 					if ok {
 						_, alreadyUsed := fns[left.Name]
 						if alreadyUsed {
@@ -5411,11 +5427,11 @@ func Check(node Node) error {
 						}
 					}
 
-					variables, ok := globalVars[parent]
+					variables, ok := globalVars[scopeNode]
 
 					if !ok {
 						variables = make(map[string]globalVarInfo)
-						globalVars[parent] = variables
+						globalVars[scopeNode] = variables
 					}
 
 					varInfo, alreadyDefined := variables[left.Name]
@@ -5440,11 +5456,11 @@ func Check(node Node) error {
 			}
 
 			for _, name := range names {
-				variables, ok := localVars[parent]
+				variables, ok := localVars[scopeNode]
 
 				if !ok {
 					variables = make(map[string]int)
-					localVars[parent] = variables
+					localVars[scopeNode] = variables
 				}
 
 				variables[name] = 0
@@ -5455,7 +5471,7 @@ func Check(node Node) error {
 			switch parent.(type) {
 			case *Module, *EmbeddedModule:
 				fns, ok := fnDecls[parent]
-				vars, globalOk := globalVars[parent]
+				globVars, globalOk := globalVars[parent]
 
 				if !ok {
 					fns = make(map[string]int)
@@ -5463,7 +5479,7 @@ func Check(node Node) error {
 				}
 
 				if globalOk {
-					_, alreadyUsed := vars[node.Name.Name]
+					_, alreadyUsed := globVars[node.Name.Name]
 					if alreadyUsed {
 						return fmt.Errorf("invalid function declaration: a global variable named '%s' exist", node.Name.Name)
 					}
@@ -5477,6 +5493,14 @@ func Check(node Node) error {
 			default:
 				return errors.New("invalid function declaration: a function declaration should be a top level statement in a module (embedded or not)")
 			}
+		case *FunctionExpression:
+			parameters := make(map[string]int)
+			localVars[node] = parameters
+
+			for _, p := range node.Parameters {
+				parameters[p.Var.Name] = 0
+			}
+
 		case *BreakStatement, *ContinueStatement:
 
 			forStmtIndex := -1
@@ -5502,14 +5526,18 @@ func Check(node Node) error {
 				}
 			}
 		case *Variable:
-			variables, ok := localVars[parent]
+			if node.Name == "" {
+				break
+			}
+
+			variables, ok := localVars[scopeNode]
 
 			if !ok {
 				return fmt.Errorf("local variable %s is not defined", node.Name)
 			}
 
 			_, exist := variables[node.Name]
-			if exist {
+			if !exist {
 				return fmt.Errorf("local variable %s is not defined", node.Name)
 			}
 		}
