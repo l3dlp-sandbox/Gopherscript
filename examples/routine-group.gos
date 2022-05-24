@@ -16,11 +16,8 @@ require {
 }
 
 for (1 .. 2) {
-    sr req_group .{http,io,tostr} {
-        res = http.get(https://debloat.dev/fakeapp/users/1)!
-        json = tostr(io.ReadAll($res.Body)!)
-
-        return $json
+    sr req_group .{read} {
+        return read(https://debloat.dev/fakeapp/users/1)!
     } allow {
         read: $$DOMAIN
         use: {globals: "*"}
