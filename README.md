@@ -2,7 +2,7 @@
 
 Gopherscript is a secure scripting/configuration language written in Go. 
 It features a fined-grain permission system and enforces a strong isolation of dependencies.
-Gopherscript is not production ready yet : if you find a bug or want to suggest a feature create an issue please !
+Gopherscript is not production ready yet : if you find a bug or want to suggest a feature create an issue please ! Expect breaking changes.
 
 Join the official community on [Revolt](https://app.revolt.chat/invite/cJQPeQkc).
 
@@ -10,7 +10,7 @@ Join the official community on [Revolt](https://app.revolt.chat/invite/cJQPeQkc)
 
 ## Security & Minimalism
 
-- The codebase is small on purpose (a single Go file with less than 7K lines and only std lib dependencies). See [Implementation](#implementation).
+- The codebase is small on purpose (a single Go file with less than 8K lines and only std lib dependencies). See [Implementation](#implementation).
 - The default global scope has ZERO variables/functions and there are no "builtin modules" to import. (only add what you need from Golang)
 - A strict but extensive permission system allows you to precisely control what is allowed (almost no permissions by default). 
   For more details go to the [permission section](#permissions).
