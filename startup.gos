@@ -38,6 +38,7 @@ require {
         "fs/new-file": 10x/s
 
         "http/request": 1x/s
+        "execution/total-time": 10s
     }
 }
 
