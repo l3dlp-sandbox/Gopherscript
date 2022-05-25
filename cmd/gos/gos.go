@@ -537,7 +537,7 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 
 	var nodeAtCursor gopherscript.Node
 
-	gopherscript.Walk(mod, nil, nil, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) error {
+	gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) error {
 		span := node.Base().Span
 
 		if span.Start > cursorIndex || span.End < cursorIndex {
