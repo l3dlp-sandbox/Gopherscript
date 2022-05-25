@@ -167,7 +167,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 				return ArrowRight
 			case 68:
 				return ArrowLeft
-			case 70:
+			case 54:
 				return End
 			case 72:
 				return Home
@@ -198,6 +198,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	var runeSeq []rune
 	backspaceCount := 0
 	pressedTabCount := 0
+	ignoreNextChar := false
 
 	writePrompt()
 
@@ -206,6 +207,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		backspaceCount = 0
 		runeSeq = nil
 		pressedTabCount = 0
+		ignoreNextChar = false
 	}
 
 	moveCursorLineStart := func() {
@@ -214,6 +216,11 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	for {
 		r, _, err := reader.ReadRune()
+
+		if ignoreNextChar {
+			ignoreNextChar = false
+			continue
+		}
 
 		if err == io.EOF {
 			log.Println("EOF")
@@ -304,6 +311,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			prevBackspaceCount := backspaceCount
 			backspaceCount = 0
 			termenv.CursorForward(prevBackspaceCount)
+			ignoreNextChar = true
 			continue
 		case ArrowLeft:
 			if backspaceCount < len(input) {
