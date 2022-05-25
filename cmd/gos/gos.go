@@ -389,6 +389,9 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 		case Enter:
 			history.Commands = append(history.Commands, string(input))
+			if history.Commands[0] == "" {
+				history.Commands = history.Commands[1:]
+			}
 
 			inputString := string(input)
 
