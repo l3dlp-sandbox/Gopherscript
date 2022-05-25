@@ -26,7 +26,7 @@ Have a look at the [features section](#features) and the wiki !
 
 You can use the ``gos`` executable to execute scripts or launch a REPL:
 ```
-go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.3.6
+go install github.com/debloat-dev/Gopherscript/cmd/gos@v0.4.0
 ```
 See the documentation [here](./gos.md).
 You can also use Gopherscript as a library and only add whay you need to the global scope (see the example further below).
