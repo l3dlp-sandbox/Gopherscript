@@ -84,7 +84,7 @@ func isIdentChar(r rune) bool {
 
 func isDelim(r rune) bool {
 	switch r {
-	case '{', '}', '[', ']', '(', ')', ',', ';', ':':
+	case '{', '}', '[', ']', '(', ')', ',', ';', ':', '|':
 		return true
 	default:
 		return false
@@ -93,7 +93,7 @@ func isDelim(r rune) bool {
 
 func isNotPairedOrIsClosingDelim(r rune) bool {
 	switch r {
-	case ',', ';', ':', ')', ']', '}':
+	case ',', ';', ':', ')', ']', '}', '|':
 		return true
 	default:
 		return false
@@ -889,6 +889,23 @@ type SpawnExpression struct {
 	Globals            Node
 	ExprOrVar          Node
 	GrantedPermissions *ObjectLiteral //nil if no "allow ...." in the spawn expression
+}
+
+type PipelineStatement struct {
+	NodeBase
+	Stages []*PipelineStage
+}
+
+type PipelineStageKind int
+
+const (
+	NormalStage PipelineStageKind = iota
+	ParallelStage
+)
+
+type PipelineStage struct {
+	Kind PipelineStageKind
+	Expr Node
 }
 
 func isSimpleValueLiteral(node Node) bool {
@@ -3664,6 +3681,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		return nil
 	}
 
+	parseCallArgs := func(call *Call) {
+		for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
+			eatSpaceAndComments()
+
+			if s[i] == '\n' || isNotPairedOrIsClosingDelim(s[i]) {
+				break
+			}
+
+			arg := parseExpression()
+
+			call.Arguments = append(call.Arguments, arg)
+			eatSpaceAndComments()
+		}
+	}
+
 	parseFunction = func(start int) Node {
 		eatSpace()
 
@@ -4435,18 +4467,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Must:      true,
 				}
 
-				for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
-					eatSpaceAndComments()
-
-					if s[i] == '\n' || isNotPairedOrIsClosingDelim(s[i]) {
-						break
-					}
-
-					arg := parseExpression()
-
-					call.Arguments = append(call.Arguments, arg)
-					eatSpaceAndComments()
-				}
+				parseCallArgs(call)
 
 				if i < len(s) && s[i] == '\n' {
 					i++
@@ -4458,7 +4479,116 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					call.NodeBase.Span.End = call.Arguments[len(call.Arguments)-1].Base().Span.End
 				}
 
-				return call
+				eatSpace()
+
+				//normal call
+
+				if i >= len(s) || s[i] != '|' {
+					return call
+				}
+
+				//pipe statement
+
+				stmt := &PipelineStatement{
+					NodeBase: NodeBase{
+						NodeSpan{call.Span.Start, 0},
+					},
+					Stages: []*PipelineStage{
+						{
+							Kind: NormalStage,
+							Expr: call,
+						},
+					},
+				}
+
+				i++
+				eatSpace()
+
+				if i >= len(s) {
+					panic(ParsingError{
+						"unterminated pipeline statement, last stage is empty",
+						i,
+						expr.Base().Span.Start,
+						UnspecifiedCategory,
+						nil,
+					})
+				}
+
+				for i < len(s) && s[i] != '\n' {
+					eatSpace()
+					if i >= len(s) {
+						panic(ParsingError{
+							"unterminated pipeline statement, last stage is empty",
+							i,
+							expr.Base().Span.Start,
+							UnspecifiedCategory,
+							nil,
+						})
+					}
+
+					callee := parseExpression()
+
+					currentCall := &Call{
+						NodeBase: NodeBase{
+							Span: NodeSpan{callee.Base().Span.Start, 0},
+						},
+						Callee:    callee,
+						Arguments: nil,
+						Must:      true,
+					}
+
+					stmt.Stages = append(stmt.Stages, &PipelineStage{
+						Kind: NormalStage,
+						Expr: currentCall,
+					})
+
+					switch callee.(type) {
+					case *IdentifierLiteral, *IdentifierMemberExpression:
+
+						parseCallArgs(currentCall)
+
+						if i < len(s) && s[i] == '\n' {
+							i++
+						}
+
+						if len(currentCall.Arguments) == 0 {
+							currentCall.NodeBase.Span.End = callee.Base().Span.End
+						} else {
+							currentCall.NodeBase.Span.End = currentCall.Arguments[len(currentCall.Arguments)-1].Base().Span.End
+						}
+
+						eatSpace()
+
+						if i >= len(s) {
+							return stmt
+						}
+
+						switch s[i] {
+						case '|':
+							i++
+							continue //we parse the next stage
+						case '\n':
+							i++
+							return stmt
+						default:
+							panic(ParsingError{
+								fmt.Sprintf("invalid pipeline stage, unexpected char '%c'", s[i]),
+								i,
+								expr.Base().Span.Start,
+								UnspecifiedCategory,
+								nil,
+							})
+						}
+					default:
+						panic(ParsingError{
+							"invalid pipeline stage, all pipeline stages should be calls",
+							i,
+							expr.Base().Span.Start,
+							UnspecifiedCategory,
+							nil,
+						})
+					}
+				}
 			}
 		}
 		return expr

@@ -1367,6 +1367,166 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pipeline statement: empty second stage", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("print $a |")
+		})
+	})
+
+	t.Run("pipeline statement: second stage is not a call", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("print $a | 1")
+		})
+	})
+
+	t.Run("pipeline statement: second stage is a call with no arguments", func(t *testing.T) {
+		n := MustParseModule("print $a | do-something")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 23}},
+			Statements: []Node{
+				&PipelineStatement{
+					Stages: []*PipelineStage{
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{0, 8}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{0, 5}},
+									Name:     "print",
+								},
+								Arguments: []Node{
+									&Variable{
+										NodeBase: NodeBase{NodeSpan{6, 8}},
+										Name:     "a",
+									},
+								},
+							},
+						},
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{11, 23}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{11, 23}},
+									Name:     "do-something",
+								},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pipeline statement: second stage is a call with a single argument", func(t *testing.T) {
+		n := MustParseModule("print $a | do-something $")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 25}},
+			Statements: []Node{
+				&PipelineStatement{
+					Stages: []*PipelineStage{
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{0, 8}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{0, 5}},
+									Name:     "print",
+								},
+								Arguments: []Node{
+									&Variable{
+										NodeBase: NodeBase{NodeSpan{6, 8}},
+										Name:     "a",
+									},
+								},
+							},
+						},
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{11, 25}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{11, 23}},
+									Name:     "do-something",
+								},
+								Arguments: []Node{
+									&Variable{
+										NodeBase: NodeBase{NodeSpan{24, 25}},
+										Name:     "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pipeline statement: third stage is a call with no arguments", func(t *testing.T) {
+		n := MustParseModule("print $a | do-something $ | do-something-else")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 45}},
+			Statements: []Node{
+				&PipelineStatement{
+					Stages: []*PipelineStage{
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{0, 8}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{0, 5}},
+									Name:     "print",
+								},
+								Arguments: []Node{
+									&Variable{
+										NodeBase: NodeBase{NodeSpan{6, 8}},
+										Name:     "a",
+									},
+								},
+							},
+						},
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{11, 25}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{11, 23}},
+									Name:     "do-something",
+								},
+								Arguments: []Node{
+									&Variable{
+										NodeBase: NodeBase{NodeSpan{24, 25}},
+										Name:     "",
+									},
+								},
+							},
+						},
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{28, 45}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{28, 45}},
+									Name:     "do-something-else",
+								},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("identifier member expression", func(t *testing.T) {
 		n := MustParseModule("http.get")
 		assert.EqualValues(t, &Module{
