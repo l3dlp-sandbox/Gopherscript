@@ -1421,6 +1421,42 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pipeline statement: first and second stages are calls with no arguments", func(t *testing.T) {
+		n := MustParseModule("print | do-something")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 20}},
+			Statements: []Node{
+				&PipelineStatement{
+					Stages: []*PipelineStage{
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{0, 5}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{0, 5}},
+									Name:     "print",
+								},
+							},
+						},
+						{
+							Kind: NormalStage,
+							Expr: &Call{
+								Must:     true,
+								NodeBase: NodeBase{NodeSpan{8, 20}},
+								Callee: &IdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{8, 20}},
+									Name:     "do-something",
+								},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pipeline statement: second stage is a call with a single argument", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something $")
 		assert.EqualValues(t, &Module{

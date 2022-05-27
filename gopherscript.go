@@ -2410,6 +2410,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	}
 
 	parseExpression = func() Node {
+		__start := i
 		//these variables are only used for expressions that can be on the left of a member/slice/index/call expression
 		//other expressions are directly returned
 		var lhs Node
@@ -3545,7 +3546,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		panic(ParsingError{
 			fmt.Sprintf("an expression was expected: ...%s<<here>>%s...", left, right),
 			i,
-			first.Base().Span.Start,
+			__start,
 			UnspecifiedCategory,
 			nil,
 		})
@@ -4454,7 +4455,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			switch expr.(type) {
 			case *IdentifierLiteral, *IdentifierMemberExpression:
-				if !followedBySpace || s[i] == '\n' || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(') {
+				if !followedBySpace || s[i] == '\n' || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(' && s[i] != '|') {
 					break
 				}
 
@@ -5445,6 +5446,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		}
 		if err := walk(n.Unit, node, ancestorChain, fn); err != nil {
 			return err
+		}
+	case *PipelineStatement:
+		for _, stage := range n.Stages {
+			if err := walk(stage.Expr, node, ancestorChain, fn); err != nil {
+				return err
+			}
 		}
 	}
 
