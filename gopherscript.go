@@ -4548,10 +4548,6 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						parseCallArgs(currentCall)
 
-						if i < len(s) && s[i] == '\n' {
-							i++
-						}
-
 						if len(currentCall.Arguments) == 0 {
 							currentCall.NodeBase.Span.End = callee.Base().Span.End
 						} else {
