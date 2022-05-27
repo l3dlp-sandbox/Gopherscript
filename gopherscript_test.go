@@ -4270,6 +4270,40 @@ func TestEval(t *testing.T) {
 		assert.IsType(t, Object{}, res.(ExternalValue).value)
 	})
 
+	t.Run("pipeline statement", func(t *testing.T) {
+		n := MustParseModule(`get-data | split-lines $`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"get-data": func(ctx *Context) string {
+				return "aaa\nbbb"
+			},
+			"split-lines": func(ctx *Context, s string) []string {
+				return strings.Split(s, "\n")
+			},
+		})
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"aaa", "bbb"}, UnwrapReflectVal(res))
+	})
+
+	t.Run("pipeline statement : original value of anonymous variable is restored", func(t *testing.T) {
+		n := MustParseModule(`
+			$ = 1
+			get-data | split-lines $;
+			return $
+		`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"get-data": func(ctx *Context) string {
+				return "aaa\nbbb"
+			},
+			"split-lines": func(ctx *Context, s string) []string {
+				return strings.Split(s, "\n")
+			},
+		})
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, res)
+	})
+
 	t.Run("member expression : <variable> <propname>", func(t *testing.T) {
 		n := MustParseModule(`$a = {v: 1}; return $a.v`)
 		state := NewState(DEFAULT_TEST_CTX)

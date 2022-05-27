@@ -4571,6 +4571,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						case '\n':
 							i++
 							return stmt
+						case ';':
+							i++
+							return stmt
 						default:
 							panic(ParsingError{
 								fmt.Sprintf("invalid pipeline stage, unexpected char '%c'", s[i]),
@@ -5884,6 +5887,26 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return nil, nil
 	case *Call:
 		return CallFunc(n.Callee, state, n.Arguments, n.Must)
+	case *PipelineStatement:
+
+		scope := state.CurrentScope()
+		if savedAnonymousValue, hasValue := scope[""]; hasValue {
+			defer func() {
+				scope[""] = savedAnonymousValue
+			}()
+		}
+
+		var res interface{}
+
+		for _, stage := range n.Stages {
+			res, err = Eval(stage.Expr, state)
+			if err != nil {
+				return nil, err
+			}
+			scope[""] = res
+		}
+
+		return res, nil
 	case *Assignment:
 
 		switch lhs := n.Left.(type) {
