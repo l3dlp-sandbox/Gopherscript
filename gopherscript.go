@@ -896,6 +896,11 @@ type PipelineStatement struct {
 	Stages []*PipelineStage
 }
 
+type PipelineExpression struct {
+	NodeBase
+	Stages []*PipelineStage
+}
+
 type PipelineStageKind int
 
 const (
@@ -4440,7 +4445,30 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					(*Assignment)(nil),
 				})
 			}
-			right := parseExpression()
+
+			var right Node
+
+			if s[i] == '|' {
+				i++
+				eatSpace()
+				right = parseStatement()
+				pipeline, ok := right.(*PipelineStatement)
+				if !ok {
+					panic(ParsingError{
+						"invalid assignment, a pipeline expression was expected after '|'",
+						i,
+						expr.Base().Span.Start,
+						KnownType,
+						(*Assignment)(nil),
+					})
+				}
+				right = &PipelineExpression{
+					NodeBase: pipeline.NodeBase,
+					Stages:   pipeline.Stages,
+				}
+			} else {
+				right = parseExpression()
+			}
 
 			return &Assignment{
 				NodeBase: NodeBase{
@@ -4553,6 +4581,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						} else {
 							currentCall.NodeBase.Span.End = currentCall.Arguments[len(currentCall.Arguments)-1].Base().Span.End
 						}
+
+						stmt.Span.End = currentCall.Span.End
 
 						eatSpace()
 
@@ -5452,6 +5482,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 				return err
 			}
 		}
+	case *PipelineExpression:
+		for _, stage := range n.Stages {
+			if err := walk(stage.Expr, node, ancestorChain, fn); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -5883,7 +5919,16 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return nil, nil
 	case *Call:
 		return CallFunc(n.Callee, state, n.Arguments, n.Must)
-	case *PipelineStatement:
+	case *PipelineStatement, *PipelineExpression:
+
+		var stages []*PipelineStage
+
+		switch e := n.(type) {
+		case *PipelineStatement:
+			stages = e.Stages
+		case *PipelineExpression:
+			stages = e.Stages
+		}
 
 		scope := state.CurrentScope()
 		if savedAnonymousValue, hasValue := scope[""]; hasValue {
@@ -5894,7 +5939,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		var res interface{}
 
-		for _, stage := range n.Stages {
+		for _, stage := range stages {
 			res, err = Eval(stage.Expr, state)
 			if err != nil {
 				return nil, err

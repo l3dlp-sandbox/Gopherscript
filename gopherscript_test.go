@@ -1137,6 +1137,57 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("assignment var = | <pipeline>", func(t *testing.T) {
+		n := MustParseModule("$a = | a | b")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 12}},
+			Statements: []Node{
+				&Assignment{
+					NodeBase: NodeBase{NodeSpan{0, 12}},
+					Left: &Variable{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "a",
+					},
+					Right: &PipelineExpression{
+						NodeBase: NodeBase{NodeSpan{7, 12}},
+						Stages: []*PipelineStage{
+							{
+								Kind: NormalStage,
+								Expr: &Call{
+									NodeBase: NodeBase{
+										NodeSpan{7, 8},
+									},
+									Callee: &IdentifierLiteral{
+										NodeBase: NodeBase{
+											NodeSpan{7, 8},
+										},
+										Name: "a",
+									},
+									Must: true,
+								},
+							},
+							{
+								Kind: NormalStage,
+								Expr: &Call{
+									NodeBase: NodeBase{
+										NodeSpan{11, 12},
+									},
+									Callee: &IdentifierLiteral{
+										NodeBase: NodeBase{
+											NodeSpan{11, 12},
+										},
+										Name: "b",
+									},
+									Must: true,
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("multi assignement statement : assign <ident> = <var>", func(t *testing.T) {
 		n := MustParseModule("assign a = $b")
 		assert.EqualValues(t, &Module{
@@ -1385,6 +1436,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 23}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 23}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -1427,6 +1479,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 24}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 23}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -1469,6 +1522,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 25}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 23}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -1518,6 +1572,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 20}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 20}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -1554,6 +1609,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 25}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 25}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -1601,6 +1657,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 45}},
 			Statements: []Node{
 				&PipelineStatement{
+					NodeBase: NodeBase{NodeSpan{0, 45}},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
@@ -4393,6 +4450,21 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
+	})
+
+	t.Run("assignment : LHS is a pipeline expression", func(t *testing.T) {
+		n := MustParseModule(`a = | get-data | split-lines $; return $a`)
+		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+			"get-data": func(ctx *Context) string {
+				return "aaa\nbbb"
+			},
+			"split-lines": func(ctx *Context, s string) []string {
+				return strings.Split(s, "\n")
+			},
+		})
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"aaa", "bbb"}, UnwrapReflectVal(res))
 	})
 
 	t.Run("member expression : <variable> <propname>", func(t *testing.T) {
