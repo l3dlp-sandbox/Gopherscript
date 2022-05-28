@@ -208,6 +208,8 @@ https://localhost/
 
 # URL expressions
 https://example.com/users/$id$
+@loc/index.html       	# @loc is a host alias : the expression resolves to https://localhost/index.html if @loc = https://localhost
+
 
 # URL pattern literals (only prefix patterns supported)
 https://example.com/users/...
@@ -251,12 +253,12 @@ Routines are mainly used for concurrent work and isolation. Each routine has its
 
 Syntax for spawning routines:
 ```
-$routine = sr [group] <globals> <module | call | variable>
+routine = sr [group] <globals> <module | call | variable>
 ``` 
 
 Call (all permissions are inherited).
 ```
-$routine = sr nil f()
+routine = sr nil f()
 ```
 
 Embedded module:
@@ -264,7 +266,7 @@ Embedded module:
 ![image](https://user-images.githubusercontent.com/84961291/162414775-75d0562c-0e99-402f-8a66-b85fdb730a09.png)
 
 <!--
-$routine = sr {http: $$http} {
+routine = sr {http: $$http} {
     return http.get(https://example.com/)!
 } allow { 
     use: {globals: ["http"]} 
@@ -273,7 +275,7 @@ $routine = sr {http: $$http} {
 
 You can wait for the routine's result by calling the WaitResult method:
 ```
-$result = $routine.WaitResult()!
+result = $routine.WaitResult()!
 ```
 
 Routines can optionally be part of a "routine group" that allows easier control of multiple routines. The group variable is defined (and updated) when the spawn expression is evaluated.
@@ -283,7 +285,7 @@ for (1 .. 10) {
     sr req_group nil read(https://debloat.dev/fakeapp/users)!
 }
 
-$results = $req_group.WaitAllResults()!
+results = $req_group.WaitAllResults()!
 ```
 
 **For more details about the different features you can read the repository's wiki.**
