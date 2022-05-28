@@ -28,7 +28,7 @@ const TRULY_MAX_STACK_HEIGHT = 10
 const DEFAULT_MAX_STACK_HEIGHT = 5
 const MAX_OBJECT_KEY_BYTE_LEN = 64
 const HTTP_URL_PATTERN = "^https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b([-a-zA-Z0-9@:%_+.~#?&//=]{0,100})$"
-const LOOSE_HTTP_EXPR_PATTERN = "^https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b([-a-zA-Z0-9@:%_+.~#?&//=$]{0,100})$"
+const LOOSE_URL_EXPR_PATTERN = "^(@[a-zA-Z0-9_-]+|https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b)([-a-zA-Z0-9@:%_+.~#?&//=$]{0,100})$"
 const LOOSE_HTTP_HOST_PATTERN_PATTERN = "^https?:\\/\\/(\\*|(www\\.)?[-a-zA-Z0-9.*]{1,32}\\.[a-zA-Z0-9*]{1,6})(:[0-9]{1,5})?$"
 const IMPLICIT_KEY_LEN_KEY = "__len"
 const GOPHERSCRIPT_MIMETYPE = "application/gopherscript"
@@ -43,7 +43,7 @@ const IO_TIME_TOTAL_LIMIT_NAME = "execution/total-io-time"
 
 var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
-var LOOSE_HTTP_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_EXPR_PATTERN)
+var LOOSE_URL_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_URL_EXPR_PATTERN)
 var isSpace = regexp.MustCompile(`^\s+`).MatchString
 var KEYWORDS = []string{"if", "else", "require", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
 var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "use", "consume", "provide"}
@@ -265,6 +265,11 @@ type URLPatternLiteral struct {
 	Value string
 }
 
+type AtHostLiteral struct {
+	NodeBase
+	Value string
+}
+
 type AbsolutePathLiteral struct {
 	NodeBase
 	Value string
@@ -298,7 +303,7 @@ type AbsolutePathExpression struct {
 type URLExpression struct {
 	NodeBase
 	Raw         string
-	HostPart    string
+	HostPart    Node
 	Path        *AbsolutePathExpression
 	QueryParams []Node
 }
@@ -733,6 +738,12 @@ type MultiAssignment struct {
 	NodeBase
 	Variables []Node
 	Right     Node
+}
+
+type HostAliasDefinition struct {
+	NodeBase
+	Left  *AtHostLiteral
+	Right Node
 }
 
 type Call struct {
@@ -1999,7 +2010,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
-	parseURLLike := func(start int, ident *IdentifierLiteral) Node {
+	parseURLLike := func(start int) Node {
 		i += 3
 		for i < len(s) && !isSpace(string(s[i])) && (!isDelim(s[i]) || s[i] == ':') {
 			i++
@@ -2020,7 +2031,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			})
 		}
 
-		span := NodeSpan{ident.Span.Start, i}
+		span := NodeSpan{start, i}
 
 		if !HTTP_URL_REGEX.MatchString(_url) {
 
@@ -2060,7 +2071,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Value: _url,
 				}
-			case LOOSE_HTTP_EXPR_PATTERN_REGEX.MatchString(_url):
+			case LOOSE_URL_EXPR_PATTERN_REGEX.MatchString(_url):
 				if strings.Contains(_url, "$$") {
 					panic(ParsingError{
 						"an URL expression cannot contain interpolations next to each others",
@@ -2081,7 +2092,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				}
 
-				pathStart := ident.Span.End + len("://")
+				pathStart := start
+
+				if strings.Contains(_url, "://") {
+					pathStart += strings.Index(_url, "://") + 3
+				}
 
 				for s[pathStart] != '/' {
 					pathStart++
@@ -2167,10 +2182,28 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				slices := parsePathExpressionSlices(pathStart, pathExclEnd)
 
+				var hostPart Node
+				hostPartString := string(s[span.Start:pathStart])
+				hostPartBase := NodeBase{
+					NodeSpan{span.Start, pathStart},
+				}
+
+				if strings.Contains(hostPartString, "://") {
+					hostPart = &HTTPHostLiteral{
+						NodeBase: hostPartBase,
+						Value:    hostPartString,
+					}
+				} else {
+					hostPart = &AtHostLiteral{
+						NodeBase: hostPartBase,
+						Value:    hostPartString,
+					}
+				}
+
 				return &URLExpression{
 					NodeBase: NodeBase{span},
 					Raw:      _url,
-					HostPart: string(s[span.Start:pathStart]),
+					HostPart: hostPart,
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{
 							NodeSpan{pathStart, pathExclEnd},
@@ -2344,7 +2377,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			})
 		case "http", "https":
 			if i < len(s)-2 && string(s[i:i+3]) == "://" {
-				return parseURLLike(start, ident)
+				return parseURLLike(start)
 			}
 		}
 
@@ -3066,22 +3099,93 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			i++
 			if i >= len(s) {
 				panic(ParsingError{
-					"invalid lazy expression, '@' should be followed by an expression",
+					"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
 					i,
 					start,
-					KnownType,
-					(*LazyExpression)(nil),
+					UnspecifiedCategory,
+					nil,
 				})
 			}
 
-			e := parseExpression()
+			if s[i] == '(' {
+				//no increment on purpose
 
-			return &LazyExpression{
-				NodeBase: NodeBase{
-					Span: NodeSpan{start, i},
-				},
-				Expression: e,
+				e := parseExpression()
+				return &LazyExpression{
+					NodeBase: NodeBase{
+						Span: NodeSpan{start, i},
+					},
+					Expression: e,
+				}
+			} else if s[i] == '/' || (s[i] >= 'a' && s[i] <= 'z') {
+				i--
+				j := i + 1
+
+				for j < len(s) && isIdentChar(s[j]) {
+					j++
+				}
+
+				aliasEndIndex := j
+
+				for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+					j++
+				}
+
+				if j >= len(s) {
+					panic(ParsingError{
+						"unterminated AtHostLiteral | URLExpression | HostAliasDefinition",
+						j,
+						start,
+						UnspecifiedCategory,
+						nil,
+					})
+				}
+
+				//@alias = <host>
+				if s[j] == '=' {
+
+					left := &AtHostLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{start, aliasEndIndex},
+						},
+						Value: string(s[start:aliasEndIndex]),
+					}
+
+					i = j + 1
+					eatSpace()
+
+					if i >= len(s) {
+						panic(ParsingError{
+							"unterminated HostAliasDefinition, missing value after '='",
+							i,
+							start,
+							KnownType,
+							(*HostAliasDefinition)(nil),
+						})
+					}
+
+					right := parseExpression()
+					return &HostAliasDefinition{
+						NodeBase: NodeBase{
+							NodeSpan{start, right.Base().Span.End},
+						},
+						Left:  left,
+						Right: right,
+					}
+				}
+
+				return parseURLLike(start)
+			} else {
+
+				panic(ParsingError{
+					"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
+					i,
+					start,
+					UnspecifiedCategory,
+					nil,
+				})
 			}
+
 		case '(': //parenthesized expression and binary expressions
 			openingParenIndex := i
 			i++
@@ -4797,12 +4901,7 @@ type Context struct {
 	limitations          []Limitation
 	limiters             map[string]*Limiter
 	stackPermission      StackPermission
-}
-
-type ContextConfig struct {
-	grantedPermissions   []Permission
-	forbiddenPermissions []Permission
-	limitations          []Limitation
+	hostAliases          map[string]interface{}
 }
 
 func NewContext(permissions []Permission, forbiddenPermissions []Permission, limitations []Limitation) *Context {
@@ -4864,6 +4963,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 		limitations:          limitations,
 		limiters:             limiters,
 		stackPermission:      stackPermission,
+		hostAliases:          map[string]interface{}{},
 	}
 
 	return ctx
@@ -4957,6 +5057,22 @@ func (ctx *Context) GetRate(name string) ByteRate {
 		return limiter.limitation.ByteRate
 	}
 	return -1
+}
+
+func (ctx *Context) resolveHostAlias(alias string) interface{} {
+	host, ok := ctx.hostAliases[alias]
+	if !ok {
+		return nil
+	}
+	return host
+}
+
+func (ctx *Context) addHostAlias(alias string, host interface{}) {
+	_, ok := ctx.hostAliases[alias]
+	if ok {
+		panic(errors.New("cannot register a host alias more than once"))
+	}
+	ctx.hostAliases[alias] = host
 }
 
 type IterationChange int
@@ -5358,6 +5474,13 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 			if err := walk(vr, node, ancestorChain, fn); err != nil {
 				return err
 			}
+		}
+		if err := walk(n.Right, node, ancestorChain, fn); err != nil {
+			return err
+		}
+	case *HostAliasDefinition:
+		if err := walk(n.Left, node, ancestorChain, fn); err != nil {
+			return err
 		}
 		if err := walk(n.Right, node, ancestorChain, fn); err != nil {
 			return err
@@ -5848,6 +5971,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return URL(n.Value), nil
 	case *HTTPHostLiteral:
 		return HTTPHost(n.Value), nil
+	case *AtHostLiteral:
+		return state.ctx.resolveHostAlias(n.Value[1:]), nil
 	case *HTTPHostPatternLiteral:
 		return HTTPHostPattern(n.Value), nil
 	case *URLPatternLiteral:
@@ -5882,7 +6007,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 		}
 
-		return URL(n.HostPart + string(pth.(Path)) + queryBuff.String()), nil
+		host, err := Eval(n.HostPart, state)
+		if err != nil {
+			return nil, err
+		}
+
+		return URL(fmt.Sprint(host) + string(pth.(Path)) + queryBuff.String()), nil
 	case *NilLiteral:
 		return nil, nil
 	case *Variable:
@@ -6044,6 +6174,15 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			keyValue := reflect.ValueOf(var_.(*IdentifierLiteral).Name)
 			scopeValue.SetMapIndex(keyValue, elemValue)
 		}
+
+		return nil, nil
+	case *HostAliasDefinition:
+		name := n.Left.Value[1:]
+		value, err := Eval(n.Right, state)
+		if err != nil {
+			return nil, err
+		}
+		state.ctx.addHostAlias(name, value)
 
 		return nil, nil
 	case *Module:

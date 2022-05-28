@@ -761,7 +761,10 @@ func TestMustParseModule(t *testing.T) {
 				&URLExpression{
 					NodeBase: NodeBase{NodeSpan{0, 26}},
 					Raw:      "https://example.com/$path$",
-					HostPart: "https://example.com",
+					HostPart: &HTTPHostLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 19}},
+						Value:    "https://example.com",
+					},
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{NodeSpan{19, 26}},
 						Slices: []Node{
@@ -793,7 +796,10 @@ func TestMustParseModule(t *testing.T) {
 				&URLExpression{
 					NodeBase: NodeBase{NodeSpan{0, 26}},
 					Raw:      "https://example.com/?v=$x$",
-					HostPart: "https://example.com",
+					HostPart: &HTTPHostLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 19}},
+						Value:    "https://example.com",
+					},
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{NodeSpan{19, 20}},
 						Slices: []Node{
@@ -840,7 +846,10 @@ func TestMustParseModule(t *testing.T) {
 				&URLExpression{
 					NodeBase: NodeBase{NodeSpan{0, 32}},
 					Raw:      "https://example.com/?v=$x$&w=$y$",
-					HostPart: "https://example.com",
+					HostPart: &HTTPHostLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 19}},
+						Value:    "https://example.com",
+					},
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{NodeSpan{19, 20}},
 						Slices: []Node{
@@ -2991,20 +3000,20 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
-	t.Run("lazy expression : '@' integer ", func(t *testing.T) {
-		n := MustParseModule("@1")
+	t.Run("lazy expression : '@' '(' integer ')' ", func(t *testing.T) {
+		n := MustParseModule("@(1)")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
-				NodeSpan{0, 2},
+				NodeSpan{0, 4},
 			},
 			Statements: []Node{
 				&LazyExpression{
 					NodeBase: NodeBase{
-						NodeSpan{0, 2},
+						NodeSpan{0, 4},
 					},
 					Expression: &IntLiteral{
 						NodeBase: NodeBase{
-							NodeSpan{1, 2},
+							NodeSpan{2, 3},
 						},
 						Raw:   "1",
 						Value: 1,
@@ -3015,19 +3024,19 @@ func TestMustParseModule(t *testing.T) {
 	})
 
 	t.Run("lazy expression followed by another expression", func(t *testing.T) {
-		n := MustParseModule("@1 2")
+		n := MustParseModule("@(1) 2")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
-				NodeSpan{0, 4},
+				NodeSpan{0, 6},
 			},
 			Statements: []Node{
 				&LazyExpression{
 					NodeBase: NodeBase{
-						NodeSpan{0, 2},
+						NodeSpan{0, 4},
 					},
 					Expression: &IntLiteral{
 						NodeBase: NodeBase{
-							NodeSpan{1, 2},
+							NodeSpan{2, 3},
 						},
 						Raw:   "1",
 						Value: 1,
@@ -3035,7 +3044,7 @@ func TestMustParseModule(t *testing.T) {
 				},
 				&IntLiteral{
 					NodeBase: NodeBase{
-						NodeSpan{3, 4},
+						NodeSpan{5, 6},
 					},
 					Raw:   "2",
 					Value: 2,
@@ -3777,6 +3786,15 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, URL("https://example.com/index.html"), res)
 	})
 
+	t.Run("URL expression : host alias", func(t *testing.T) {
+		n := MustParseModule(`@api/index.html`)
+		ctx, _ := DEFAULT_TEST_CTX.NewWith(nil)
+		ctx.addHostAlias("api", HTTPHost("https://example.com"))
+		res, err := Eval(n.Statements[0], NewState(ctx))
+
+		assert.NoError(t, err)
+		assert.Equal(t, URL("https://example.com/index.html"), res)
+	})
 	t.Run("URL expression, query with no interpolation", func(t *testing.T) {
 		n := MustParseModule(`return https://example.com/?v=a`)
 		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
@@ -4518,14 +4536,14 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("lazy expression : @ <integer>", func(t *testing.T) {
-		n := MustParseModule(`@1`)
+		n := MustParseModule(`@(1)`)
 		state := NewState(DEFAULT_TEST_CTX)
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, &LazyExpression{
-			NodeBase: NodeBase{NodeSpan{0, 2}},
+			NodeBase: NodeBase{NodeSpan{0, 4}},
 			Expression: &IntLiteral{
-				NodeBase: NodeBase{NodeSpan{1, 2}},
+				NodeBase: NodeBase{NodeSpan{2, 3}},
 				Raw:      "1",
 				Value:    1,
 			},
