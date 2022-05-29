@@ -3400,6 +3400,41 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
+
+	//also used for checking block parsing
+	t.Run("permission dropping statement : empty object literal", func(t *testing.T) {
+		n := MustParseModule("drop-perms {}")
+
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 13},
+			},
+			Statements: []Node{
+				&PermissionDroppingStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 13},
+					},
+					Object: &ObjectLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{11, 13},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("permission dropping statement : value is not an object literal", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("drop-perms 1")
+		})
+	})
+
+	t.Run("permission dropping statement : value is not an object literal", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("drop-perms")
+		})
+	})
 }
 
 type User struct {
@@ -3686,9 +3721,8 @@ func TestRequirements(t *testing.T) {
 
 }
 
-func TestEval(t *testing.T) {
-
-	var DEFAULT_TEST_CTX = NewContext([]Permission{
+func NewDefaultTestContext() *Context {
+	return NewContext([]Permission{
 		GlobalVarPermission{ReadPerm, "*"},
 		GlobalVarPermission{UpdatePerm, "*"},
 		GlobalVarPermission{CreatePerm, "*"},
@@ -3697,66 +3731,69 @@ func TestEval(t *testing.T) {
 		HttpPermission{ReadPerm, HTTPHostPattern("https://*")},
 		RoutinePermission{CreatePerm},
 	}, nil, nil)
+}
+
+func TestEval(t *testing.T) {
 
 	t.Run("integer literal", func(t *testing.T) {
 		n := MustParseModule("1")
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, res)
 	})
 
 	t.Run("string literal", func(t *testing.T) {
 		n := MustParseModule(`"a"`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, "a", res)
 	})
 
 	t.Run("boolean literal", func(t *testing.T) {
 		n := MustParseModule(`true`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, true, res)
 	})
 
 	t.Run("nil literal", func(t *testing.T) {
 		n := MustParseModule(`nil`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, nil, res)
 	})
 
 	t.Run("absolute path literal", func(t *testing.T) {
 		n := MustParseModule(`/`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, Path("/"), res)
 	})
 
 	t.Run("relative path literal", func(t *testing.T) {
 		n := MustParseModule(`./`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, Path("./"), res)
 	})
 
 	t.Run("absolute path pattern literal", func(t *testing.T) {
 		n := MustParseModule(`/*`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, PathPattern("/*"), res)
 	})
 
 	t.Run("relative path pattern literal", func(t *testing.T) {
 		n := MustParseModule(`./*`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, PathPattern("./*"), res)
 	})
 
 	t.Run("absolute path expression", func(t *testing.T) {
 		n := MustParseModule(`/home/$username$`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
 			"username": "foo",
 		}))
 		assert.NoError(t, err)
@@ -3765,21 +3802,21 @@ func TestEval(t *testing.T) {
 
 	t.Run("HTTP host", func(t *testing.T) {
 		n := MustParseModule(`https://example.com`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, HTTPHost("https://example.com"), res)
 	})
 
 	t.Run("HTTP host pattern", func(t *testing.T) {
 		n := MustParseModule(`https://*.example.com`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.Equal(t, HTTPHostPattern("https://*.example.com"), res)
 	})
 
 	t.Run("URL expression, single path interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/$path$`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
 			"path": "/index.html",
 		}))
 		assert.NoError(t, err)
@@ -3788,7 +3825,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("URL expression : host alias", func(t *testing.T) {
 		n := MustParseModule(`@api/index.html`)
-		ctx, _ := DEFAULT_TEST_CTX.NewWith(nil)
+		ctx, _ := NewDefaultTestContext().NewWith(nil)
 		ctx.addHostAlias("api", HTTPHost("https://example.com"))
 		res, err := Eval(n.Statements[0], NewState(ctx))
 
@@ -3797,28 +3834,28 @@ func TestEval(t *testing.T) {
 	})
 	t.Run("URL expression, query with no interpolation", func(t *testing.T) {
 		n := MustParseModule(`return https://example.com/?v=a`)
-		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		res, err := Eval(n, NewState(NewDefaultTestContext(), nil))
 		assert.NoError(t, err)
 		assert.Equal(t, URL("https://example.com/?v=a"), res)
 	})
 
 	t.Run("URL expression, single query interpolation", func(t *testing.T) {
 		n := MustParseModule(`x = "a"; return https://example.com/?v=$x$`)
-		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		res, err := Eval(n, NewState(NewDefaultTestContext(), nil))
 		assert.NoError(t, err)
 		assert.Equal(t, URL("https://example.com/?v=a"), res)
 	})
 
 	t.Run("URL expression, two query interpolations", func(t *testing.T) {
 		n := MustParseModule(`x = "a"; y = "b"; return https://example.com/?v=$x$&w=$y$`)
-		res, err := Eval(n, NewState(DEFAULT_TEST_CTX, nil))
+		res, err := Eval(n, NewState(NewDefaultTestContext(), nil))
 		assert.NoError(t, err)
 		assert.Equal(t, URL("https://example.com/?v=a&w=b"), res)
 	})
 
 	t.Run("variable assignment", func(t *testing.T) {
 		n := MustParseModule(`$a = 1; return $a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -3826,7 +3863,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("variable assignment (lhs: identifier literal)", func(t *testing.T) {
 		n := MustParseModule(`a = 1; return $a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -3846,7 +3883,7 @@ func TestEval(t *testing.T) {
 
 			$$A = 2;
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.Error(t, err)
 		assert.Nil(t, res)
@@ -3854,7 +3891,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("element assignment", func(t *testing.T) {
 		n := MustParseModule(`$a = [0] $a[0] = 1; return $a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{1}, res)
@@ -3862,7 +3899,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("member expression assignment : pre existing field", func(t *testing.T) {
 		n := MustParseModule(`$a = {count:0}; $a.count = 1; return $a.count`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -3870,7 +3907,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("member expression assignment : non existing field", func(t *testing.T) {
 		n := MustParseModule(`$a = {}; $a.count = 1; return $a.count`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -3878,14 +3915,14 @@ func TestEval(t *testing.T) {
 
 	t.Run("rate literal : byte rate", func(t *testing.T) {
 		n := MustParseModule(`10kB/s`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, ByteRate(10_000), res)
 	})
 
 	t.Run("rate literal : simple rate", func(t *testing.T) {
 		n := MustParseModule(`10x/s`)
-		res, err := Eval(n.Statements[0], NewState(DEFAULT_TEST_CTX))
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
 		assert.NoError(t, err)
 		assert.EqualValues(t, SimpleRate(10), res)
 	})
@@ -3894,7 +3931,7 @@ func TestEval(t *testing.T) {
 		n := MustParseModule(`
 			const ()
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, map[string]interface{}{}, state.GlobalScope())
@@ -3906,7 +3943,7 @@ func TestEval(t *testing.T) {
 				a = 1
 			)
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, map[string]interface{}{"a": 1}, state.GlobalScope())
@@ -3914,7 +3951,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("empty object literal", func(t *testing.T) {
 		n := MustParseModule(`{}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, Object{}, res)
@@ -3922,7 +3959,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("single prop object literal", func(t *testing.T) {
 		n := MustParseModule(`{a:1}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, Object{"a": 1}, res)
@@ -3930,7 +3967,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("multiprop object literal", func(t *testing.T) {
 		n := MustParseModule(`{a:1,b:2}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, Object{"a": 1, "b": 2}, res)
@@ -3938,7 +3975,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("object literal with only an implicit key prop", func(t *testing.T) {
 		n := MustParseModule(`{:1}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, Object{"0": 1, IMPLICIT_KEY_LEN_KEY: 1}, res)
@@ -3946,7 +3983,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("empty list literal", func(t *testing.T) {
 		n := MustParseModule(`[]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{}, res)
@@ -3954,7 +3991,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("list literal : [integer]", func(t *testing.T) {
 		n := MustParseModule(`[1]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1}, res)
@@ -3962,7 +3999,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("list literal : [integer,integer]", func(t *testing.T) {
 		n := MustParseModule(`[1,2]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 2}, res)
@@ -3970,7 +4007,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("multi assignement", func(t *testing.T) {
 		n := MustParseModule(`assign a b = [1, 2]; return [$a, $b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 2}, res)
@@ -3978,7 +4015,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("if statement with true condition", func(t *testing.T) {
 		n := MustParseModule(`if true { return 1 }`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, res)
@@ -3986,7 +4023,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("if statement with false condition", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; if false { $a = 1 }; return $a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 0, res)
@@ -3994,7 +4031,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("if-else statement with false condition", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; if false { $a = 1 } else { $b = 1 }; return [$a, $b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{0, 1}, res)
@@ -4002,7 +4039,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for statement : empty list", func(t *testing.T) {
 		n := MustParseModule(`$c = 0; for i, e in [] { $c = 1 }; return $c`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 0, res)
@@ -4010,7 +4047,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for statement : single elem list", func(t *testing.T) {
 		n := MustParseModule(`$c1 = 0; $c2 = 2; for i, e in [5] { $c1 = $i; $c2 = $e; }; return [$c1, $c2]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{0, 5}, res)
@@ -4018,7 +4055,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for statement : two-elem list", func(t *testing.T) {
 		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 11}, res)
@@ -4026,7 +4063,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for statement : two-elem list", func(t *testing.T) {
 		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in [5,6] { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 11}, res)
@@ -4034,7 +4071,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for statement : integer range", func(t *testing.T) {
 		n := MustParseModule(`$c1 = 0; $c2 = 0; for i, e in (5 .. 6) { $c1 = ($c1 + $i); $c2 = ($c2 + $e); }; return [$c1, $c2]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 11}, res)
@@ -4052,7 +4089,7 @@ func TestEval(t *testing.T) {
 			}; 
 			return [$c1, $c2]
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{1, 5}, res)
@@ -4060,7 +4097,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("for <expr> statement", func(t *testing.T) {
 		n := MustParseModule(`$c = 0; for (1 .. 2) { $c = ($c + 1) }; return $c`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 2, res)
@@ -4068,7 +4105,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("switch statement : singe case (matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; switch 0 { 0 { $a = 1 } }; return $a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4076,7 +4113,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("switch statement : two cases (first matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; switch 0 { 0 { $a = 1 } 1 { $b = 1} }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{1, 0}, res)
@@ -4084,7 +4121,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("switch statement : two cases (second matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; switch 1 { 0 { $a = 1 } 1 { $b = 1 } }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{0, 1}, res)
@@ -4092,7 +4129,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("match statement : matchers : two cases (first matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; match / { /* { $a = 1 } /e* { $b = 1} }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{1, 0}, res)
@@ -4100,7 +4137,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("match statement : matchers : two cases (second matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; match /e { /f* { $a = 1 } /e* { $b = 1} }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{0, 1}, res)
@@ -4108,7 +4145,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("match statement : equality : two cases (second matches)", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; match /e { /f* { $a = 1 } /e { $b = 1} }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{0, 1}, res)
@@ -4116,14 +4153,14 @@ func TestEval(t *testing.T) {
 
 	t.Run("match statement : seconde case is not a matcher nor value of the same type ", func(t *testing.T) {
 		n := MustParseModule(`$a = 0; $b = 0; match /e { /f* { $a = 1 } 1 { $b = 1} }; return [$a,$b]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.Error(t, err)
 	})
 
 	t.Run("upper bound range expression : integer ", func(t *testing.T) {
 		n := MustParseModule(`return ..10`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, IntRange{
@@ -4137,7 +4174,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("upper bound range expression : quantity", func(t *testing.T) {
 		n := MustParseModule(`return ..10s`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, QuantityRange{
@@ -4150,7 +4187,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("function expression : empty", func(t *testing.T) {
 		n := MustParseModule(`fn(){}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 
@@ -4159,7 +4196,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("function declaration", func(t *testing.T) {
 		n := MustParseModule(`fn f(){}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.NoError(t, err)
 
@@ -4169,7 +4206,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call declared void function", func(t *testing.T) {
 		n := MustParseModule(`fn f(){  }; return f()`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, nil, res)
@@ -4177,7 +4214,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call declared non-void function", func(t *testing.T) {
 		n := MustParseModule(`fn f(){ return 1 }; return f()`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4185,7 +4222,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call variadic Go function : arg count < non-variadic-param-count", func(t *testing.T) {
 		n := MustParseModule(`gofunc()`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, x int, xs ...int) {},
 		})
 		_, err := Eval(n, state)
@@ -4194,7 +4231,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call variadic Go function : arg count == non-variadic-param-count", func(t *testing.T) {
 		n := MustParseModule(`gofunc(1)`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, x int, xs ...int) int {
 				return x
 			},
@@ -4206,7 +4243,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call variadic Go function : arg count == 1 + non-variadic-param-count", func(t *testing.T) {
 		n := MustParseModule(`gofunc(1 2)`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, x int, xs ...int) int {
 				return x + xs[0]
 			},
@@ -4219,7 +4256,7 @@ func TestEval(t *testing.T) {
 	t.Run("call Go function with a mix of non-Go & Go values", func(t *testing.T) {
 		n := MustParseModule(`gofunc 1 getval()`)
 		called := false
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"getval": func(ctx *Context) url.URL {
 				return url.URL{}
 			},
@@ -4235,7 +4272,7 @@ func TestEval(t *testing.T) {
 	t.Run("call Go function with an Object convertible to the expected struct argument", func(t *testing.T) {
 		n := MustParseModule(`gofunc({Name: "foo"})`)
 		called := false
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, user User) {
 				called = true
 				assert.Equal(t, "foo", user.Name)
@@ -4249,7 +4286,7 @@ func TestEval(t *testing.T) {
 	t.Run("call Go function with an Object not convertible to the expected struct argument", func(t *testing.T) {
 		n := MustParseModule(`gofunc({X: "foo"})`)
 		called := false
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, user User) {
 				called = true
 				assert.Equal(t, "foo", user.Name)
@@ -4263,7 +4300,7 @@ func TestEval(t *testing.T) {
 	t.Run("call Go function with an Object not convertible to the expected struct argument", func(t *testing.T) {
 		n := MustParseModule(`gofunc({Name: 1})`)
 		called := false
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(user User) {
 				called = true
 				assert.Equal(t, "foo", user.Name)
@@ -4283,7 +4320,7 @@ func TestEval(t *testing.T) {
 			$rt.WaitResult()
 		`)
 		called := false
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context, obj Object) {
 				called = true
 				assert.Equal(t, Object{"a": 1}, obj)
@@ -4296,7 +4333,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("(must) call Go function with two results", func(t *testing.T) {
 		n := MustParseModule(`return gofunc()!`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context) (int, error) {
 				return 3, nil
 			},
@@ -4308,7 +4345,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call Go function : contextless, missing permission", func(t *testing.T) {
 		n := MustParseModule(`return gofunc()`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": ctxlessFunc,
 		})
 
@@ -4318,7 +4355,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call Go function : contextless, granted permission", func(t *testing.T) {
 		n := MustParseModule(`return gofunc()`)
-		ctx, _ := DEFAULT_TEST_CTX.NewWith([]Permission{
+		ctx, _ := NewDefaultTestContext().NewWith([]Permission{
 			ContextlessCallPermission{FuncMethodName: "ctxlessFunc", ReceiverTypeName: ""},
 		})
 		state := NewState(ctx, map[string]interface{}{
@@ -4332,7 +4369,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call Go method : contextless, missing permission", func(t *testing.T) {
 		n := MustParseModule(`return gomethod()`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gomethod": User{Name: "Foo"}.GetNameNoCtx,
 		})
 
@@ -4342,7 +4379,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call Go method : contextless, granted permission", func(t *testing.T) {
 		n := MustParseModule(`return $$user.GetNameNoCtx()`)
-		ctx, _ := DEFAULT_TEST_CTX.NewWith([]Permission{
+		ctx, _ := NewDefaultTestContext().NewWith([]Permission{
 			ContextlessCallPermission{FuncMethodName: "GetNameNoCtx", ReceiverTypeName: "User"},
 		})
 		state := NewState(ctx, map[string]interface{}{
@@ -4358,7 +4395,7 @@ func TestEval(t *testing.T) {
 		n := MustParseModule(`
 			return (getuser()).Name
 		`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"getuser": func(ctx *Context) interface{} {
 				return User{Name: "Foo"}
 			},
@@ -4370,7 +4407,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call declared non-void function : return in if", func(t *testing.T) {
 		n := MustParseModule(`fn f(){ if true { return 1 } }; return f()`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4378,7 +4415,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call struct method", func(t *testing.T) {
 		n := MustParseModule(`return $$user.GetName()`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"user": User{"Foo", ""},
 		})
 		res, err := Eval(n, state)
@@ -4388,7 +4425,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("call interface method", func(t *testing.T) {
 		n := MustParseModule(`return $$named.GetName()`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"named": Named(User{"Foo", ""}),
 		})
 		res, err := Eval(n, state)
@@ -4403,7 +4440,7 @@ func TestEval(t *testing.T) {
 			$f = $rt.WaitResult()!
 			return $f()
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, nil, res)
@@ -4416,7 +4453,7 @@ func TestEval(t *testing.T) {
 			$f = $rt.WaitResult()!
 			return $f()
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4429,7 +4466,7 @@ func TestEval(t *testing.T) {
 			$f = $rt.WaitResult()!
 			return $f()
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.IsType(t, ExternalValue{}, res)
@@ -4438,7 +4475,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("pipeline statement", func(t *testing.T) {
 		n := MustParseModule(`get-data | split-lines $`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"get-data": func(ctx *Context) string {
 				return "aaa\nbbb"
 			},
@@ -4457,7 +4494,7 @@ func TestEval(t *testing.T) {
 			get-data | split-lines $;
 			return $
 		`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"get-data": func(ctx *Context) string {
 				return "aaa\nbbb"
 			},
@@ -4472,7 +4509,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("assignment : LHS is a pipeline expression", func(t *testing.T) {
 		n := MustParseModule(`a = | get-data | split-lines $; return $a`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"get-data": func(ctx *Context) string {
 				return "aaa\nbbb"
 			},
@@ -4487,7 +4524,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("member expression : <variable> <propname>", func(t *testing.T) {
 		n := MustParseModule(`$a = {v: 1}; return $a.v`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4495,7 +4532,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("member expression : '(' <object literal> ')' <propname>", func(t *testing.T) {
 		n := MustParseModule(`return ({a:1}).a`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4503,7 +4540,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("member expression : unexported field", func(t *testing.T) {
 		n := MustParseModule(`return $$val.secret`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"val": User{Name: "Foo", secret: "secret"},
 		})
 		res, err := Eval(n, state)
@@ -4513,7 +4550,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("index expression : <variable> '[' 0 ']", func(t *testing.T) {
 		n := MustParseModule(`$a = ["a"]; return $a[0]`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, "a", res)
@@ -4521,7 +4558,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("key list expression : empty", func(t *testing.T) {
 		n := MustParseModule(`return .{}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, KeyList{}, res)
@@ -4529,7 +4566,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("key list expression : single element", func(t *testing.T) {
 		n := MustParseModule(`return .{name}`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, KeyList{"name"}, res)
@@ -4537,7 +4574,7 @@ func TestEval(t *testing.T) {
 
 	t.Run("lazy expression : @ <integer>", func(t *testing.T) {
 		n := MustParseModule(`@(1)`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, &LazyExpression{
@@ -4555,7 +4592,7 @@ func TestEval(t *testing.T) {
 			import importname https://modules.com/return_1.gos "<hash>" {} allow {}
 			return $$importname
 		`, "<hash>", RETURN_1_MODULE_HASH))
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, res)
@@ -4566,7 +4603,7 @@ func TestEval(t *testing.T) {
 			import importname https://modules.com/return_global_a.gos "<hash>" {a: 1} allow {read: {globals: "a"}}
 			return $$importname
 		`, "<hash>", RETURN_GLOBAL_A_MODULE_HASH))
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, res)
@@ -4576,7 +4613,7 @@ func TestEval(t *testing.T) {
 		n := MustParseModule(`
 			sr nil { }
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.NoError(t, err)
 	})
@@ -4589,7 +4626,7 @@ func TestEval(t *testing.T) {
 
 			return $rt.WaitResult()!
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4603,7 +4640,7 @@ func TestEval(t *testing.T) {
 
 			return $rt.WaitResult()!
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.IsType(t, ExternalValue{}, res)
@@ -4621,7 +4658,7 @@ func TestEval(t *testing.T) {
 
 			$rt.WaitResult()!
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		_, err := Eval(n, state)
 		assert.NoError(t, err)
 	})
@@ -4632,7 +4669,7 @@ func TestEval(t *testing.T) {
 
 			return $group
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.IsType(t, reflect.Value{}, res)
@@ -4649,7 +4686,7 @@ func TestEval(t *testing.T) {
 
 			return $group
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.IsType(t, reflect.Value{}, res)
@@ -4666,7 +4703,7 @@ func TestEval(t *testing.T) {
 
 			return $rt.WaitResult()!
 		`)
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
 			"gofunc": func(ctx *Context) int {
 				called = true
 				return 2
@@ -4687,7 +4724,7 @@ func TestEval(t *testing.T) {
 			$res = $rt.WaitResult()!
 			return $res.x
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, res)
@@ -4702,14 +4739,14 @@ func TestEval(t *testing.T) {
 			$res = $rt.WaitResult()!
 			return $res.x
 		`)
-		state := NewState(DEFAULT_TEST_CTX)
+		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.IsType(t, ExternalValue{}, res)
 		assert.Equal(t, Object{}, res.(ExternalValue).value)
 	})
 
-	t.Run("an value passed to a routine and then returned by it should not be wrapped", func(t *testing.T) {
+	t.Run("a value passed to a routine and then returned by it should not be wrapped", func(t *testing.T) {
 		called := false
 
 		n := MustParseModule(`
@@ -4721,11 +4758,12 @@ func TestEval(t *testing.T) {
 			return $f()
 		`)
 
-		state := NewState(DEFAULT_TEST_CTX, map[string]interface{}{
+		_ctx := NewDefaultTestContext()
+		state := NewState(_ctx, map[string]interface{}{
 			"gofunc": func(ctx *Context) int {
 				called = true
 
-				if ctx != DEFAULT_TEST_CTX {
+				if ctx != _ctx {
 					t.Fatal("the context should be the main one")
 				}
 				return 0
@@ -4733,6 +4771,24 @@ func TestEval(t *testing.T) {
 		})
 		_, err := Eval(n, state)
 		assert.True(t, called)
+		assert.NoError(t, err)
+	})
+
+	t.Run("dropped permissions", func(t *testing.T) {
+		n := MustParseModule(`
+			drop-perms {
+				read: {
+					globals: "*"
+				}
+			}
+		`)
+
+		state := NewState(NewDefaultTestContext())
+		_, err := Eval(n, state)
+
+		assert.True(t, state.ctx.HasPermission(GlobalVarPermission{Kind_: UsePerm, Name: "*"}))
+		assert.False(t, state.ctx.HasPermission(GlobalVarPermission{Kind_: ReadPerm, Name: "*"}))
+
 		assert.NoError(t, err)
 	})
 
@@ -4827,6 +4883,18 @@ func TestForbiddenPermissions(t *testing.T) {
 	ctx := NewContext([]Permission{readGoFiles}, []Permission{readFile}, nil)
 
 	assert.True(t, ctx.HasPermission(readGoFiles))
+	assert.False(t, ctx.HasPermission(readFile))
+}
+
+func TestDropPermissions(t *testing.T) {
+	readGoFiles := FilesystemPermission{ReadPerm, PathPattern("./*.go")}
+	readFile := FilesystemPermission{ReadPerm, Path("./file.go")}
+
+	ctx := NewContext([]Permission{readGoFiles}, []Permission{readFile}, nil)
+
+	ctx.DropPermissions([]Permission{readGoFiles})
+
+	assert.False(t, ctx.HasPermission(readGoFiles))
 	assert.False(t, ctx.HasPermission(readFile))
 }
 

@@ -45,7 +45,7 @@ var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
 var LOOSE_URL_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_URL_EXPR_PATTERN)
 var isSpace = regexp.MustCompile(`^\s+`).MatchString
-var KEYWORDS = []string{"if", "else", "require", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
+var KEYWORDS = []string{"if", "else", "require", "drop-perms", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
 var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "use", "consume", "provide"}
 
 var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
@@ -877,6 +877,11 @@ type FunctionParameter struct {
 }
 
 type Requirements struct {
+	Object *ObjectLiteral
+}
+
+type PermissionDroppingStatement struct {
+	NodeBase
 	Object *ObjectLiteral
 }
 
@@ -3929,7 +3934,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		expr := parseExpression()
 
 		if i >= len(s) {
-			return expr
+			ident, isIdent := expr.(*IdentifierLiteral)
+			if !isIdent || !isKeyword(ident.Name) {
+				return expr
+			}
 		}
 
 		b := s[i]
@@ -4368,6 +4376,27 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				fn := parseFunction(ev.Span.Start)
 
 				return fn
+			case "drop-perms":
+				eatSpace()
+
+				objLit, ok := parseExpression().(*ObjectLiteral)
+				if !ok {
+					panic(ParsingError{
+						"permission dropping statement: 'drop-perms' keyword should be followed by an object literal (permissions)",
+						i,
+						expr.Base().Span.Start,
+						KnownType,
+						(*ImportStatement)(nil),
+					})
+				}
+
+				return &PermissionDroppingStatement{
+					NodeBase: NodeBase{
+						NodeSpan{expr.Base().Span.Start, objLit.Span.End},
+					},
+					Object: objLit,
+				}
+
 			case "import":
 				importStart := expr.Base().Span.Start
 
@@ -5016,7 +5045,8 @@ top:
 	return newCtx, nil
 }
 
-//Creates a new Context  with the permissions passed as argument removed.
+//Creates a new Context with the permissions passed as argument removed.
+//The limiters are shared between the two contexts.
 func (ctx *Context) NewWithout(removedPerms []Permission) (*Context, error) {
 
 	var perms []Permission
@@ -5036,6 +5066,25 @@ top:
 	newCtx := NewContext(perms, forbiddenPerms, nil)
 	newCtx.limiters = ctx.limiters
 	return newCtx, nil
+}
+
+func (ctx *Context) DropPermissions(droppedPermissions []Permission) {
+
+	var perms []Permission
+
+top:
+	for _, perm := range ctx.grantedPermissions {
+		for _, removedPerm := range droppedPermissions {
+			if removedPerm.Includes(perm) {
+				continue top
+			}
+		}
+
+		perms = append(perms, perm)
+	}
+
+	ctx.grantedPermissions = perms
+	ctx.forbiddenPermissions = append(ctx.forbiddenPermissions, droppedPermissions...)
 }
 
 func (ctx *Context) Take(name string, count int64) {
@@ -5340,6 +5389,10 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 			if err := walk(stmt, node, ancestorChain, fn); err != nil {
 				return err
 			}
+		}
+	case *PermissionDroppingStatement:
+		if err := walk(n.Object, node, ancestorChain, fn); err != nil {
+			return err
 		}
 	case *ImportStatement:
 		if err := walk(n.Identifier, node, ancestorChain, fn); err != nil {
@@ -6254,6 +6307,10 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				break loop
 			}
 		}
+		return nil, nil
+	case *PermissionDroppingStatement:
+		perms, _ := n.Object.PermissionsLimitations(nil, state, nil)
+		state.ctx.DropPermissions(perms)
 		return nil, nil
 	case *ImportStatement:
 		varPerm := GlobalVarPermission{ReadPerm, n.Identifier.Name}
