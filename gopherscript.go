@@ -5801,6 +5801,9 @@ func Check(node Node) error {
 					}
 
 				case *Variable:
+					if left.Name == "" { //$
+						return errors.New("invalid assignment: anonymous variable '$' cannot be assigned")
+					}
 					names = append(names, left.Name)
 				case *IdentifierLiteral:
 					names = append(names, left.Name)
