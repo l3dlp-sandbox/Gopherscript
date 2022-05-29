@@ -177,6 +177,16 @@ require {
 }
 ```
 
+Permissions can also be dropped.
+
+```
+drop-perms {
+   read: {
+       : https://*
+   }
+}
+```
+
 ### Special literals & expressions
 
 ```
