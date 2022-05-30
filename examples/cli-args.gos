@@ -1,0 +1,9 @@
+require {
+    use: {globals: "*"}
+    read: {
+        cli-args: true
+        globals: "*"
+    }
+}
+
+log $$args

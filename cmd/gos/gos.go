@@ -454,6 +454,9 @@ func moveFlagsStart(args []string) {
 	index := 0
 
 	for i := range args {
+		if args[i] == "--" {
+			break
+		}
 		if args[i][0] == '-' {
 			temp := args[i]
 			args[i] = args[index]
@@ -619,6 +622,10 @@ func main() {
 			}
 
 			filepath := runFlags.Arg(0)
+			var passedArgs []string
+			if len(runFlags.Args()) > 2 {
+				passedArgs = runFlags.Args()[3:]
+			}
 
 			if filepath == "" {
 				panic("missing script path")
@@ -642,10 +649,29 @@ func main() {
 			}
 
 			var ctx *gopherscript.Context
+			passCLIArguments := false
 			if mod.Requirements == nil {
 				panic("missing requirements in script")
 			}
-			requiredPermissions, limitations := mod.Requirements.Object.PermissionsLimitations(mod.GlobalConstantDeclarations, nil, nil)
+
+			requiredPermissions, limitations := mod.Requirements.Object.PermissionsLimitations(
+				mod.GlobalConstantDeclarations,
+				nil,
+				func(kind gopherscript.PermissionKind, name string, value gopherscript.Node) ([]gopherscript.Permission, bool, error) {
+					if kind != gopherscript.ReadPerm || name != "cli-args" {
+						return nil, false, nil
+					}
+					boolLit, ok := value.(*gopherscript.BooleanLiteral)
+					if !ok {
+						return nil, true, errors.New("cli-args should have a boolean value")
+					}
+
+					if boolLit.Value {
+						passCLIArguments = true
+					}
+					return nil, true, nil //okay to not give a permission ???
+				},
+			)
 
 			if perms == "required" {
 				ctx = gopherscript.NewContext(requiredPermissions, nil, limitations)
@@ -656,6 +682,14 @@ func main() {
 			//CONTEXT & STATE
 
 			state := NewState(ctx)
+
+			if passCLIArguments {
+				args := gopherscript.List{}
+				for _, arg := range passedArgs {
+					args = append(args, arg)
+				}
+				state.GlobalScope()["args"] = args
+			}
 
 			//EXECUTION
 

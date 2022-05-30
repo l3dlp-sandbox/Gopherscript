@@ -426,7 +426,7 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
 	runningState *State,
-	handleCustomType func(kind PermissionKind, name string) ([]Permission, bool, error),
+	handleCustomType func(kind PermissionKind, name string, value Node) ([]Permission, bool, error),
 ) ([]Permission, []Limitation) {
 
 	perms := make([]Permission, 0)
@@ -618,7 +618,7 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 						perms = append(perms, newPerms...)
 					default:
 						if handleCustomType != nil {
-							customPerms, handled, err := handleCustomType(permKind, typeName)
+							customPerms, handled, err := handleCustomType(permKind, typeName, p.Value)
 							if handled {
 								if err != nil {
 									log.Panicf("invalid requirements, cannot infer '%s' permission '%s': %s\n", name, typeName, err.Error())
