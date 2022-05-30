@@ -624,7 +624,7 @@ func main() {
 			filepath := runFlags.Arg(0)
 			var passedArgs []string
 			if len(runFlags.Args()) > 2 {
-				passedArgs = runFlags.Args()[3:]
+				passedArgs = runFlags.Args()[2:]
 			}
 
 			if filepath == "" {
