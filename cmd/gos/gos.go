@@ -182,6 +182,27 @@ type CommandHistory struct {
 	Commands []string `json:"commands"`
 }
 
+func debug(args ...interface{}) {
+	f, err := os.OpenFile(".debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	_, err = f.Write([]byte(fmt.Sprint(args...)))
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	f.Close()
+}
+
+func copyRuneSlice(src []rune) []rune {
+	var sliceCopy = make([]rune, len(src))
+
+	copy(sliceCopy, src)
+	return sliceCopy
+}
+
 func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REPLConfiguration) {
 	old, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -290,16 +311,15 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			}
 
 			start := len(input) - backspaceCount - 1
-			right := input[start+1:]
+			right := copyRuneSlice(input[start+1:])
 			input = append(input[0:start], right...)
 
 			termenv.CursorBack(1)
-			termenv.ClearLineRight()
-			fmt.Print(string(right))
+			termenv.SaveCursorPosition()
 
-			if len(right) != 0 {
-				termenv.CursorBack(1)
-			}
+			fmt.Print(string(right))
+			termenv.ClearLineRight()
+			termenv.RestoreCursorPosition()
 
 			continue
 		case Home:
