@@ -308,6 +308,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			termenv.CursorBack(backspaceCount - prevBackspaceCount)
 			continue
 		case End:
+			if backspaceCount == 0 {
+				ignoreNextChar = true
+				continue
+			}
 			prevBackspaceCount := backspaceCount
 			backspaceCount = 0
 			termenv.CursorForward(prevBackspaceCount)
