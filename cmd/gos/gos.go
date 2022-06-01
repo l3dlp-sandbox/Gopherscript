@@ -2163,7 +2163,10 @@ func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) 
 	ctx.Take(FS_TOTAL_NEW_FILE_LIMIT_NAME, 1)
 	ctx.Take(FS_NEW_FILE_RATE_LIMIT_NAME, 1)
 
-	rate := ctx.GetRate(FS_WRITE_LIMIT_NAME)
+	rate, err := ctx.GetRate(FS_WRITE_LIMIT_NAME)
+	if err != nil {
+		return err
+	}
 	chunkSize := min(int(rate), min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10))))
 	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, DEFAULT_FILE_FMODE)
 	if err != nil {
@@ -2192,7 +2195,10 @@ func __readEntireFile(ctx *gopherscript.Context, fpath gopherscript.Path) ([]byt
 		return nil, err
 	}
 
-	rate := ctx.GetRate(FS_READ_LIMIT_NAME)
+	rate, err := ctx.GetRate(FS_READ_LIMIT_NAME)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.Open(string(fpath))
 	if err != nil {

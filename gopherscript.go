@@ -5110,12 +5110,12 @@ func (ctx *Context) Take(name string, count int64) {
 	}
 }
 
-func (ctx *Context) GetRate(name string) ByteRate {
+func (ctx *Context) GetRate(name string) (ByteRate, error) {
 	limiter, ok := ctx.limiters[name]
 	if ok {
-		return limiter.limitation.ByteRate
+		return limiter.limitation.ByteRate, nil
 	}
-	return -1
+	return -1, fmt.Errorf("context: cannot get rate '%s': not present", name)
 }
 
 func (ctx *Context) resolveHostAlias(alias string) interface{} {
