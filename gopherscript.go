@@ -3933,15 +3933,18 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parseStatement = func() Statement {
 		expr := parseExpression()
 
+		var b rune
+		followedBySpace := false
+
 		if i >= len(s) {
 			ident, isIdent := expr.(*IdentifierLiteral)
 			if !isIdent || !isKeyword(ident.Name) {
 				return expr
 			}
+		} else {
+			b = s[i]
+			followedBySpace = b == ' '
 		}
-
-		b := s[i]
-		followedBySpace := b == ' '
 
 		switch ev := expr.(type) {
 		case *Call:
@@ -4490,12 +4493,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 			case "return":
+				var end int = i
+				var returnValue Node
+
 				eatSpace()
 
-				returnValue := parseExpression()
+				if i < len(s) && s[i] != ';' && s[i] != '}' && s[i] != '\n' {
+					returnValue = parseExpression()
+					end = returnValue.Base().Span.End
+				}
+
 				return &ReturnStatement{
 					NodeBase: NodeBase{
-						Span: NodeSpan{ev.Span.Start, returnValue.Base().Span.End},
+						Span: NodeSpan{ev.Span.Start, end},
 					},
 					Expr: returnValue,
 				}
@@ -5574,9 +5584,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 			return err
 		}
 	case *ReturnStatement:
-		if err := walk(n.Expr, node, ancestorChain, fn); err != nil {
-			return err
+		if n.Expr != nil {
+			if err := walk(n.Expr, node, ancestorChain, fn); err != nil {
+				return err
+			}
 		}
+
 	case *BreakStatement:
 		if n.Label != nil {
 			if err := walk(n.Label, node, ancestorChain, fn); err != nil {
@@ -6090,6 +6103,10 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 		return v, nil
 	case *ReturnStatement:
+		if n.Expr == nil {
+			return nil, nil
+		}
+
 		value, err := Eval(n.Expr, state)
 		if err != nil {
 			return nil, err

@@ -3435,6 +3435,65 @@ func TestMustParseModule(t *testing.T) {
 			MustParseModule("drop-perms")
 		})
 	})
+
+	t.Run("return statement : value", func(t *testing.T) {
+		n := MustParseModule("return 1")
+
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 8},
+			},
+			Statements: []Node{
+				&ReturnStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 8},
+					},
+					Expr: &IntLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{7, 8},
+						},
+						Raw:   "1",
+						Value: 1,
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("return statement : no value", func(t *testing.T) {
+		n := MustParseModule("return")
+
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 6},
+			},
+			Statements: []Node{
+				&ReturnStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("return statement : no value, followed by newline", func(t *testing.T) {
+		n := MustParseModule("return\n")
+
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 7},
+			},
+			Statements: []Node{
+				&ReturnStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+					},
+				},
+			},
+		}, n)
+	})
+
 }
 
 type User struct {
@@ -3887,6 +3946,22 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 		assert.Error(t, err)
 		assert.Nil(t, res)
+	})
+
+	t.Run("return statement : value", func(t *testing.T) {
+		n := MustParseModule(`return nil`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, nil, res)
+	})
+
+	t.Run("return statement : no value", func(t *testing.T) {
+		n := MustParseModule(`return`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, nil, res)
 	})
 
 	t.Run("element assignment", func(t *testing.T) {
