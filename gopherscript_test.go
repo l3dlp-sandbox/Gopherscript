@@ -3850,10 +3850,36 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, PathPattern("./*"), res)
 	})
 
-	t.Run("absolute path expression", func(t *testing.T) {
+	t.Run("absolute path expression : interpolation value is a string", func(t *testing.T) {
 		n := MustParseModule(`/home/$username$`)
 		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
 			"username": "foo",
+		}))
+		assert.NoError(t, err)
+		assert.Equal(t, Path("/home/foo"), res)
+	})
+
+	t.Run("absolute path expression : interpolation value is a string containing '/'", func(t *testing.T) {
+		n := MustParseModule(`/home/$username$`)
+		_, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"username": "fo/o",
+		}))
+		assert.Error(t, err)
+	})
+
+	t.Run("absolute path expression : interpolation value is a relative path", func(t *testing.T) {
+		n := MustParseModule(`/home/$path$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"path": Path("./foo"),
+		}))
+		assert.NoError(t, err)
+		assert.Equal(t, Path("/home/foo"), res)
+	})
+
+	t.Run("absolute path expression : interpolation value is an a bsolute path", func(t *testing.T) {
+		n := MustParseModule(`/home/$path$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"path": Path("/foo"),
 		}))
 		assert.NoError(t, err)
 		assert.Equal(t, Path("/home/foo"), res)
@@ -3876,7 +3902,7 @@ func TestEval(t *testing.T) {
 	t.Run("URL expression, single path interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/$path$`)
 		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
-			"path": "/index.html",
+			"path": "index.html",
 		}))
 		assert.NoError(t, err)
 		assert.Equal(t, URL("https://example.com/index.html"), res)

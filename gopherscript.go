@@ -6015,13 +6015,19 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		pth := ""
 
 		for _, node := range n.Slices {
+			_, isStaticPathSlice := node.(*PathSlice)
 			pathSlice, err := Eval(node, state)
 			if err != nil {
 				return nil, err
 			}
 			switch s := pathSlice.(type) {
 			case string:
+				if !isStaticPathSlice && (strings.Contains(s, "..") || strings.Contains(s, "/")) {
+					return nil, errors.New("path expression: error: result should not contain the substring '..' or '/' ")
+				}
 				pth += s
+			case Path:
+				pth = path.Join(pth, string(s))
 			default:
 				return nil, errors.New("path expression: path slices should have a string value")
 			}
