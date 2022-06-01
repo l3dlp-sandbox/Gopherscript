@@ -3876,13 +3876,48 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, Path("/home/foo"), res)
 	})
 
-	t.Run("absolute path expression : interpolation value is an a bsolute path", func(t *testing.T) {
-		n := MustParseModule(`/home/$path$`)
+	t.Run("relative path expression : interpolation value is an absolute path", func(t *testing.T) {
+		n := MustParseModule(`./home/$path$`)
 		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
 			"path": Path("/foo"),
 		}))
 		assert.NoError(t, err)
-		assert.Equal(t, Path("/home/foo"), res)
+		assert.Equal(t, Path("./home/foo"), res)
+	})
+
+	t.Run("relative path expression : interpolation value is a string", func(t *testing.T) {
+		n := MustParseModule(`./home/$username$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"username": "foo",
+		}))
+		assert.NoError(t, err)
+		assert.Equal(t, Path("./home/foo"), res)
+	})
+
+	t.Run("relative path expression : interpolation value is a string containing '/'", func(t *testing.T) {
+		n := MustParseModule(`./home/$username$`)
+		_, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"username": "fo/o",
+		}))
+		assert.Error(t, err)
+	})
+
+	t.Run("relative path expression : interpolation value is a relative path", func(t *testing.T) {
+		n := MustParseModule(`./home/$path$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"path": Path("./foo"),
+		}))
+		assert.NoError(t, err)
+		assert.Equal(t, Path("./home/foo"), res)
+	})
+
+	t.Run("relative path expression : interpolation value is an absolute path", func(t *testing.T) {
+		n := MustParseModule(`./home/$path$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
+			"path": Path("/foo"),
+		}))
+		assert.NoError(t, err)
+		assert.Equal(t, Path("./home/foo"), res)
 	})
 
 	t.Run("HTTP host", func(t *testing.T) {
@@ -5225,7 +5260,6 @@ func TestLimiters(t *testing.T) {
 		//should cause a wait
 		ctx.Take("fs/read-file", 1)
 		assert.WithinDuration(t, expectedTime, time.Now(), 200*time.Millisecond)
-
 	})
 
 	t.Run("total", func(t *testing.T) {

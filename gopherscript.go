@@ -6010,11 +6010,20 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return n.Value, nil
 	case *URLQueryParameterSlice:
 		return n.Value, nil
-	case *AbsolutePathExpression:
+	case *AbsolutePathExpression, *RelativePathExpression:
+
+		var slices []Node
+
+		switch pexpr := n.(type) {
+		case *AbsolutePathExpression:
+			slices = pexpr.Slices
+		case *RelativePathExpression:
+			slices = pexpr.Slices
+		}
 
 		pth := ""
 
-		for _, node := range n.Slices {
+		for _, node := range slices {
 			_, isStaticPathSlice := node.(*PathSlice)
 			pathSlice, err := Eval(node, state)
 			if err != nil {
@@ -6022,12 +6031,16 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 			switch s := pathSlice.(type) {
 			case string:
-				if !isStaticPathSlice && (strings.Contains(s, "..") || strings.Contains(s, "/")) {
-					return nil, errors.New("path expression: error: result should not contain the substring '..' or '/' ")
+				if !isStaticPathSlice && (strings.Contains(s, "..") || strings.ContainsRune(s, '/') || strings.ContainsRune(s, '\\')) {
+					return nil, errors.New("path expression: error: result should not contain the substring '..' or '/' or '\\' ")
 				}
 				pth += s
 			case Path:
-				pth = path.Join(pth, string(s))
+				str := string(s)
+				if str[0] == '/' {
+					str = "./" + str
+				}
+				pth = path.Join(pth, str)
 			default:
 				return nil, errors.New("path expression: path slices should have a string value")
 			}
@@ -6037,8 +6050,14 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, errors.New("path expression: error: result should not contain the substring '..' ")
 		}
 
-		if len(pth) >= 2 && pth[1] == '/' {
-			pth = pth[1:]
+		if pth[0] != '.' && pth[0] != '/' {
+			pth = "./" + pth
+		}
+
+		if len(pth) >= 2 {
+			if pth[0] == '/' && pth[1] == '/' {
+				pth = pth[1:]
+			}
 		}
 
 		return Path(pth), nil
