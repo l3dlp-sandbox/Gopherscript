@@ -5342,6 +5342,8 @@ func TestToBool(t *testing.T) {
 		{"not empty pointer", &User{}, true},
 		{"empty pointer", (*User)(nil), false},
 		{"unitialized struct", User{}, true},
+		{"empty string", "", false},
+		{"not empty string", "1", true},
 	}
 
 	for _, testCase := range testCases {

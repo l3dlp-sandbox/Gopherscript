@@ -4892,6 +4892,8 @@ func toBool(reflVal reflect.Value) bool {
 	}
 
 	switch reflVal.Kind() {
+	case reflect.String:
+		return reflVal.Len() != 0
 	case reflect.Slice:
 		return reflVal.Len() != 0
 	case reflect.Chan, reflect.Map:
