@@ -1338,6 +1338,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 
 		resultValues := fnVal.Call(argValues)
 
+		//TODO: do that even for single result functions ?
 		if must && fnValType.NumOut() >= 2 &&
 			fnValType.Out(fnValType.NumOut()-1).Implements(ERROR_INTERFACE_TYPE) {
 			lastElem := resultValues[len(resultValues)-1]
