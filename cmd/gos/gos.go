@@ -913,13 +913,15 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						}
 
 						handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-							state := NewState(ctx)
+							newState := NewState(ctx)
+							newState.GlobalScope()["http"] = state.GlobalScope()["http"]
 
 							req := httpRequest{
-								Method: r.Method,
-								URL:    gopherscript.URL(r.URL.String()),
-								Path:   gopherscript.Path(r.URL.Path),
-								Body:   r.Body,
+								Method:  r.Method,
+								URL:     gopherscript.URL(r.URL.String()),
+								Path:    gopherscript.Path(r.URL.Path),
+								Body:    r.Body,
+								request: r,
 							}
 
 							log.Println(replaceNewLinesRawMode(fmt.Sprintf("%#v", req)))
@@ -928,7 +930,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 								rw: w,
 							}
 
-							_, err := gopherscript.CallFunc(v, state, gopherscript.List{
+							_, err := gopherscript.CallFunc(v, newState, gopherscript.List{
 								gopherscript.ValOf(resp),
 								gopherscript.ValOf(req),
 							}, false)
@@ -1027,6 +1029,18 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					endChan: endChan,
 				}, nil
 			})),
+			"servefile": gopherscript.ValOf(func(ctx *gopherscript.Context, rw *httpResponse, r httpRequest, pth gopherscript.Path) error {
+
+				pth = pth.ToAbs()
+				perm := gopherscript.FilesystemPermission{Kind_: gopherscript.ReadPerm, Entity: pth}
+
+				if err := ctx.CheckHasPermission(perm); err != nil {
+					return err
+				}
+
+				http.ServeFile(rw.rw, r.request, string(pth))
+				return nil
+			}),
 		},
 		"logvals": func(ctx *gopherscript.Context, args ...interface{}) {
 			s := ""
@@ -1651,10 +1665,11 @@ func (serv *httpServer) WaitClosed(ctx *gopherscript.Context) {
 }
 
 type httpRequest struct {
-	Method string
-	URL    gopherscript.URL
-	Path   gopherscript.Path
-	Body   io.ReadCloser
+	Method  string
+	URL     gopherscript.URL
+	Path    gopherscript.Path
+	Body    io.ReadCloser
+	request *http.Request
 }
 
 type httpResponse struct {

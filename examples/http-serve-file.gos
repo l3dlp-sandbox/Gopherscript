@@ -1,0 +1,29 @@
+require {
+    use: {
+        globals: ["http", "log", "tostr"]
+    }
+    read: {
+        globals: ["http", "read", "handle"]
+        : https://localhost:8080
+        : /home/...
+    }
+    provide: https://localhost:8080
+}
+
+fn handle(rw, r){
+    path = $r.Path
+
+    match $r.Path {
+        /* {
+            err = http.servefile$ $rw $r ./examples/static/$path$
+            if $err? {
+                log $err
+                $rw.WriteHeader(404)
+            }
+        }
+    }
+}
+
+server = http.serve(https://localhost:8080 $$handle)!
+body = tostr(http.getbody( https://localhost:8080/index.js )!)
+log $body

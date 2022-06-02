@@ -1,1 +1,5 @@
 .debug.txt
+
+*.key
+*.cert
+*.pem
