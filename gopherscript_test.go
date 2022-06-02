@@ -5350,3 +5350,10 @@ func TestToBool(t *testing.T) {
 		})
 	}
 }
+
+func TestPathPatternTest(t *testing.T) {
+	assert.True(t, PathPattern("/*").Test(Path("/")))
+	assert.True(t, PathPattern("/*").Test(Path("/e")))
+	assert.False(t, PathPattern("/*").Test(Path("/e/")))
+	assert.False(t, PathPattern("/*").Test(Path("/e/e")))
+}
