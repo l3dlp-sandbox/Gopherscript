@@ -3100,7 +3100,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 			}
 			//otherwise fail
-		case '@': //lazy
+		case '@': //lazy expressions & host related stuff
 			start := i
 			i++
 			if i >= len(s) {
@@ -3601,7 +3601,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 		}
 
-		//call
+		//call: <lhs> '(' ...
 		if lhs != nil && i < len(s) && s[i] == '(' {
 			i++
 			spanStart := lhs.Base().Span.Start
