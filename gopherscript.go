@@ -209,6 +209,11 @@ type KeyListExpression struct {
 	Keys []*IdentifierLiteral
 }
 
+type BooleanConversionExpression struct {
+	NodeBase
+	Expr Node
+}
+
 type BooleanLiteral struct {
 	NodeBase
 	Value bool
@@ -2491,6 +2496,17 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Name: string(s[start+1 : i]),
 				}
 			}
+
+			if i < len(s) && s[i] == '?' {
+				i++
+				lhs = &BooleanConversionExpression{
+					NodeBase: NodeBase{
+						NodeSpan{__start, i},
+					},
+					Expr: lhs,
+				}
+			}
+
 		//TODO: refactor ?
 		case '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 			'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
@@ -4837,6 +4853,9 @@ func ValOf(v interface{}) interface{} {
 	}
 	switch val := v.(type) {
 	case reflect.Value:
+		if !val.IsValid() {
+			return val //return another value ?
+		}
 		intf := val.Interface()
 		if IsGopherVal(intf) {
 			return intf
@@ -4864,6 +4883,23 @@ func UnwrapReflectVal(v interface{}) interface{} {
 		return val.Interface()
 	default:
 		return val
+	}
+}
+
+func toBool(reflVal reflect.Value) bool {
+	if !reflVal.IsValid() {
+		return false
+	}
+
+	switch reflVal.Kind() {
+	case reflect.Slice:
+		return reflVal.Len() != 0
+	case reflect.Chan, reflect.Map:
+		return !reflVal.IsNil() && reflVal.Len() != 0
+	case reflect.Func, reflect.Pointer, reflect.UnsafePointer, reflect.Interface:
+		return !reflVal.IsNil()
+	default:
+		return true
 	}
 }
 
@@ -5525,6 +5561,10 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 			if err := walk(key, node, ancestorChain, fn); err != nil {
 				return err
 			}
+		}
+	case *BooleanConversionExpression:
+		if err := walk(n.Expr, node, ancestorChain, fn); err != nil {
+			return err
 		}
 	case *Assignment:
 		if err := walk(n.Left, node, ancestorChain, fn); err != nil {
@@ -6965,6 +7005,13 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 
 		return list, nil
+	case *BooleanConversionExpression:
+		valueToConvert, err := Eval(n.Expr, state)
+		if err != nil {
+			return nil, err
+		}
+
+		return toBool(ToReflectVal(valueToConvert)), nil
 	default:
 		return nil, fmt.Errorf("cannot evaluate %#v (%T)", node, node)
 	}

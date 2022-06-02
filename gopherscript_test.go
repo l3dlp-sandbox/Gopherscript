@@ -3494,6 +3494,28 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("boolean conversion expression", func(t *testing.T) {
+		n := MustParseModule("$err?")
+
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 5},
+			},
+			Statements: []Node{
+				&BooleanConversionExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+					},
+					Expr: &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{0, 4},
+						},
+						Name: "err",
+					},
+				},
+			},
+		}, n)
+	})
 }
 
 type User struct {
@@ -4928,6 +4950,18 @@ func TestEval(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("boolean conversion expression", func(t *testing.T) {
+		n := MustParseModule(`$$invalid?`)
+
+		state := NewState(NewDefaultTestContext(), map[string]interface{}{
+			"invalid": reflect.ValueOf(nil),
+		})
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, false, res)
+	})
+
 }
 
 func TestHttpPermission(t *testing.T) {
@@ -5293,4 +5327,26 @@ func TestLimiters(t *testing.T) {
 		assert.InDelta(t, int64(0), ctx.limiters["test"].bucket.avail, float64(capacity/20))
 	})
 
+}
+
+func TestToBool(t *testing.T) {
+
+	testCases := []struct {
+		name  string
+		input interface{}
+		ok    bool
+	}{
+		{"nil slice", ([]int)(nil), false},
+		{"empty, not-nil slice", []int{}, false},
+		{"not empty slice", []int{2}, true},
+		{"not empty pointer", &User{}, true},
+		{"empty pointer", (*User)(nil), false},
+		{"unitialized struct", User{}, true},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.True(t, testCase.ok == toBool(ToReflectVal(testCase.input)))
+		})
+	}
 }
