@@ -261,16 +261,6 @@ import modresult https://example.com/return_1.gos "SG2a/7YNuwBjsD2OI6bM9jZM4gPcO
 
 Routines are mainly used for concurrent work and isolation. Each routine has its own goroutine and state.
 
-Syntax for spawning routines:
-```
-routine = sr [group] <globals> <module | call | variable>
-``` 
-
-Call (all permissions are inherited).
-```
-routine = sr nil f()
-```
-
 Embedded module:
 
 ![image](https://user-images.githubusercontent.com/84961291/162414775-75d0562c-0e99-402f-8a66-b85fdb730a09.png)
@@ -283,9 +273,9 @@ routine = sr {http: $$http} {
 }
 -->
 
-You can wait for the routine's result by calling the WaitResult method:
+Call syntax (all permissions are inherited).
 ```
-result = $routine.WaitResult()!
+routine = sr nil f()
 ```
 
 Routines can optionally be part of a "routine group" that allows easier control of multiple routines. The group variable is defined (and updated) when the spawn expression is evaluated.
