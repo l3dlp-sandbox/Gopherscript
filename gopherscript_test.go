@@ -3516,6 +3516,42 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
+
+	t.Run("pattern identifier literal", func(t *testing.T) {
+		n := MustParseModule("%int")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 4}},
+			Statements: []Node{
+				&PatternIdentifierLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 4}},
+					Name:     "int",
+				},
+			},
+		}, n)
+	})
+
+	t.Run("single line object pattern literal { : integer} ", func(t *testing.T) {
+		n := MustParseModule("%{ : 1 }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 8}},
+			Statements: []Node{
+				&ObjectPatternLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 8}},
+					Properties: []ObjectProperty{
+						{
+							NodeBase: NodeBase{NodeSpan{3, 6}},
+							Key:      nil,
+							Value: &IntLiteral{
+								NodeBase: NodeBase{NodeSpan{5, 6}},
+								Raw:      "1",
+								Value:    1,
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
 }
 
 type User struct {

@@ -728,6 +728,16 @@ type IdentifierLiteral struct {
 	Name string
 }
 
+type PatternIdentifierLiteral struct {
+	NodeBase
+	Name string
+}
+
+type ObjectPatternLiteral struct {
+	NodeBase
+	Properties []ObjectProperty
+}
+
 type GlobalConstantDeclarations struct {
 	NodeBase
 	NamesValues [][2]Node
@@ -2458,6 +2468,206 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
+	parseComplexPatternStuff := func() Node {
+		start := i
+		i++
+		if i >= len(s) {
+			panic(ParsingError{
+				"unterminated pattern: '%'",
+				i,
+				start,
+				UnspecifiedCategory,
+				nil,
+			})
+		}
+
+		switch {
+		case isIdentChar(s[i]): //pattern identifier literal
+
+			for i < len(s) && isIdentChar(s[i]) {
+				i++
+			}
+
+			return &PatternIdentifierLiteral{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+				},
+				Name: string(s[start+1 : i]),
+			}
+		case s[i] == '{': //object pattern literal
+			openingBraceIndex := i
+			i++
+
+			unamedPropCount := 0
+			var properties []ObjectProperty
+
+			for i < len(s) && s[i] != '}' {
+				eatSpaceNewlineComma()
+
+				if i < len(s) && s[i] == '}' {
+					break
+				}
+
+				var keys []Node
+				var lastKey Node = nil
+				lastKeyName := ""
+				var propSpanStart int
+
+				if s[i] == ':' {
+					propSpanStart = i
+					i++
+					unamedPropCount++
+					keys = append(keys, nil)
+					lastKeyName = strconv.Itoa(unamedPropCount)
+					if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+						panic(ParsingError{
+							"key is too long",
+							i,
+							openingBraceIndex,
+							KnownType,
+							(*ObjectPatternLiteral)(nil),
+						})
+					}
+				} else {
+					for {
+						lastKey = parseExpression()
+						keys = append(keys, lastKey)
+
+						switch k := lastKey.(type) {
+						case *IdentifierLiteral:
+							lastKeyName = k.Name
+						case *StringLiteral:
+							lastKeyName = k.Value
+						default:
+							panic(ParsingError{
+								"Only identifiers and strings are valid object pattern keys",
+								i,
+								openingBraceIndex,
+								KnownType,
+								(*ObjectPatternLiteral)(nil),
+							})
+						}
+
+						if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+							panic(ParsingError{
+								"key is too long",
+								i,
+								openingBraceIndex,
+								KnownType,
+								(*ObjectPatternLiteral)(nil),
+							})
+						}
+
+						if len(keys) == 1 {
+							propSpanStart = lastKey.Base().Span.Start
+						}
+						singleKey := true
+
+						eatSpace()
+
+						if s[i] == ',' {
+							i++
+							eatSpace()
+							singleKey = false
+						}
+
+						if i >= len(s) || s[i] == '}' {
+							panic(ParsingError{
+								"invalid object pattern literal, missing colon after key '" + lastKeyName + "'",
+								i,
+								openingBraceIndex,
+								KnownType,
+								(*ObjectPatternLiteral)(nil),
+							})
+						}
+
+						if singleKey {
+							if s[i] != ':' {
+								panic(ParsingError{
+									"invalid object pattern literal, following key should be followed by a colon : '" + lastKeyName + "'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectPatternLiteral)(nil),
+								})
+							}
+							i++
+							break
+						}
+					}
+				}
+
+				eatSpace()
+
+				if i >= len(s) || s[i] == '}' {
+					panic(ParsingError{
+						"invalid object pattern literal, missing value after colon, key '" + lastKeyName + "'",
+						i,
+						openingBraceIndex,
+						KnownType,
+						(*ObjectPatternLiteral)(nil),
+					})
+				}
+				v := parseExpression()
+
+				if len(keys) > 1 {
+					switch v.(type) {
+					case *Variable, *GlobalVariable:
+					default:
+						if !isSimpleValueLiteral(v) {
+							panic(ParsingError{
+								"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
+								i,
+								openingBraceIndex,
+								KnownType,
+								(*ObjectPatternLiteral)(nil),
+							})
+						}
+					}
+
+				}
+
+				for _, key := range keys {
+					properties = append(properties, ObjectProperty{
+						NodeBase: NodeBase{
+							Span: NodeSpan{propSpanStart, i},
+						},
+						Key:   key,
+						Value: v,
+					})
+				}
+
+				eatSpaceNewlineComma()
+			}
+
+			if i >= len(s) {
+				panic(ParsingError{
+					"unterminated object pattern literal, missing closing brace '}'",
+					i,
+					openingBraceIndex,
+					KnownType,
+					(*ObjectPatternLiteral)(nil),
+				})
+			}
+			i++
+
+			return &ObjectPatternLiteral{
+				NodeBase: NodeBase{
+					Span: NodeSpan{openingBraceIndex - 1, i},
+				},
+				Properties: properties,
+			}
+		default:
+			panic(ParsingError{
+				"unterminated pattern: '%'",
+				i,
+				start,
+				UnspecifiedCategory,
+				nil,
+			})
+		}
+	}
+
 	parseExpression = func() Node {
 		__start := i
 		//these variables are only used for expressions that can be on the left of a member/slice/index/call expression
@@ -3208,6 +3418,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				})
 			}
 
+		case '%':
+			return parseComplexPatternStuff()
 		case '(': //parenthesized expression and binary expressions
 			openingParenIndex := i
 			i++
@@ -5520,6 +5732,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 
 		if err := walk(n.Value, node, ancestorChain, fn); err != nil {
 			return err
+		}
+	case *ObjectPatternLiteral:
+		for _, prop := range n.Properties {
+			if err := walk(&prop, node, ancestorChain, fn); err != nil {
+				return err
+			}
 		}
 	case *MemberExpression:
 		if err := walk(n.Left, node, ancestorChain, fn); err != nil {
