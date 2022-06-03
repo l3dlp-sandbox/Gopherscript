@@ -1132,6 +1132,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"topjson":   toPrettyJSON,
 		"tojsonval": toJSONVal,
 		"toval":     toGopherscriptVal,
+		"parsejson": parseJson,
 		"sleep": func(ctx *gopherscript.Context, d time.Duration) {
 			time.Sleep(d)
 		},
@@ -2087,6 +2088,26 @@ func convertJSONValToGopherscriptVal(ctx *gopherscript.Context, v interface{}) i
 	default:
 		return val
 	}
+}
+
+func parseJson(ctx *gopherscript.Context, v interface{}) (interface{}, error) {
+	var b []byte
+
+	switch val := v.(type) {
+	case []byte:
+		b = val
+	case string:
+		b = []byte(val)
+	default:
+		return "", errors.New("cannot parse non string|bytes")
+	}
+
+	var result interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return nil, err
+	}
+
+	return convertJSONValToGopherscriptVal(ctx, result), nil
 }
 
 func getPublicKey(privKey interface{}) interface{} {
