@@ -3552,6 +3552,86 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
+
+	t.Run("pattern definition : RHS is a pattern identifier literal ", func(t *testing.T) {
+		n := MustParseModule("%i = %int;")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 10}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 10},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "i",
+					},
+					Right: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{5, 9}},
+						Name:     "int",
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a string literal", func(t *testing.T) {
+		n := MustParseModule("%l = string \"a\";")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 16}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 16},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 15}},
+						Kind:     StringPattern,
+						Elements: []Node{
+							&StringLiteral{
+								NodeBase: NodeBase{NodeSpan{12, 15}},
+								Raw:      "\"a\"",
+								Value:    "a",
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal", func(t *testing.T) {
+		n := MustParseModule("%l = string (\"a\");")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 18}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 18},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 17}},
+						Kind:     StringPattern,
+						Elements: []Node{
+							&StringLiteral{
+								NodeBase: NodeBase{NodeSpan{13, 16}},
+								Raw:      "\"a\"",
+								Value:    "a",
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
 }
 
 type User struct {
