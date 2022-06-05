@@ -5495,3 +5495,39 @@ func TestPathPatternTest(t *testing.T) {
 	assert.False(t, PathPattern("/*").Test(Path("/e/")))
 	assert.False(t, PathPattern("/*").Test(Path("/e/e")))
 }
+
+func TestCompileStringPatternPiece(t *testing.T) {
+
+	t.Run("single element : string literal", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternPiece(&PatternPiece{
+			Kind: StringPattern,
+			Elements: []Node{
+				&StringLiteral{Value: "s"},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "s", patt.regexp.String())
+	})
+
+	t.Run("two elements : one string literal + a pattern identifier (exact string matcher)", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		ctx.addNamedPattern("b", ExactStringMatcher("c"))
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternPiece(&PatternPiece{
+			Kind: StringPattern,
+			Elements: []Node{
+				&StringLiteral{Value: "a"},
+				&PatternIdentifierLiteral{Name: "b"},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "ac", patt.regexp.String())
+	})
+}

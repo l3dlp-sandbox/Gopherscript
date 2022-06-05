@@ -6424,6 +6424,51 @@ func getQuantity(value float64, unit string) interface{} {
 	}
 }
 
+type ComplexStringPattern struct {
+	regexp *regexp.Regexp
+	node   Node
+}
+
+func (patt ComplexStringPattern) Test(v interface{}) bool {
+	str, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return patt.regexp.MatchString(str)
+}
+
+func CompileStringPatternPiece(node *PatternPiece, state *State) (*ComplexStringPattern, error) {
+	regex := bytes.NewBufferString("")
+
+	ERR_PREFIX := "string pattern piece compilation"
+
+	for _, element := range node.Elements {
+		switch v := element.(type) {
+		case *StringLiteral:
+			regex.WriteString(v.Value)
+		case *PatternIdentifierLiteral:
+			pattern, err := Eval(v, state)
+			if err != nil {
+				return nil, fmt.Errorf("%s: failed to evaluate an element: %s", ERR_PREFIX, err.Error())
+			}
+
+			switch p := pattern.(type) {
+			case ExactStringMatcher:
+				regex.WriteString(string(p))
+			case *ComplexStringPattern:
+				regex.WriteString(p.regexp.String())
+			default:
+				return nil, fmt.Errorf("%s: invalid element: %T", ERR_PREFIX, p)
+			}
+		}
+	}
+
+	return &ComplexStringPattern{
+		regexp: regexp.MustCompile(regex.String()),
+		node:   node,
+	}, nil
+}
+
 //MustEval calls Eval and panics if there is an error.
 func MustEval(node Node, state *State) interface{} {
 	res, err := Eval(node, state)
@@ -7454,6 +7499,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		return toBool(ToReflectVal(valueToConvert)), nil
 	case *PatternIdentifierLiteral:
+		//should we return an error if not present
 		return state.ctx.resolveNamedPattern(n.Name), nil
 	case *PatternDefinition:
 		right, err := Eval(n.Right, state)
@@ -7474,6 +7520,10 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		state.ctx.addNamedPattern(n.Left.Name, pattern)
 		return nil, nil
 	case *PatternPiece:
+		if n.Kind != StringPattern {
+			return nil, errors.New("evaluation of non-string pattern pieces not implemented yet")
+		}
+
 		return nil, errors.New("evaluation of pattern pieces not implemented yet")
 	case *PatternUnion:
 		return nil, errors.New("evaluation of pattern unions not implemented yet")
