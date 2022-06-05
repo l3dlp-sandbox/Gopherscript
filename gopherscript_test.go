@@ -5078,6 +5078,26 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, false, res)
 	})
 
+	t.Run("pattern definition : identifier : RHS is a string literal", func(t *testing.T) {
+		n := MustParseModule(`%s = "s"; return %s`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, ExactStringMatcher("s"), res)
+	})
+
+	t.Run("pattern definition & identifiers : RHS is another pattern identifier", func(t *testing.T) {
+		n := MustParseModule(`%p = "p"; %s = %p; return %s`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, ExactStringMatcher("p"), res)
+	})
+
 }
 
 func TestHttpPermission(t *testing.T) {

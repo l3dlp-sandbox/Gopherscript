@@ -1159,6 +1159,13 @@ func (patt URLPattern) Test(v interface{}) bool {
 	}
 }
 
+type ExactStringMatcher string
+
+func (matcher ExactStringMatcher) Test(v interface{}) bool {
+	str, ok := v.(string)
+	return ok && string(matcher) == str
+}
+
 func samePointer(a, b interface{}) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
@@ -5375,6 +5382,7 @@ type Context struct {
 	limiters             map[string]*Limiter
 	stackPermission      StackPermission
 	hostAliases          map[string]interface{}
+	namedPatterns        map[string]Matcher
 }
 
 func NewContext(permissions []Permission, forbiddenPermissions []Permission, limitations []Limitation) *Context {
@@ -5437,6 +5445,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 		limiters:             limiters,
 		stackPermission:      stackPermission,
 		hostAliases:          map[string]interface{}{},
+		namedPatterns:        map[string]Matcher{},
 	}
 
 	return ctx
@@ -5566,6 +5575,22 @@ func (ctx *Context) addHostAlias(alias string, host interface{}) {
 		panic(errors.New("cannot register a host alias more than once"))
 	}
 	ctx.hostAliases[alias] = host
+}
+
+func (ctx *Context) resolveNamedPattern(name string) Matcher {
+	pattern, ok := ctx.namedPatterns[name]
+	if !ok {
+		return nil
+	}
+	return pattern
+}
+
+func (ctx *Context) addNamedPattern(name string, pattern Matcher) {
+	_, ok := ctx.namedPatterns[name]
+	if ok {
+		panic(errors.New("cannot register a pattern more than once"))
+	}
+	ctx.namedPatterns[name] = pattern
 }
 
 type IterationChange int
@@ -7428,6 +7453,30 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 
 		return toBool(ToReflectVal(valueToConvert)), nil
+	case *PatternIdentifierLiteral:
+		return state.ctx.resolveNamedPattern(n.Name), nil
+	case *PatternDefinition:
+		right, err := Eval(n.Right, state)
+		if err != nil {
+			return nil, err
+		}
+
+		pattern, ok := right.(Matcher)
+		if !ok {
+			switch v := right.(type) {
+			case string:
+				pattern = ExactStringMatcher(v)
+			default:
+				return nil, errors.New("pattern definition failed, value should implement the Matcher interface")
+			}
+		}
+
+		state.ctx.addNamedPattern(n.Left.Name, pattern)
+		return nil, nil
+	case *PatternPiece:
+		return nil, errors.New("evaluation of pattern pieces not implemented yet")
+	case *PatternUnion:
+		return nil, errors.New("evaluation of pattern unions not implemented yet")
 	default:
 		return nil, fmt.Errorf("cannot evaluate %#v (%T)", node, node)
 	}
