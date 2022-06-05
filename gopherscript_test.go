@@ -3591,11 +3591,16 @@ func TestMustParseModule(t *testing.T) {
 					Right: &PatternPiece{
 						NodeBase: NodeBase{NodeSpan{5, 15}},
 						Kind:     StringPattern,
-						Elements: []Node{
-							&StringLiteral{
-								NodeBase: NodeBase{NodeSpan{12, 15}},
-								Raw:      "\"a\"",
-								Value:    "a",
+						Elements: []*PatternPieceElement{
+							{
+								NodeBase: NodeBase{
+									NodeSpan{12, 15},
+								},
+								Expr: &StringLiteral{
+									NodeBase: NodeBase{NodeSpan{12, 15}},
+									Raw:      "\"a\"",
+									Value:    "a",
+								},
 							},
 						},
 					},
@@ -3620,11 +3625,51 @@ func TestMustParseModule(t *testing.T) {
 					Right: &PatternPiece{
 						NodeBase: NodeBase{NodeSpan{5, 17}},
 						Kind:     StringPattern,
-						Elements: []Node{
-							&StringLiteral{
-								NodeBase: NodeBase{NodeSpan{13, 16}},
-								Raw:      "\"a\"",
-								Value:    "a",
+						Elements: []*PatternPieceElement{
+							{
+								NodeBase: NodeBase{
+									NodeSpan{12, 17},
+								},
+								Expr: &StringLiteral{
+									NodeBase: NodeBase{NodeSpan{13, 16}},
+									Raw:      "\"a\"",
+									Value:    "a",
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal with '*' as ocurrence", func(t *testing.T) {
+		n := MustParseModule("%l = string (\"a\")*;")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 19}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 19},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 18}},
+						Kind:     StringPattern,
+						Elements: []*PatternPieceElement{
+							{
+								Ocurrence: ZeroOrMoreOcurrence,
+								NodeBase: NodeBase{
+									NodeSpan{12, 18},
+								},
+								Expr: &StringLiteral{
+									NodeBase: NodeBase{NodeSpan{13, 16}},
+									Raw:      "\"a\"",
+									Value:    "a",
+								},
 							},
 						},
 					},
@@ -5505,13 +5550,34 @@ func TestCompileStringPatternPiece(t *testing.T) {
 
 		patt, err := CompileStringPatternPiece(&PatternPiece{
 			Kind: StringPattern,
-			Elements: []Node{
-				&StringLiteral{Value: "s"},
+			Elements: []*PatternPieceElement{
+				{
+					Ocurrence: ExactlyOneOcurrence,
+					Expr:      &StringLiteral{Value: "s"},
+				},
 			},
 		}, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "s", patt.regexp.String())
+		assert.Equal(t, "(s)", patt.regexp.String())
+	})
+	t.Run("single element : string literal (ocurrence modifier i '*')", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternPiece(&PatternPiece{
+			Kind: StringPattern,
+			Elements: []*PatternPieceElement{
+				{
+					Ocurrence: ZeroOrMoreOcurrence,
+					Expr:      &StringLiteral{Value: "s"},
+				},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "(s)*", patt.regexp.String())
 	})
 
 	t.Run("two elements : one string literal + a pattern identifier (exact string matcher)", func(t *testing.T) {
@@ -5521,13 +5587,19 @@ func TestCompileStringPatternPiece(t *testing.T) {
 
 		patt, err := CompileStringPatternPiece(&PatternPiece{
 			Kind: StringPattern,
-			Elements: []Node{
-				&StringLiteral{Value: "a"},
-				&PatternIdentifierLiteral{Name: "b"},
+			Elements: []*PatternPieceElement{
+				{
+					Ocurrence: ExactlyOneOcurrence,
+					Expr:      &StringLiteral{Value: "a"},
+				},
+				{
+					Ocurrence: ExactlyOneOcurrence,
+					Expr:      &PatternIdentifierLiteral{Name: "b"},
+				},
 			},
 		}, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "ac", patt.regexp.String())
+		assert.Equal(t, "(a)(c)", patt.regexp.String())
 	})
 }

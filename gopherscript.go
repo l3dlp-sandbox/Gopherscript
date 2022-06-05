@@ -962,7 +962,22 @@ const (
 type PatternPiece struct {
 	NodeBase
 	Kind     PatternKind
-	Elements []Node
+	Elements []*PatternPieceElement
+}
+
+type OcurrenceCountModifier int
+
+const (
+	ExactlyOneOcurrence OcurrenceCountModifier = iota
+	AtLeastOneOcurrence
+	ZeroOrMoreOcurrence
+	OptionalOcurrence
+)
+
+type PatternPieceElement struct {
+	NodeBase
+	Ocurrence OcurrenceCountModifier
+	Expr      Node
 }
 
 type PatternUnion struct {
@@ -2544,7 +2559,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		}
 
-		var elements []Node
+		var elements []*PatternPieceElement
 
 		for i < len(s) && s[i] != ';' && s[i] != '|' && s[i] != ')' {
 			eatSpace()
@@ -2552,6 +2567,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				continue
 			}
 
+			var element Node
+			elementStart := i
 			if s[i] == '(' {
 				i++
 
@@ -2566,8 +2583,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						nil,
 					})
 				}
-				element := parseComplexPatternStuff(true)
-				elements = append(elements, element)
+				element = parseComplexPatternStuff(true)
 
 				eatSpace()
 
@@ -2582,9 +2598,32 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 				i++
 			} else {
-				element := parseComplexPatternStuff(true)
-				elements = append(elements, element)
+				element = parseComplexPatternStuff(true)
 			}
+
+			ocurrenceModifier := ExactlyOneOcurrence
+			elementEnd := i
+
+			if i < len(s) && (s[i] == '+' || s[i] == '*' || s[i] == '?') {
+				switch s[i] {
+				case '+':
+					ocurrenceModifier = AtLeastOneOcurrence
+				case '*':
+					ocurrenceModifier = ZeroOrMoreOcurrence
+				case '?':
+					ocurrenceModifier = OptionalOcurrence
+				}
+				elementEnd++
+				i++
+			}
+
+			elements = append(elements, &PatternPieceElement{
+				NodeBase: NodeBase{
+					NodeSpan{elementStart, elementEnd},
+				},
+				Ocurrence: ocurrenceModifier,
+				Expr:      element,
+			})
 		}
 
 		return &PatternPiece{
@@ -6159,6 +6198,10 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 				return err
 			}
 		}
+	case *PatternPieceElement:
+		if err := walk(n.Expr, node, ancestorChain, fn); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -6443,7 +6486,9 @@ func CompileStringPatternPiece(node *PatternPiece, state *State) (*ComplexString
 	ERR_PREFIX := "string pattern piece compilation"
 
 	for _, element := range node.Elements {
-		switch v := element.(type) {
+		regex.WriteRune('(')
+
+		switch v := element.Expr.(type) {
 		case *StringLiteral:
 			regex.WriteString(v.Value)
 		case *PatternIdentifierLiteral:
@@ -6460,6 +6505,15 @@ func CompileStringPatternPiece(node *PatternPiece, state *State) (*ComplexString
 			default:
 				return nil, fmt.Errorf("%s: invalid element: %T", ERR_PREFIX, p)
 			}
+		}
+		regex.WriteRune(')')
+		switch element.Ocurrence {
+		case AtLeastOneOcurrence:
+			regex.WriteRune('+')
+		case ZeroOrMoreOcurrence:
+			regex.WriteRune('*')
+		case OptionalOcurrence:
+			regex.WriteRune('?')
 		}
 	}
 
