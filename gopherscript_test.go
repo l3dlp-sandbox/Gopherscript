@@ -3677,6 +3677,42 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
+
+	t.Run("pattern definition : RHS is a two-case union with one element each", func(t *testing.T) {
+		n := MustParseModule(`%i = | "a" | "b";`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 17}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 17},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "i",
+					},
+					Right: &PatternUnion{
+						NodeBase: NodeBase{
+							NodeSpan{5, 16},
+						},
+						Cases: []Node{
+							&StringLiteral{
+								NodeBase: NodeBase{NodeSpan{7, 10}},
+								Raw:      `"a"`,
+								Value:    "a",
+							},
+							&StringLiteral{
+								NodeBase: NodeBase{NodeSpan{13, 16}},
+								Raw:      `"b"`,
+								Value:    "b",
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 }
 
 type User struct {
@@ -5541,14 +5577,14 @@ func TestPathPatternTest(t *testing.T) {
 	assert.False(t, PathPattern("/*").Test(Path("/e/e")))
 }
 
-func TestCompileStringPatternPiece(t *testing.T) {
+func TestCompileStringPatternNode(t *testing.T) {
 
 	t.Run("single element : string literal", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
 		ctx.addNamedPattern("s", ExactStringMatcher("s"))
 		state := NewState(ctx)
 
-		patt, err := CompileStringPatternPiece(&PatternPiece{
+		patt, err := CompileStringPatternNode(&PatternPiece{
 			Kind: StringPattern,
 			Elements: []*PatternPieceElement{
 				{
@@ -5559,14 +5595,15 @@ func TestCompileStringPatternPiece(t *testing.T) {
 		}, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "(s)", patt.regexp.String())
+		assert.Equal(t, "(s)", patt.Regex())
 	})
+
 	t.Run("single element : string literal (ocurrence modifier i '*')", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
 		ctx.addNamedPattern("s", ExactStringMatcher("s"))
 		state := NewState(ctx)
 
-		patt, err := CompileStringPatternPiece(&PatternPiece{
+		patt, err := CompileStringPatternNode(&PatternPiece{
 			Kind: StringPattern,
 			Elements: []*PatternPieceElement{
 				{
@@ -5577,7 +5614,7 @@ func TestCompileStringPatternPiece(t *testing.T) {
 		}, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "(s)*", patt.regexp.String())
+		assert.Equal(t, "(s)*", patt.Regex())
 	})
 
 	t.Run("two elements : one string literal + a pattern identifier (exact string matcher)", func(t *testing.T) {
@@ -5585,7 +5622,7 @@ func TestCompileStringPatternPiece(t *testing.T) {
 		ctx.addNamedPattern("b", ExactStringMatcher("c"))
 		state := NewState(ctx)
 
-		patt, err := CompileStringPatternPiece(&PatternPiece{
+		patt, err := CompileStringPatternNode(&PatternPiece{
 			Kind: StringPattern,
 			Elements: []*PatternPieceElement{
 				{
@@ -5600,6 +5637,61 @@ func TestCompileStringPatternPiece(t *testing.T) {
 		}, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "(a)(c)", patt.regexp.String())
+		assert.Equal(t, "(a)(c)", patt.Regex())
+	})
+
+	t.Run("union of two single-element cases", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternNode(&PatternUnion{
+			Cases: []Node{
+				&StringLiteral{Value: "a"},
+				&StringLiteral{Value: "b"},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "(a|b)", patt.Regex())
+	})
+
+	t.Run("union of two multiple-element cases", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternNode(&PatternUnion{
+			Cases: []Node{
+				&PatternPiece{
+					Kind: StringPattern,
+					Elements: []*PatternPieceElement{
+						{
+							Ocurrence: ExactlyOneOcurrence,
+							Expr:      &StringLiteral{Value: "a"},
+						},
+						{
+							Ocurrence: ExactlyOneOcurrence,
+							Expr:      &StringLiteral{Value: "b"},
+						},
+					},
+				},
+
+				&PatternPiece{
+					Kind: StringPattern,
+					Elements: []*PatternPieceElement{
+						{
+							Ocurrence: ExactlyOneOcurrence,
+							Expr:      &StringLiteral{Value: "c"},
+						},
+						{
+							Ocurrence: ExactlyOneOcurrence,
+							Expr:      &StringLiteral{Value: "d"},
+						},
+					},
+				},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "((a)(b)|(c)(d))", patt.Regex())
 	})
 }

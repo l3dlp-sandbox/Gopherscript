@@ -1181,6 +1181,10 @@ func (matcher ExactStringMatcher) Test(v interface{}) bool {
 	return ok && string(matcher) == str
 }
 
+func (matcher ExactStringMatcher) Regex() string {
+	return regexp.QuoteMeta(string(matcher))
+}
+
 func samePointer(a, b interface{}) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
@@ -2640,18 +2644,42 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		if inPattern {
 			switch {
-			case isAlpha(s[i]):
+			case isAlpha(s[i]) || s[i] == '(':
 				return parsePatternPiece()
 			case s[i] == '"':
 				return parseExpression()
 			case s[i] == '|':
-				panic(ParsingError{
-					"pattern union not implemented yet",
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
+				var cases []Node
+
+				for i < len(s) && s[i] != ';' && s[i] != ')' {
+					eatSpace()
+					if i >= len(s) || s[i] == ';' || s[i] == ')' {
+						continue
+					}
+
+					if s[i] != '|' {
+						panic(ParsingError{
+							"invalid pattern union : elements should be separated by '|'",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						})
+					}
+					i++
+
+					eatSpace()
+
+					case_ := parseComplexPatternStuff(true)
+					cases = append(cases, case_)
+				}
+
+				return &PatternUnion{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+					},
+					Cases: cases,
+				}
 			}
 		}
 
@@ -6202,6 +6230,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		if err := walk(n.Expr, node, ancestorChain, fn); err != nil {
 			return err
 		}
+	case *PatternUnion:
+		for _, case_ := range n.Cases {
+			if err := walk(case_, node, ancestorChain, fn); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -6480,47 +6514,81 @@ func (patt ComplexStringPattern) Test(v interface{}) bool {
 	return patt.regexp.MatchString(str)
 }
 
-func CompileStringPatternPiece(node *PatternPiece, state *State) (*ComplexStringPattern, error) {
-	regex := bytes.NewBufferString("")
+func (patt ComplexStringPattern) Regex() string {
+	return patt.regexp.String()
+}
 
-	ERR_PREFIX := "string pattern piece compilation"
+type StringPatternElement interface {
+	Regex() string
+}
 
-	for _, element := range node.Elements {
-		regex.WriteRune('(')
+func CompileStringPatternNode(node Node, state *State) (StringPatternElement, error) {
+	switch v := node.(type) {
+	case *StringLiteral:
+		return ExactStringMatcher(v.Value), nil
+	case *PatternIdentifierLiteral:
+		pattern, err := Eval(v, state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate a pattern identifier literal: %s", err.Error())
+		}
 
-		switch v := element.Expr.(type) {
-		case *StringLiteral:
-			regex.WriteString(v.Value)
-		case *PatternIdentifierLiteral:
-			pattern, err := Eval(v, state)
+		stringPatternElem, ok := pattern.(StringPatternElement)
+		if !ok {
+			return nil, fmt.Errorf("not a string pattern element: %T", pattern)
+		}
+
+		return stringPatternElem, nil
+	case *PatternUnion:
+		regex := bytes.NewBufferString("(")
+
+		for i, case_ := range v.Cases {
+			if i > 0 {
+				regex.WriteRune('|')
+			}
+			patternElement, err := CompileStringPatternNode(case_, state)
 			if err != nil {
-				return nil, fmt.Errorf("%s: failed to evaluate an element: %s", ERR_PREFIX, err.Error())
+				return nil, fmt.Errorf("failed to compile a pattern element: %s", err.Error())
 			}
 
-			switch p := pattern.(type) {
-			case ExactStringMatcher:
-				regex.WriteString(string(p))
-			case *ComplexStringPattern:
-				regex.WriteString(p.regexp.String())
-			default:
-				return nil, fmt.Errorf("%s: invalid element: %T", ERR_PREFIX, p)
-			}
+			regex.WriteString(patternElement.Regex())
 		}
+
 		regex.WriteRune(')')
-		switch element.Ocurrence {
-		case AtLeastOneOcurrence:
-			regex.WriteRune('+')
-		case ZeroOrMoreOcurrence:
-			regex.WriteRune('*')
-		case OptionalOcurrence:
-			regex.WriteRune('?')
-		}
-	}
 
-	return &ComplexStringPattern{
-		regexp: regexp.MustCompile(regex.String()),
-		node:   node,
-	}, nil
+		return &ComplexStringPattern{
+			regexp: regexp.MustCompile(regex.String()),
+			node:   node,
+		}, nil
+	case *PatternPiece:
+		regex := bytes.NewBufferString("")
+
+		for _, element := range v.Elements {
+			regex.WriteRune('(')
+			patternElement, err := CompileStringPatternNode(element.Expr, state)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compile a pattern piece: %s", err.Error())
+			}
+
+			regex.WriteString(patternElement.Regex())
+			regex.WriteRune(')')
+
+			switch element.Ocurrence {
+			case AtLeastOneOcurrence:
+				regex.WriteRune('+')
+			case ZeroOrMoreOcurrence:
+				regex.WriteRune('*')
+			case OptionalOcurrence:
+				regex.WriteRune('?')
+			}
+		}
+
+		return &ComplexStringPattern{
+			regexp: regexp.MustCompile(regex.String()),
+			node:   node,
+		}, nil
+	default:
+		return nil, fmt.Errorf("cannot compile string pattern element: %T", v)
+	}
 }
 
 //MustEval calls Eval and panics if there is an error.
@@ -7556,19 +7624,14 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		//should we return an error if not present
 		return state.ctx.resolveNamedPattern(n.Name), nil
 	case *PatternDefinition:
-		right, err := Eval(n.Right, state)
+		right, err := CompileStringPatternNode(n.Right, state)
 		if err != nil {
 			return nil, err
 		}
 
 		pattern, ok := right.(Matcher)
 		if !ok {
-			switch v := right.(type) {
-			case string:
-				pattern = ExactStringMatcher(v)
-			default:
-				return nil, errors.New("pattern definition failed, value should implement the Matcher interface")
-			}
+			return nil, errors.New("pattern definition failed, value should implement the Matcher interface")
 		}
 
 		state.ctx.addNamedPattern(n.Left.Name, pattern)
@@ -7578,9 +7641,9 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, errors.New("evaluation of non-string pattern pieces not implemented yet")
 		}
 
-		return nil, errors.New("evaluation of pattern pieces not implemented yet")
+		return CompileStringPatternNode(n, state)
 	case *PatternUnion:
-		return nil, errors.New("evaluation of pattern unions not implemented yet")
+		return CompileStringPatternNode(n, state)
 	default:
 		return nil, fmt.Errorf("cannot evaluate %#v (%T)", node, node)
 	}
