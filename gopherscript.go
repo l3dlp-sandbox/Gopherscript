@@ -881,6 +881,12 @@ type UpperBoundRangeExpression struct {
 	UpperBound Node
 }
 
+type RuneRangeExpression struct {
+	NodeBase
+	Lower Node
+	Upper Node
+}
+
 type FunctionExpression struct {
 	NodeBase
 	Parameters   []FunctionParameter
@@ -3522,86 +3528,128 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Elements: elements,
 			}
-		case '\'': //rune
+		case '\'': //rune | rune range literal
 			start := i
-			i++
 
-			if i >= len(s) {
-				panic(ParsingError{
-					"unterminated rune literal",
-					i,
-					start,
-					KnownType,
-					(*RuneLiteral)(nil),
-				})
-			}
-
-			value := s[i]
-
-			if value == '\'' {
-				panic(ParsingError{
-					"invalid rune literal : no character",
-					i,
-					start,
-					KnownType,
-					(*RuneLiteral)(nil),
-				})
-			}
-
-			if value == '\\' {
+			parseRuneLiteral := func() Node {
+				start := i
 				i++
-				switch s[i] {
-				//same single character escapes as Golang
-				case 'a':
-					value = '\a'
-				case 'b':
-					value = '\b'
-				case 'f':
-					value = '\f'
-				case 'n':
-					value = '\n'
-				case 'r':
-					value = '\r'
-				case 't':
-					value = '\t'
-				case 'v':
-					value = '\v'
-				case '\\':
-					value = '\\'
-				case '\'':
-					value = '\''
-				default:
+
+				if i >= len(s) {
 					panic(ParsingError{
-						"invalid rune literal: invalid single character escape" + string(s[start:i]),
+						"unterminated rune literal",
 						i,
 						start,
 						KnownType,
 						(*RuneLiteral)(nil),
 					})
 				}
+
+				value := s[i]
+
+				if value == '\'' {
+					panic(ParsingError{
+						"invalid rune literal : no character",
+						i,
+						start,
+						KnownType,
+						(*RuneLiteral)(nil),
+					})
+				}
+
+				if value == '\\' {
+					i++
+					switch s[i] {
+					//same single character escapes as Golang
+					case 'a':
+						value = '\a'
+					case 'b':
+						value = '\b'
+					case 'f':
+						value = '\f'
+					case 'n':
+						value = '\n'
+					case 'r':
+						value = '\r'
+					case 't':
+						value = '\t'
+					case 'v':
+						value = '\v'
+					case '\\':
+						value = '\\'
+					case '\'':
+						value = '\''
+					default:
+						panic(ParsingError{
+							"invalid rune literal: invalid single character escape" + string(s[start:i]),
+							i,
+							start,
+							KnownType,
+							(*RuneLiteral)(nil),
+						})
+					}
+				}
+
+				i++
+
+				if i >= len(s) || s[i] != '\'' {
+					panic(ParsingError{
+						"unterminated rune literal, missing ' at the end",
+						i,
+						start,
+						KnownType,
+						(*RuneLiteral)(nil),
+					})
+				}
+
+				i++
+
+				return &RuneLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+					},
+					Value: value,
+				}
+
 			}
 
+			lower := parseRuneLiteral()
+
+			if i >= len(s) || s[i] != '.' {
+				return lower
+			}
+
+			i++
+			if i >= len(s) || s[i] != '.' {
+				panic(ParsingError{
+					"invalid rune range expression",
+					i,
+					start,
+					KnownType,
+					(*RuneRangeExpression)(nil),
+				})
+			}
 			i++
 
 			if i >= len(s) || s[i] != '\'' {
 				panic(ParsingError{
-					"unterminated rune literal, missing ' at the end",
+					"invalid rune range expression",
 					i,
 					start,
 					KnownType,
-					(*RuneLiteral)(nil),
+					(*RuneRangeExpression)(nil),
 				})
 			}
 
-			i++
+			upper := parseRuneLiteral()
 
-			return &RuneLiteral{
+			return &RuneRangeExpression{
 				NodeBase: NodeBase{
-					NodeSpan{start, i},
+					NodeSpan{start, upper.Base().Span.End},
 				},
-				Value: value,
+				Lower: lower,
+				Upper: upper,
 			}
-
 		case '"': //string
 			//strings are JSON strings
 			start := i

@@ -2913,6 +2913,45 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("rune range expression", func(t *testing.T) {
+		n := MustParseModule("'a'..'z'")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 8},
+			},
+			Statements: []Node{
+				&RuneRangeExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 8},
+					},
+					Lower: &RuneLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{0, 3},
+						},
+						Value: 'a',
+					},
+					Upper: &RuneLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{5, 8},
+						},
+						Value: 'z',
+					},
+				},
+			},
+		}, n)
+	})
+	t.Run("invalid rune range expression : <rune> '.'", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("'a'.")
+		})
+	})
+
+	t.Run("invalid rune range expression : <rune> '.' '.' ", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("'a'..")
+		})
+	})
+
 	t.Run("function expression : no parameters, no requirements, empty body ", func(t *testing.T) {
 		n := MustParseModule("fn(){}")
 		assert.EqualValues(t, &Module{
