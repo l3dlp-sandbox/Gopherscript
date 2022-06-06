@@ -244,6 +244,11 @@ type RateLiteral struct {
 	Unit     *IdentifierLiteral
 }
 
+type RuneLiteral struct {
+	NodeBase
+	Value rune
+}
+
 type StringLiteral struct {
 	NodeBase
 	Raw   string
@@ -3517,6 +3522,86 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Elements: elements,
 			}
+		case '\'': //rune
+			start := i
+			i++
+
+			if i >= len(s) {
+				panic(ParsingError{
+					"unterminated rune literal",
+					i,
+					start,
+					KnownType,
+					(*RuneLiteral)(nil),
+				})
+			}
+
+			value := s[i]
+
+			if value == '\'' {
+				panic(ParsingError{
+					"invalid rune literal : no character",
+					i,
+					start,
+					KnownType,
+					(*RuneLiteral)(nil),
+				})
+			}
+
+			if value == '\\' {
+				i++
+				switch s[i] {
+				//same single character escapes as Golang
+				case 'a':
+					value = '\a'
+				case 'b':
+					value = '\b'
+				case 'f':
+					value = '\f'
+				case 'n':
+					value = '\n'
+				case 'r':
+					value = '\r'
+				case 't':
+					value = '\t'
+				case 'v':
+					value = '\v'
+				case '\\':
+					value = '\\'
+				case '\'':
+					value = '\''
+				default:
+					panic(ParsingError{
+						"invalid rune literal: invalid single character escape" + string(s[start:i]),
+						i,
+						start,
+						KnownType,
+						(*RuneLiteral)(nil),
+					})
+				}
+			}
+
+			i++
+
+			if i >= len(s) || s[i] != '\'' {
+				panic(ParsingError{
+					"unterminated rune literal, missing ' at the end",
+					i,
+					start,
+					KnownType,
+					(*RuneLiteral)(nil),
+				})
+			}
+
+			i++
+
+			return &RuneLiteral{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+				},
+				Value: value,
+			}
+
 		case '"': //string
 			//strings are JSON strings
 			start := i
@@ -5303,7 +5388,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 func IsSimpleGopherVal(v interface{}) bool {
 	switch v.(type) {
-	case string, JSONstring, bool, int, float64,
+	case rune, string, JSONstring, bool, int, float64,
 		Identifier, Path, PathPattern, URL, HTTPHost, HTTPHostPattern, URLPattern:
 		return true
 	default:
@@ -5313,7 +5398,7 @@ func IsSimpleGopherVal(v interface{}) bool {
 
 func IsGopherVal(v interface{}) bool {
 	switch v.(type) {
-	case string, JSONstring, bool, int, float64, Object, List, Func, ExternalValue,
+	case rune, string, JSONstring, bool, int, float64, Object, List, Func, ExternalValue,
 		Identifier, Path, PathPattern, URL, HTTPHost, HTTPHostPattern, URLPattern:
 		return true
 	default:
@@ -6691,6 +6776,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		return nil, fmt.Errorf("invalid quantity type: %T", q)
 	case *StringLiteral:
+		return n.Value, nil
+	case *RuneLiteral:
 		return n.Value, nil
 	case *IdentifierLiteral:
 		return Identifier(n.Name), nil

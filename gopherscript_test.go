@@ -1068,6 +1068,44 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("rune literal : simple character", func(t *testing.T) {
+		n := MustParseModule(`'a'`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 3}},
+			Statements: []Node{
+				&RuneLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 3}},
+					Value:    'a',
+				},
+			},
+		}, n)
+	})
+
+	t.Run("rune literal : valid escaped character", func(t *testing.T) {
+		n := MustParseModule(`'\n'`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 4}},
+			Statements: []Node{
+				&RuneLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 4}},
+					Value:    '\n',
+				},
+			},
+		}, n)
+	})
+
+	t.Run("rune literal : invalid escaped character", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule(`'\z'`)
+		})
+	})
+
+	t.Run("rune literal : missing character", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule(`''`)
+		})
+	})
+
 	t.Run("identifier literal : single letter", func(t *testing.T) {
 		n := MustParseModule(`e`)
 		assert.EqualValues(t, &Module{
