@@ -6591,6 +6591,29 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 	}
 }
 
+type EntryMatcher struct {
+	Key   Matcher
+	Value Matcher
+}
+
+type ObjectPattern struct {
+	EntryMatchers map[string]Matcher
+}
+
+func (patt ObjectPattern) Test(v interface{}) bool {
+	obj, ok := v.(Object)
+	if !ok {
+		return false
+	}
+	for key, valueMatcher := range patt.EntryMatchers {
+		value, ok := obj[key]
+		if !ok || !valueMatcher.Test(value) {
+			return false
+		}
+	}
+	return true
+}
+
 //MustEval calls Eval and panics if there is an error.
 func MustEval(node Node, state *State) interface{} {
 	res, err := Eval(node, state)
@@ -7644,6 +7667,24 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return CompileStringPatternNode(n, state)
 	case *PatternUnion:
 		return CompileStringPatternNode(n, state)
+	case *ObjectPatternLiteral:
+		pattern := &ObjectPattern{
+			EntryMatchers: make(map[string]Matcher),
+		}
+		for _, p := range n.Properties {
+			name := p.Name()
+			value, err := Eval(p.Value, state)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate object pattern literal, error when evaluating value for '%s': %s", name, err.Error())
+			}
+			matcher, ok := value.(Matcher)
+			if !ok {
+				return nil, fmt.Errorf("failed to evaluate object pattern literal, matcher for key '%s' is not a matcher but a %T", name, value)
+			}
+			pattern.EntryMatchers[name] = matcher
+		}
+
+		return pattern, nil
 	default:
 		return nil, fmt.Errorf("cannot evaluate %#v (%T)", node, node)
 	}

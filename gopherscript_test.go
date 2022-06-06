@@ -5179,6 +5179,32 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, ExactStringMatcher("p"), res)
 	})
 
+	t.Run("object pattern literal : empty", func(t *testing.T) {
+		n := MustParseModule(`%{}`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, &ObjectPattern{
+			EntryMatchers: map[string]Matcher{},
+		}, res)
+	})
+
+	t.Run("object pattern literal : not empty", func(t *testing.T) {
+		n := MustParseModule(`%s = "s"; return %{name: %s}`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, &ObjectPattern{
+			EntryMatchers: map[string]Matcher{
+				"name": ExactStringMatcher("s"),
+			},
+		}, res)
+	})
+
 }
 
 func TestHttpPermission(t *testing.T) {
