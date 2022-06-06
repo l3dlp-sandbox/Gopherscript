@@ -4617,6 +4617,14 @@ func TestEval(t *testing.T) {
 		}, res.(reflect.Value).Interface())
 	})
 
+	t.Run("rune range expression", func(t *testing.T) {
+		n := MustParseModule(`'a'..'z'`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, RuneRange{'a', 'z'}, res.(reflect.Value).Interface())
+	})
+
 	t.Run("function expression : empty", func(t *testing.T) {
 		n := MustParseModule(`fn(){}`)
 		state := NewState(NewDefaultTestContext())

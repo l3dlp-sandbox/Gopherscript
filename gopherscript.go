@@ -883,8 +883,8 @@ type UpperBoundRangeExpression struct {
 
 type RuneRangeExpression struct {
 	NodeBase
-	Lower Node
-	Upper Node
+	Lower *RuneLiteral
+	Upper *RuneLiteral
 }
 
 type FunctionExpression struct {
@@ -3531,7 +3531,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		case '\'': //rune | rune range literal
 			start := i
 
-			parseRuneLiteral := func() Node {
+			parseRuneLiteral := func() *RuneLiteral {
 				start := i
 				i++
 
@@ -6335,6 +6335,13 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		if err := walk(n.UpperBound, node, ancestorChain, fn); err != nil {
 			return err
 		}
+	case *RuneRangeExpression:
+		if err := walk(n.Lower, node, ancestorChain, fn); err != nil {
+			return err
+		}
+		if err := walk(n.Upper, node, ancestorChain, fn); err != nil {
+			return err
+		}
 	case *AbsolutePathExpression:
 		for _, e := range n.Slices {
 			if err := walk(e, node, ancestorChain, fn); err != nil {
@@ -7730,6 +7737,11 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				End:          UnwrapReflectVal(v),
 			}), nil
 		}
+	case *RuneRangeExpression:
+		return ValOf(RuneRange{
+			Start: n.Lower.Value,
+			End:   n.Upper.Value,
+		}), nil
 
 	case *FunctionExpression:
 		return Func(n), nil
@@ -8137,6 +8149,12 @@ type QuantityRange struct {
 	inclusiveEnd bool
 	Start        interface{}
 	End          interface{}
+}
+
+//TODO: implement Iterable
+type RuneRange struct {
+	Start rune
+	End   rune
 }
 
 type ByteCount int
