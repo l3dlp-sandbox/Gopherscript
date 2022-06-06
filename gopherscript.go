@@ -851,11 +851,13 @@ const (
 	ExclEndRange
 	And
 	Or
+	Match
+	NotMatch
 )
 
 var BINARY_OPERATOR_STRINGS = []string{
 	"+", "+.", "-", "-.", "*", "*.", "/", "/.", "++", "<", "<.", "<=", "<=", ">", ">.", ">=", ">=.", "==", "!=",
-	"in", "not-in", "keyof", ".", "..", "..<", "and", "or",
+	"in", "not-in", "keyof", ".", "..", "..<", "and", "or", "match", "not-match",
 }
 
 func (operator BinaryOperator) String() string {
@@ -3827,6 +3829,28 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if len(s)-i >= NOTIN_LEN && string(s[i:i+NOTIN_LEN]) == "not-in" {
 					operator = NotIn
 					i += NOTIN_LEN - 1
+					break
+				}
+
+				NOTMATCH_LEN := len("not-match")
+				if len(s)-i >= NOTMATCH_LEN && string(s[i:i+NOTMATCH_LEN]) == "not-match" {
+					operator = NotMatch
+					i += NOTMATCH_LEN - 1
+					break
+				}
+
+				panic(ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				})
+			case 'm':
+				MATCH_LEN := len("match")
+				if len(s)-i >= MATCH_LEN && string(s[i:i+MATCH_LEN]) == "match" {
+					operator = Match
+					i += MATCH_LEN - 1
 					break
 				}
 				panic(ParsingError{
@@ -7538,6 +7562,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return left.(bool) && right.(bool), nil
 		case Or:
 			return left.(bool) || right.(bool), nil
+		case Match, NotMatch:
+			ok := right.(Matcher).Test(left)
+			if n.Operator == NotMatch {
+				ok = !ok
+			}
+			return ok, nil
 		default:
 			return nil, errors.New("invalid binary operator " + strconv.Itoa(int(n.Operator)))
 		}
