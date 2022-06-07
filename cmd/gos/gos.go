@@ -1831,6 +1831,9 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 			}
 			body = strings.NewReader(argVal)
 		case gopherscript.List:
+			if body != nil {
+				return nil, errors.New("body provided at least twice")
+			}
 			jsonString := toJSON(ctx, argVal)
 			body = strings.NewReader(jsonString)
 		case io.Reader:
