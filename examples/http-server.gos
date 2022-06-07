@@ -3,7 +3,7 @@ require {
         globals: ["http", "log", "tostr"]
     }
     read: {
-        globals: "handle"
+        globals: ["handle", "http"]
         : https://localhost:8080/
     }
     provide: https://localhost:8080
@@ -11,6 +11,8 @@ require {
 
 
 fn handle(rw, r){
+    log "access to http from handler:" ($$http != nil)
+
     match $r.Path {
         / {
             $rw.WriteJSON({ 
@@ -20,6 +22,8 @@ fn handle(rw, r){
     }
 }
 
-server = http.serve(https://localhost:8080 $$handle)!
+shared_globals = .{http}
+
+server = http.serve(https://localhost:8080 $$handle $shared_globals)!
 body = tostr(http.getbody(https://localhost:8080/)!)
 log $body

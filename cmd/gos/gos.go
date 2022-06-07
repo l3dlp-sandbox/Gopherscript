@@ -27,7 +27,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -895,6 +894,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			"serve": gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (*httpServer, error) {
 				var addr string
 				var handler http.Handler
+				var sharedGlobals gopherscript.KeyList
 
 				for _, arg := range args {
 					switch v := arg.(type) {
@@ -916,7 +916,12 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 						handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 							newState := NewState(ctx)
-							newState.GlobalScope()["http"] = state.GlobalScope()["http"]
+							newStateGlobals := newState.GlobalScope()
+							stateGlobals := state.GlobalScope()
+
+							for _, name := range sharedGlobals {
+								newStateGlobals[name] = stateGlobals[name]
+							}
 
 							req := httpRequest{
 								Method:  r.Method,
@@ -942,9 +947,13 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 								termenv.CursorNextLine(1)
 							}
 						})
-
-					case reflect.Value:
-
+					case gopherscript.KeyList:
+						if sharedGlobals != nil {
+							return nil, errors.New("list of shared globals already provided")
+						}
+						sharedGlobals = v
+					default:
+						return nil, fmt.Errorf("http.serve: invalid argument of type %T", v)
 					}
 				}
 
