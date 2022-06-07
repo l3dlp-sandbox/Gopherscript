@@ -1,0 +1,14 @@
+require {
+    use: {
+        globals: "log"
+    }
+}
+
+%email-username = string (|'a'..'z' | 'A'..'Z' | '0'..'9' | '.' | '-')+ ;
+%domain-w = string (| 'a'..'z' | 'A'..'Z' | '0'..'9' | '-');
+%domain = string %domain-w+ (string '.' %domain-w+)+ ;
+
+%email-address = string %email-username '@' %domain;
+
+log ("a@mail.com" match %email-address)
+log ("a@" match %email-address)
