@@ -2591,7 +2591,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
-				if i > len(s) {
+				if i >= len(s) {
 					panic(ParsingError{
 						fmt.Sprintf("unterminated parenthesized pattern"),
 						i,
@@ -2659,7 +2659,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			switch {
 			case isAlpha(s[i]) || s[i] == '(':
 				return parsePatternPiece()
-			case s[i] == '"':
+			case s[i] == '"' || s[i] == '\'':
 				return parseExpression()
 			case s[i] == '|':
 				var cases []Node
@@ -6690,6 +6690,16 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 	switch v := node.(type) {
 	case *StringLiteral:
 		return ExactStringMatcher(v.Value), nil
+	case *RuneLiteral:
+		return ExactStringMatcher(v.Value), nil
+	case *RuneRangeExpression:
+		lower := v.Lower.Value
+		upper := v.Upper.Value
+
+		return &ComplexStringPattern{
+			regexp: regexp.MustCompile(fmt.Sprintf("[%c-%c]", lower, upper)),
+			node:   node,
+		}, nil
 	case *PatternIdentifierLiteral:
 		pattern, err := Eval(v, state)
 		if err != nil {

@@ -3686,6 +3686,39 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a rune literal", func(t *testing.T) {
+		n := MustParseModule("%l = string 'a';")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 16}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 16},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 15}},
+						Kind:     StringPattern,
+						Elements: []*PatternPieceElement{
+							{
+								NodeBase: NodeBase{
+									NodeSpan{12, 15},
+								},
+								Expr: &RuneLiteral{
+									NodeBase: NodeBase{NodeSpan{12, 15}},
+									Value:    'a',
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal", func(t *testing.T) {
 		n := MustParseModule("%l = string (\"a\");")
 		assert.EqualValues(t, &Module{
@@ -5707,6 +5740,27 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, "(s)", patt.Regex())
+	})
+
+	t.Run("single element : rune range expression", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternNode(&PatternPiece{
+			Kind: StringPattern,
+			Elements: []*PatternPieceElement{
+				{
+					Ocurrence: ExactlyOneOcurrence,
+					Expr: &RuneRangeExpression{
+						Lower: &RuneLiteral{Value: 'a'},
+						Upper: &RuneLiteral{Value: 'z'},
+					},
+				},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "([a-z])", patt.Regex())
 	})
 
 	t.Run("single element : string literal (ocurrence modifier i '*')", func(t *testing.T) {
