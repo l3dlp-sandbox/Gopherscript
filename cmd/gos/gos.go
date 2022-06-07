@@ -1826,21 +1826,35 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 			}
 			contentType = argVal
 		case string:
+			if body != nil {
+				return nil, errors.New("body provided at least twice")
+			}
 			body = strings.NewReader(argVal)
+		case gopherscript.List:
+			jsonString := toJSON(ctx, argVal)
+			body = strings.NewReader(jsonString)
 		case io.Reader:
 			if body != nil {
 				return nil, errors.New("body provided at least twice")
 			}
 			body = argVal
 		case gopherscript.Object:
-			if opts != nil {
-				return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
+
+			if body == nil {
+				jsonString := toJSON(ctx, argVal)
+				body = strings.NewReader(jsonString)
+			} else {
+
+				if opts != DEFAULT_HTTP_REQUEST_OPTIONS {
+					return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
+				}
+				var err error
+				opts, err = checkHttpOptions(argVal)
+				if err != nil {
+					return nil, err
+				}
 			}
-			var err error
-			opts, err = checkHttpOptions(argVal)
-			if err != nil {
-				return nil, err
-			}
+
 		default:
 			return nil, fmt.Errorf("only an URL argument is expected, not a(n) %T ", arg)
 		}
