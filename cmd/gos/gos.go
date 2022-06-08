@@ -1401,6 +1401,9 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				return nil, fmt.Errorf("resources of type %T not supported yet", res)
 			}
 		},
+		"open-store": func(ctx *gopherscript.Context, fpath gopherscript.Path) (*SmallKVStore, error) {
+			return OpenOrCreateStore(ctx, fpath)
+		},
 	})
 
 	return state
@@ -2344,7 +2347,7 @@ func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*
 		return nil, errors.New("open store: failed to parse JSON: " + err.Error())
 	}
 
-	timer := time.NewTimer(KV_STORE_PERSISTENCE_INTERVAL)
+	timer := time.NewTicker(KV_STORE_PERSISTENCE_INTERVAL)
 
 	go func() {
 		for range timer.C {
@@ -2358,7 +2361,7 @@ func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*
 	return store, nil
 }
 
-func (store *SmallKVStore) Set(key string, value interface{}) {
+func (store *SmallKVStore) Set(ctx *gopherscript.Context, key string, value interface{}) {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
@@ -2366,7 +2369,7 @@ func (store *SmallKVStore) Set(key string, value interface{}) {
 	store.hasChanges = true
 }
 
-func (store *SmallKVStore) Get(key string) (interface{}, bool) {
+func (store *SmallKVStore) Get(ctx *gopherscript.Context, key string) (interface{}, bool) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -2374,7 +2377,7 @@ func (store *SmallKVStore) Get(key string) (interface{}, bool) {
 	return v, ok
 }
 
-func (store *SmallKVStore) Has(key string) bool {
+func (store *SmallKVStore) Has(ctx *gopherscript.Context, key string) bool {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 

@@ -1,0 +1,26 @@
+require {
+    use: {
+        globals: "*"
+    }
+    create: {
+        globals: "kv"
+        : /home/user/...
+    }
+    read: {
+        : /home/user/...
+    }
+    limits: {
+        "fs/write": 100MB/s
+        "fs/read": 100MB/s
+    }
+}
+
+
+$$kv = open-store$ ./db.json
+
+kv.Set("a", 1.0)
+kv.Set("b", "hello")
+
+log kv.Get("b")
+
+sleep 1s

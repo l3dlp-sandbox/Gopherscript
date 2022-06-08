@@ -193,7 +193,7 @@ func TestOpenOrCreateStore(t *testing.T) {
 		store, err := OpenOrCreateStore(ctx, fpath)
 		assert.NoError(t, err)
 
-		store.Set("a", 1.0)
+		store.Set(ctx, "a", 1.0)
 		assert.NoError(t, store.persist())
 
 		store, err = OpenOrCreateStore(ctx, fpath)
@@ -201,7 +201,7 @@ func TestOpenOrCreateStore(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, store)
 
-		v, _ := store.Get("a")
+		v, _ := store.Get(ctx, "a")
 
 		assert.Equal(t, 1.0, v)
 	})
@@ -214,7 +214,7 @@ func TestStorePersistence(t *testing.T) {
 
 	store, err := OpenOrCreateStore(ctx, fpath)
 	assert.NoError(t, err)
-	store.Set("a", 1.0)
+	store.Set(ctx, "a", 1.0)
 
 	statBeforePersistence, _ := os.Stat(string(fpath))
 	time.Sleep(2 * KV_STORE_PERSISTENCE_INTERVAL)
