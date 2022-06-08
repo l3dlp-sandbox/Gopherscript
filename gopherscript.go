@@ -6621,6 +6621,17 @@ func Check(node Node) error {
 				variables[name] = 0
 			}
 
+		case *ForStatement:
+			//TODO: !! the variables should not be considered defined after the statement !!
+
+			variables, ok := localVars[scopeNode]
+			if !ok {
+				variables = make(map[string]int)
+				localVars[scopeNode] = variables
+			}
+			variables[node.KeyIndexIdent.Name] = 0
+			variables[node.ValueElemIdent.Name] = 0
+
 		case *FunctionDeclaration:
 
 			switch parent.(type) {
