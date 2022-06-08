@@ -163,18 +163,22 @@ func TestReadEntireFile(t *testing.T) {
 
 }
 
+func newStoreTestContext(fpath G.Path) *G.Context {
+	return G.NewContext([]G.Permission{
+		G.FilesystemPermission{G.ReadPerm, fpath},
+		G.FilesystemPermission{G.CreatePerm, fpath},
+	}, nil, []G.Limitation{
+		{Name: FS_READ_LIMIT_NAME, ByteRate: FS_READ_MIN_CHUNK_SIZE},
+		{Name: FS_WRITE_LIMIT_NAME, ByteRate: FS_WRITE_MIN_CHUNK_SIZE},
+	})
+}
+
 func TestOpenOrCreateStore(t *testing.T) {
 
 	t.Run("open non existing store", func(t *testing.T) {
 		fpath := G.Path(path.Join(t.TempDir(), "db.json"))
 
-		ctx := G.NewContext([]G.Permission{
-			G.FilesystemPermission{G.ReadPerm, fpath},
-			G.FilesystemPermission{G.CreatePerm, fpath},
-		}, nil, []G.Limitation{
-			{Name: FS_READ_LIMIT_NAME, ByteRate: FS_READ_MIN_CHUNK_SIZE},
-			{Name: FS_WRITE_LIMIT_NAME, ByteRate: FS_WRITE_MIN_CHUNK_SIZE},
-		})
+		ctx := newStoreTestContext(fpath)
 
 		store, err := OpenOrCreateStore(ctx, fpath)
 
@@ -184,14 +188,7 @@ func TestOpenOrCreateStore(t *testing.T) {
 
 	t.Run("create store, write to it and re-open it", func(t *testing.T) {
 		fpath := G.Path(path.Join(t.TempDir(), "db.json"))
-
-		ctx := G.NewContext([]G.Permission{
-			G.FilesystemPermission{G.ReadPerm, fpath},
-			G.FilesystemPermission{G.CreatePerm, fpath},
-		}, nil, []G.Limitation{
-			{Name: FS_READ_LIMIT_NAME, ByteRate: FS_READ_MIN_CHUNK_SIZE},
-			{Name: FS_WRITE_LIMIT_NAME, ByteRate: FS_WRITE_MIN_CHUNK_SIZE},
-		})
+		ctx := newStoreTestContext(fpath)
 
 		store, err := OpenOrCreateStore(ctx, fpath)
 		assert.NoError(t, err)
@@ -209,4 +206,20 @@ func TestOpenOrCreateStore(t *testing.T) {
 		assert.Equal(t, 1.0, v)
 	})
 
+}
+
+func TestStorePersistence(t *testing.T) {
+	fpath := G.Path(path.Join(t.TempDir(), "db.json"))
+	ctx := newStoreTestContext(fpath)
+
+	store, err := OpenOrCreateStore(ctx, fpath)
+	assert.NoError(t, err)
+	store.Set("a", 1.0)
+
+	statBeforePersistence, _ := os.Stat(string(fpath))
+	time.Sleep(2 * KV_STORE_PERSISTENCE_INTERVAL)
+
+	statAfterPersistence, _ := os.Stat(string(fpath))
+
+	assert.Greater(t, statAfterPersistence.Size(), statBeforePersistence.Size())
 }

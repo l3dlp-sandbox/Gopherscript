@@ -53,6 +53,7 @@ const DEFAULT_FILE_FMODE = fs.FileMode(0o400)
 const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
 const DEFAULT_DIR_FMODE = fs.FileMode(0o500)
 const DEFAULT_HTTP_CLIENT_TIMEOUT = 10 * time.Second
+const KV_STORE_PERSISTENCE_INTERVAL = 100 * time.Millisecond
 
 const PATH_ARG_PROVIDED_TWICE = "path argument provided at least twice"
 const CONTENT_ARG_PROVIDED_TWICE = "content argument provided at least twice"
@@ -2306,6 +2307,7 @@ type SmallKVStore struct {
 	hasChanges bool
 	ctx        *gopherscript.Context
 	lock       sync.RWMutex
+	closed     bool
 }
 
 func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*SmallKVStore, error) {
@@ -2314,6 +2316,7 @@ func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*
 		filepath:   filepath,
 		hasChanges: false,
 		ctx:        ctx,
+		closed:     false,
 	}
 
 	if filepath.IsDirPath() {
@@ -2340,6 +2343,17 @@ func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*
 	if err := json.Unmarshal(b, &store.inMemory); err != nil {
 		return nil, errors.New("open store: failed to parse JSON: " + err.Error())
 	}
+
+	timer := time.NewTimer(KV_STORE_PERSISTENCE_INTERVAL)
+
+	go func() {
+		for range timer.C {
+			if store.closed {
+				break
+			}
+			store.persist()
+		}
+	}()
 
 	return store, nil
 }
@@ -2385,4 +2399,9 @@ func (store *SmallKVStore) persist() error {
 	store.hasChanges = false
 
 	return err
+}
+
+func (store *SmallKVStore) Close() {
+	store.persist()
+	store.closed = true
 }
