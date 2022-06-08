@@ -6683,7 +6683,35 @@ func (patt ComplexStringPattern) Regex() string {
 }
 
 type StringPatternElement interface {
+	Matcher
 	Regex() string
+}
+
+func CompilePatternNode(node Node, state *State) (Matcher, error) {
+	switch n := node.(type) {
+	case *ObjectPatternLiteral:
+		pattern, err := Eval(n, state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate an object pattern literal: %s", err.Error())
+		}
+		objPattern, ok := pattern.(*ObjectPattern)
+		if !ok {
+			return nil, fmt.Errorf("failed to evaluate an object pattern literal: %s", err.Error())
+		}
+
+		return objPattern, nil
+	case *PatternPiece:
+		if n.Kind == StringPattern {
+			return CompileStringPatternNode(node, state)
+		}
+		return nil, fmt.Errorf("failed to compile a pattern node of type %T", node)
+	case *PatternUnion:
+		return CompileStringPatternNode(n, state)
+	case *StringLiteral, *RuneLiteral, *RuneRangeExpression, *PatternIdentifierLiteral:
+		return CompileStringPatternNode(n, state)
+	default:
+		return nil, fmt.Errorf("failed to compile a pattern node of type %T", node)
+	}
 }
 
 func CompileStringPatternNode(node Node, state *State) (StringPatternElement, error) {
@@ -7834,7 +7862,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		//should we return an error if not present
 		return state.ctx.resolveNamedPattern(n.Name), nil
 	case *PatternDefinition:
-		right, err := CompileStringPatternNode(n.Right, state)
+		right, err := CompilePatternNode(n.Right, state)
 		if err != nil {
 			return nil, err
 		}

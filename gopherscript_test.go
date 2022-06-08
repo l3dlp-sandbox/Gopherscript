@@ -3652,6 +3652,38 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : RHS is an object pattern literal ", func(t *testing.T) {
+		n := MustParseModule("%i = %{ : 1 };")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 14}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 14},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "i",
+					},
+					Right: &ObjectPatternLiteral{
+						NodeBase: NodeBase{NodeSpan{5, 13}},
+						Properties: []ObjectProperty{
+							{
+								NodeBase: NodeBase{NodeSpan{8, 11}},
+								Key:      nil,
+								Value: &IntLiteral{
+									NodeBase: NodeBase{NodeSpan{10, 11}},
+									Raw:      "1",
+									Value:    1,
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a string literal", func(t *testing.T) {
 		n := MustParseModule("%l = string \"a\";")
 		assert.EqualValues(t, &Module{
