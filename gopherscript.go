@@ -876,6 +876,12 @@ type BinaryExpression struct {
 	Right    Node
 }
 
+type IntegerRangeLiteral struct {
+	NodeBase
+	LowerBound *IntLiteral
+	UpperBound *IntLiteral
+}
+
 type UpperBoundRangeExpression struct {
 	NodeBase
 	UpperBound Node
@@ -3225,8 +3231,71 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			return identLike
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': //integers and floating point numbers
 			start := i
-			for i < len(s) && (isDigit(s[i]) || s[i] == '.' || s[i] == '-') {
+
+			parseIntegerLiteral := func(raw string, start, end int) (*IntLiteral, int64) {
+				integer, err := strconv.ParseInt(raw, 10, 32)
+				if err != nil {
+					panic(ParsingError{
+						"invalid integer literal '" + raw + "'",
+						end,
+						start,
+						KnownType,
+						(*IntLiteral)(nil),
+					})
+				}
+
+				return &IntLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{start, end},
+					},
+					Raw:   raw,
+					Value: int(integer),
+				}, integer
+			}
+
+			for i < len(s) && isDigit(s[i]) {
 				i++
+			}
+
+			if i < len(s) && s[i] == '.' {
+				i++
+
+				if i < len(s) && s[i] == '.' { //int range literal
+					lower := string(s[start : i-1])
+					lowerIntLiteral, _ := parseIntegerLiteral(lower, start, i-1)
+
+					i++
+					if i >= len(s) || !isDigit(s[i]) {
+						panic(ParsingError{
+							"unterminated integer range literal '" + string(s[start:i]) + "'",
+							i,
+							start,
+							KnownType,
+							(*IntLiteral)(nil),
+						})
+					}
+
+					upperStart := i
+
+					for i < len(s) && isDigit(s[i]) {
+						i++
+					}
+
+					upper := string(s[upperStart:i])
+
+					upperIntLiteral, _ := parseIntegerLiteral(upper, upperStart, i)
+					return &IntegerRangeLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{lowerIntLiteral.Base().Span.Start, upperIntLiteral.Base().Span.End},
+						},
+						LowerBound: lowerIntLiteral,
+						UpperBound: upperIntLiteral,
+					}
+				}
+
+				for i < len(s) && (isDigit(s[i]) || s[i] == '-') {
+					i++
+				}
 			}
 
 			raw := string(s[start:i])
@@ -3234,7 +3303,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var literal Node
 			var fValue float64
 
-			if strings.Contains(raw, ".") {
+			if strings.ContainsRune(raw, '.') {
+
 				float, err := strconv.ParseFloat(raw, 64)
 				if err != nil {
 					panic(ParsingError{
@@ -3255,26 +3325,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				fValue = float
 			} else {
-
-				integer, err := strconv.ParseInt(raw, 10, 32)
-				if err != nil {
-					panic(ParsingError{
-						"invalid integer literal '" + raw + "'",
-						i,
-						start,
-						KnownType,
-						(*IntLiteral)(nil),
-					})
-				}
-
-				literal = &IntLiteral{
-					NodeBase: NodeBase{
-						NodeSpan{start, i},
-					},
-					Raw:   raw,
-					Value: int(integer),
-				}
-
+				var integer int64
+				literal, integer = parseIntegerLiteral(raw, start, i)
 				fValue = float64(integer)
 			}
 
@@ -6335,6 +6387,13 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		if err := walk(n.UpperBound, node, ancestorChain, fn); err != nil {
 			return err
 		}
+	case *IntegerRangeLiteral:
+		if err := walk(n.LowerBound, node, ancestorChain, fn); err != nil {
+			return err
+		}
+		if err := walk(n.UpperBound, node, ancestorChain, fn); err != nil {
+			return err
+		}
 	case *RuneRangeExpression:
 		if err := walk(n.Lower, node, ancestorChain, fn); err != nil {
 			return err
@@ -7775,6 +7834,14 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				End:          UnwrapReflectVal(v),
 			}), nil
 		}
+	case *IntegerRangeLiteral:
+		return &IntRange{
+			unknownStart: false,
+			inclusiveEnd: true,
+			Start:        n.LowerBound.Value,
+			End:          n.UpperBound.Value,
+			Step:         1,
+		}, nil
 	case *RuneRangeExpression:
 		return ValOf(RuneRange{
 			Start: n.Lower.Value,

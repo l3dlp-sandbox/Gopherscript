@@ -2913,6 +2913,36 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("integer range literal", func(t *testing.T) {
+		n := MustParseModule("1..2")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 4},
+			},
+			Statements: []Node{
+				&IntegerRangeLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 4},
+					},
+					LowerBound: &IntLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{0, 1},
+						},
+						Raw:   "1",
+						Value: 1,
+					},
+					UpperBound: &IntLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{3, 4},
+						},
+						Raw:   "2",
+						Value: 2,
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("rune range expression", func(t *testing.T) {
 		n := MustParseModule("'a'..'z'")
 		assert.EqualValues(t, &Module{
