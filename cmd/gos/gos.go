@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	gopherscript "github.com/debloat-dev/Gopherscript"
@@ -49,6 +50,7 @@ const ESCAPE_CODE = 27
 const PROMPT_LEN = 2
 
 const DEFAULT_FILE_FMODE = fs.FileMode(0o400)
+const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
 const DEFAULT_DIR_FMODE = fs.FileMode(0o500)
 const DEFAULT_HTTP_CLIENT_TIMEOUT = 10 * time.Second
 
@@ -1576,7 +1578,7 @@ func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 		return errors.New("missing path argument")
 	}
 
-	return __createFile(ctx, fpath, []byte(b))
+	return __createFile(ctx, fpath, []byte(b), DEFAULT_FILE_FMODE)
 }
 
 func fsAppendToFile(ctx *gopherscript.Context, args ...interface{}) error {
@@ -2217,7 +2219,7 @@ func max(a, b int) int {
 	return b
 }
 
-func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) error {
+func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte, fmode fs.FileMode) error {
 
 	perm := gopherscript.FilesystemPermission{Kind_: gopherscript.CreatePerm, Entity: fpath.ToAbs()}
 	if err := ctx.CheckHasPermission(perm); err != nil {
@@ -2232,7 +2234,7 @@ func __createFile(ctx *gopherscript.Context, fpath gopherscript.Path, b []byte) 
 		return err
 	}
 	chunkSize := min(int(rate), min(len(b), max(FS_WRITE_MIN_CHUNK_SIZE, int(rate/10))))
-	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, DEFAULT_FILE_FMODE)
+	f, err := os.OpenFile(string(fpath), os.O_CREATE|os.O_WRONLY, fmode)
 	if err != nil {
 		return err
 	}
@@ -2273,6 +2275,7 @@ func __readEntireFile(ctx *gopherscript.Context, fpath gopherscript.Path) ([]byt
 	stat, _ := f.Stat()
 
 	chunk := make([]byte, min(int(rate), min(int(stat.Size()), max(FS_READ_MIN_CHUNK_SIZE, int(rate/10)))))
+
 	var b []byte
 	var totalN int64 = 0
 	n := len(chunk)
@@ -2280,16 +2283,106 @@ func __readEntireFile(ctx *gopherscript.Context, fpath gopherscript.Path) ([]byt
 	for {
 		ctx.Take(FS_READ_LIMIT_NAME, int64(n))
 		n, err = f.Read(chunk)
+		if err != nil {
+			return nil, err
+		}
+
+		b = append(b, chunk[0:n]...)
 		totalN += int64(n)
 
 		if totalN >= stat.Size() || err == io.EOF {
 			break
 		}
-		if err != nil {
-			return nil, err
-		}
-		b = append(b, chunk[0:n]...)
 	}
 
 	return b, nil
+}
+
+//----------
+
+type SmallKVStore struct {
+	inMemory   map[string]interface{}
+	filepath   gopherscript.Path
+	hasChanges bool
+	ctx        *gopherscript.Context
+	lock       sync.RWMutex
+}
+
+func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*SmallKVStore, error) {
+	store := &SmallKVStore{
+		inMemory:   map[string]interface{}{},
+		filepath:   filepath,
+		hasChanges: false,
+		ctx:        ctx,
+	}
+
+	if filepath.IsDirPath() {
+		return nil, errors.New("open store: provide path has the shape of a directory path")
+	}
+
+	filepath = filepath.ToAbs()
+
+	_, err := os.Stat(string(filepath))
+
+	var b []byte
+	if os.IsNotExist(err) {
+		b = []byte("{}")
+		if err := __createFile(ctx, filepath, b, DEFAULT_RW_FILE_FMODE); err != nil {
+			return nil, err
+		}
+	} else {
+		b, err = __readEntireFile(ctx, filepath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := json.Unmarshal(b, &store.inMemory); err != nil {
+		return nil, errors.New("open store: failed to parse JSON: " + err.Error())
+	}
+
+	return store, nil
+}
+
+func (store *SmallKVStore) Set(key string, value interface{}) {
+	store.lock.Lock()
+	defer store.lock.Unlock()
+
+	store.inMemory[key] = value
+	store.hasChanges = true
+}
+
+func (store *SmallKVStore) Get(key string) (interface{}, bool) {
+	store.lock.RLock()
+	defer store.lock.RUnlock()
+
+	v, ok := store.inMemory[key]
+	return v, ok
+}
+
+func (store *SmallKVStore) Has(key string) bool {
+	store.lock.RLock()
+	defer store.lock.RUnlock()
+
+	_, ok := store.inMemory[key]
+	return ok
+}
+
+func (store *SmallKVStore) persist() error {
+	store.lock.Lock()
+	defer store.lock.Unlock()
+
+	if !store.hasChanges {
+		return nil
+	}
+
+	b, err := json.Marshal(store.inMemory)
+	if err != nil {
+		return err
+	}
+
+	err = __createFile(store.ctx, store.filepath, b, DEFAULT_RW_FILE_FMODE)
+	store.hasChanges = false
+
+	return err
 }

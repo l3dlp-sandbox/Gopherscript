@@ -75,7 +75,7 @@ func TestCreateFile(t *testing.T) {
 			ctx.Take(testCase.limitation.Name, int64(testCase.limitation.ByteRate))
 
 			start := time.Now()
-			assert.NoError(t, __createFile(ctx, fpath, b))
+			assert.NoError(t, __createFile(ctx, fpath, b, DEFAULT_FILE_FMODE))
 			assert.WithinDuration(t, start.Add(testCase.expectedDuration), time.Now(), 500*time.Millisecond)
 		})
 	}
@@ -160,5 +160,53 @@ func TestReadEntireFile(t *testing.T) {
 			assert.WithinDuration(t, start.Add(testCase.expectedDuration), time.Now(), 500*time.Millisecond)
 		})
 	}
+
+}
+
+func TestOpenOrCreateStore(t *testing.T) {
+
+	t.Run("open non existing store", func(t *testing.T) {
+		fpath := G.Path(path.Join(t.TempDir(), "db.json"))
+
+		ctx := G.NewContext([]G.Permission{
+			G.FilesystemPermission{G.ReadPerm, fpath},
+			G.FilesystemPermission{G.CreatePerm, fpath},
+		}, nil, []G.Limitation{
+			{Name: FS_READ_LIMIT_NAME, ByteRate: FS_READ_MIN_CHUNK_SIZE},
+			{Name: FS_WRITE_LIMIT_NAME, ByteRate: FS_WRITE_MIN_CHUNK_SIZE},
+		})
+
+		store, err := OpenOrCreateStore(ctx, fpath)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, store)
+	})
+
+	t.Run("create store, write to it and re-open it", func(t *testing.T) {
+		fpath := G.Path(path.Join(t.TempDir(), "db.json"))
+
+		ctx := G.NewContext([]G.Permission{
+			G.FilesystemPermission{G.ReadPerm, fpath},
+			G.FilesystemPermission{G.CreatePerm, fpath},
+		}, nil, []G.Limitation{
+			{Name: FS_READ_LIMIT_NAME, ByteRate: FS_READ_MIN_CHUNK_SIZE},
+			{Name: FS_WRITE_LIMIT_NAME, ByteRate: FS_WRITE_MIN_CHUNK_SIZE},
+		})
+
+		store, err := OpenOrCreateStore(ctx, fpath)
+		assert.NoError(t, err)
+
+		store.Set("a", 1.0)
+		assert.NoError(t, store.persist())
+
+		store, err = OpenOrCreateStore(ctx, fpath)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, store)
+
+		v, _ := store.Get("a")
+
+		assert.Equal(t, 1.0, v)
+	})
 
 }
