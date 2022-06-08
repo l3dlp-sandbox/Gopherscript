@@ -3850,6 +3850,42 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal with '=2' as ocurrence", func(t *testing.T) {
+		n := MustParseModule("%l = string (\"a\")=2;")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 20}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 20},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 19}},
+						Kind:     StringPattern,
+						Elements: []*PatternPieceElement{
+							{
+								Ocurrence:           ExactOcurrence,
+								ExactOcurrenceCount: 2,
+								NodeBase: NodeBase{
+									NodeSpan{12, 19},
+								},
+								Expr: &StringLiteral{
+									NodeBase: NodeBase{NodeSpan{13, 16}},
+									Raw:      "\"a\"",
+									Value:    "a",
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pattern definition : RHS is a two-case union with one element each", func(t *testing.T) {
 		n := MustParseModule(`%i = | "a" | "b";`)
 		assert.EqualValues(t, &Module{
@@ -5842,6 +5878,26 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, "(s)*", patt.Regex())
+	})
+
+	t.Run("single element : string literal (ocurrence modifier i '=' 2)", func(t *testing.T) {
+		ctx := NewContext(nil, nil, nil)
+		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		state := NewState(ctx)
+
+		patt, err := CompileStringPatternNode(&PatternPiece{
+			Kind: StringPattern,
+			Elements: []*PatternPieceElement{
+				{
+					Ocurrence:           ExactOcurrence,
+					ExactOcurrenceCount: 2,
+					Expr:                &StringLiteral{Value: "s"},
+				},
+			},
+		}, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "(s){2}", patt.Regex())
 	})
 
 	t.Run("two elements : one string literal + a pattern identifier (exact string matcher)", func(t *testing.T) {

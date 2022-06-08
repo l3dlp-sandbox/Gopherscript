@@ -991,12 +991,14 @@ const (
 	AtLeastOneOcurrence
 	ZeroOrMoreOcurrence
 	OptionalOcurrence
+	ExactOcurrence
 )
 
 type PatternPieceElement struct {
 	NodeBase
-	Ocurrence OcurrenceCountModifier
-	Expr      Node
+	Ocurrence           OcurrenceCountModifier
+	ExactOcurrenceCount int
+	Expr                Node
 }
 
 type PatternUnion struct {
@@ -2625,27 +2627,63 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			ocurrenceModifier := ExactlyOneOcurrence
+			count := 0
 			elementEnd := i
 
-			if i < len(s) && (s[i] == '+' || s[i] == '*' || s[i] == '?') {
+			if i < len(s) && (s[i] == '+' || s[i] == '*' || s[i] == '?' || s[i] == '=') {
 				switch s[i] {
 				case '+':
 					ocurrenceModifier = AtLeastOneOcurrence
+					elementEnd++
+					i++
 				case '*':
 					ocurrenceModifier = ZeroOrMoreOcurrence
+					elementEnd++
+					i++
 				case '?':
 					ocurrenceModifier = OptionalOcurrence
+					elementEnd++
+					i++
+				case '=':
+					i++
+					numberStart := i
+					if i >= len(s) || !isDigit(s[i]) {
+						panic(ParsingError{
+							fmt.Sprintf("unterminated pattern: unterminated exact ocurrence count: missing count after '='"),
+							i,
+							start,
+							KnownType,
+							(*PatternPieceElement)(nil),
+						})
+					}
+
+					for i < len(s) && isDigit(s[i]) {
+						i++
+					}
+
+					_count, err := strconv.ParseUint(string(s[numberStart:i]), 10, 32)
+					if err != nil {
+						panic(ParsingError{
+							fmt.Sprintf("invalid pattern: invalid exact ocurrence count"),
+							i,
+							start,
+							KnownType,
+							(*PatternPieceElement)(nil),
+						})
+					}
+					count = int(_count)
+					ocurrenceModifier = ExactOcurrence
+					elementEnd = i
 				}
-				elementEnd++
-				i++
 			}
 
 			elements = append(elements, &PatternPieceElement{
 				NodeBase: NodeBase{
 					NodeSpan{elementStart, elementEnd},
 				},
-				Ocurrence: ocurrenceModifier,
-				Expr:      element,
+				Ocurrence:           ocurrenceModifier,
+				ExactOcurrenceCount: int(count),
+				Expr:                element,
 			})
 		}
 
@@ -6851,6 +6889,10 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 				regex.WriteRune('*')
 			case OptionalOcurrence:
 				regex.WriteRune('?')
+			case ExactOcurrence:
+				regex.WriteRune('{')
+				regex.WriteString(strconv.Itoa(element.ExactOcurrenceCount))
+				regex.WriteRune('}')
 			}
 		}
 
