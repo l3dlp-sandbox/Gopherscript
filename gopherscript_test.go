@@ -3886,6 +3886,41 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a pattern identifier literal with '=2' as ocurrence", func(t *testing.T) {
+		n := MustParseModule("%l = string %s=2;")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 17}},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 17},
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "l",
+					},
+					Right: &PatternPiece{
+						NodeBase: NodeBase{NodeSpan{5, 16}},
+						Kind:     StringPattern,
+						Elements: []*PatternPieceElement{
+							{
+								Ocurrence:           ExactOcurrence,
+								ExactOcurrenceCount: 2,
+								NodeBase: NodeBase{
+									NodeSpan{12, 16},
+								},
+								Expr: &PatternIdentifierLiteral{
+									NodeBase: NodeBase{NodeSpan{12, 14}},
+									Name:     "s",
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pattern definition : RHS is a two-case union with one element each", func(t *testing.T) {
 		n := MustParseModule(`%i = | "a" | "b";`)
 		assert.EqualValues(t, &Module{

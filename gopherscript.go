@@ -2768,7 +2768,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
-				if i >= len(s) || s[i] != '=' {
+				if i >= len(s) || s[i] != '=' || inPattern {
 					return left
 				}
 
@@ -2780,6 +2780,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) || s[i] != ';' {
+					log.Println("x=", string(s[i]))
 					panic(ParsingError{
 						"unterminated pattern definition: must end with ';'",
 						i,
