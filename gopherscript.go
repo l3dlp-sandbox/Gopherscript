@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"path"
@@ -27,6 +28,7 @@ import (
 const TRULY_MAX_STACK_HEIGHT = 10
 const DEFAULT_MAX_STACK_HEIGHT = 5
 const MAX_OBJECT_KEY_BYTE_LEN = 64
+const MAX_PATTERN_OCCURRENCE_COUNT = 1 << 24
 const HTTP_URL_PATTERN = "^https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b([-a-zA-Z0-9@:%_+.~#?&//=]{0,100})$"
 const LOOSE_URL_EXPR_PATTERN = "^(@[a-zA-Z0-9_-]+|https?:\\/\\/(localhost|(www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,32}\\.[a-zA-Z0-9]{1,6})\\b)([-a-zA-Z0-9@:%_+.~#?&//=$]{0,100})$"
 const LOOSE_HTTP_HOST_PATTERN_PATTERN = "^https?:\\/\\/(\\*|(www\\.)?[-a-zA-Z0-9.*]{1,32}\\.[a-zA-Z0-9*]{1,6})(:[0-9]{1,5})?$"
@@ -1126,6 +1128,11 @@ type Matcher interface {
 	Test(interface{}) bool
 }
 
+//todo: improve name
+type GenerativePattern interface {
+	Random() interface{}
+}
+
 func (patt PathPattern) Test(v interface{}) bool {
 	switch other := v.(type) {
 	case Path:
@@ -1204,6 +1211,10 @@ func (matcher ExactStringMatcher) Test(v interface{}) bool {
 
 func (matcher ExactStringMatcher) Regex() string {
 	return regexp.QuoteMeta(string(matcher))
+}
+
+func (matcher ExactStringMatcher) Random() interface{} {
+	return string(matcher)
 }
 
 func samePointer(a, b interface{}) bool {
@@ -6774,12 +6785,13 @@ func getQuantity(value float64, unit string) interface{} {
 	}
 }
 
-type ComplexStringPattern struct {
-	regexp *regexp.Regexp
-	node   Node
+type SequenceStringPattern struct {
+	regexp   *regexp.Regexp
+	node     Node
+	elements []StringPatternElement
 }
 
-func (patt ComplexStringPattern) Test(v interface{}) bool {
+func (patt SequenceStringPattern) Test(v interface{}) bool {
 	str, ok := v.(string)
 	if !ok {
 		return false
@@ -6787,13 +6799,126 @@ func (patt ComplexStringPattern) Test(v interface{}) bool {
 	return patt.regexp.MatchString(str)
 }
 
-func (patt ComplexStringPattern) Regex() string {
+func (patt SequenceStringPattern) Regex() string {
 	return patt.regexp.String()
+}
+
+func (patt SequenceStringPattern) Random() interface{} {
+	s := bytes.NewBufferString("")
+	for _, e := range patt.elements {
+		s.WriteString(e.Random().(string))
+	}
+
+	return s.String()
+}
+
+type UnionStringPattern struct {
+	regexp *regexp.Regexp
+	node   Node
+	cases  []StringPatternElement
+}
+
+func (patt UnionStringPattern) Test(v interface{}) bool {
+	str, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return patt.regexp.MatchString(str)
+}
+
+func (patt UnionStringPattern) Regex() string {
+	return patt.regexp.String()
+}
+
+func (patt UnionStringPattern) Random() interface{} {
+	if len(patt.cases) == 1 {
+		return patt.cases[0].Random()
+	}
+
+	i := rand.Intn(len(patt.cases) - 1)
+	return patt.cases[i].Random()
+}
+
+type RuneRangeStringPattern struct {
+	regexp *regexp.Regexp
+	node   Node
+	lower  rune
+	upper  rune
+}
+
+func (patt RuneRangeStringPattern) Test(v interface{}) bool {
+	str, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return patt.regexp.MatchString(str)
+}
+
+func (patt RuneRangeStringPattern) Regex() string {
+	return patt.regexp.String()
+}
+
+func (patt RuneRangeStringPattern) Random() interface{} {
+	offset := rand.Intn(int(patt.upper - patt.lower + 1))
+	r := patt.lower + rune(offset)
+	return string(r)
 }
 
 type StringPatternElement interface {
 	Matcher
+	GenerativePattern
 	Regex() string
+}
+
+type RepeatedPatternElement struct {
+	regexp            *regexp.Regexp
+	ocurrenceModifier OcurrenceCountModifier
+	exactCount        int
+	element           StringPatternElement
+}
+
+func (patt RepeatedPatternElement) Test(v interface{}) bool {
+	str, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return patt.regexp.MatchString(str)
+}
+
+func (patt RepeatedPatternElement) Regex() string {
+	return patt.regexp.String()
+}
+
+func (patt RepeatedPatternElement) Random() interface{} {
+	buff := bytes.NewBufferString("")
+
+	minCount := patt.exactCount
+	maxCount := patt.exactCount
+
+	switch patt.ocurrenceModifier {
+	case ExactOcurrence:
+		//ok
+	case ExactlyOneOcurrence:
+		minCount = 1
+		maxCount = 1
+	case ZeroOrMoreOcurrence:
+		minCount = 0
+		maxCount = MAX_PATTERN_OCCURRENCE_COUNT
+	case AtLeastOneOcurrence:
+		minCount = 1
+		maxCount = MAX_PATTERN_OCCURRENCE_COUNT
+	case OptionalOcurrence:
+		minCount = 0
+		maxCount = 1
+	}
+
+	count := minCount + rand.Intn(int(maxCount-minCount+1))
+
+	for i := 0; i < count; i++ {
+		buff.WriteString(patt.element.Random().(string))
+	}
+
+	return buff.String()
 }
 
 func CompilePatternNode(node Node, state *State) (Matcher, error) {
@@ -6833,9 +6958,11 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 		lower := v.Lower.Value
 		upper := v.Upper.Value
 
-		return &ComplexStringPattern{
+		return &RuneRangeStringPattern{
 			regexp: regexp.MustCompile(fmt.Sprintf("[%c-%c]", lower, upper)),
 			node:   node,
+			lower:  lower,
+			upper:  upper,
 		}, nil
 	case *PatternIdentifierLiteral:
 		pattern, err := Eval(v, state)
@@ -6851,8 +6978,10 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 		return stringPatternElem, nil
 	case *PatternUnion:
 		regex := bytes.NewBufferString("(")
+		var cases []StringPatternElement
 
 		for i, case_ := range v.Cases {
+
 			if i > 0 {
 				regex.WriteRune('|')
 			}
@@ -6862,44 +6991,63 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 			}
 
 			regex.WriteString(patternElement.Regex())
+			cases = append(cases, patternElement)
 		}
 
 		regex.WriteRune(')')
 
-		return &ComplexStringPattern{
+		return &UnionStringPattern{
 			regexp: regexp.MustCompile(regex.String()),
 			node:   node,
+			cases:  cases,
 		}, nil
 	case *PatternPiece:
 		regex := bytes.NewBufferString("")
+		var subpatterns []StringPatternElement
 
 		for _, element := range v.Elements {
-			regex.WriteRune('(')
+			subpatternRegexBuff := bytes.NewBufferString("")
+			subpatternRegexBuff.WriteRune('(')
+
 			patternElement, err := CompileStringPatternNode(element.Expr, state)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile a pattern piece: %s", err.Error())
 			}
 
-			regex.WriteString(patternElement.Regex())
-			regex.WriteRune(')')
+			subpatternRegexBuff.WriteString(patternElement.Regex())
+			subpatternRegexBuff.WriteRune(')')
 
 			switch element.Ocurrence {
 			case AtLeastOneOcurrence:
-				regex.WriteRune('+')
+				subpatternRegexBuff.WriteRune('+')
 			case ZeroOrMoreOcurrence:
-				regex.WriteRune('*')
+				subpatternRegexBuff.WriteRune('*')
 			case OptionalOcurrence:
-				regex.WriteRune('?')
+				subpatternRegexBuff.WriteRune('?')
 			case ExactOcurrence:
-				regex.WriteRune('{')
-				regex.WriteString(strconv.Itoa(element.ExactOcurrenceCount))
-				regex.WriteRune('}')
+				subpatternRegexBuff.WriteRune('{')
+				subpatternRegexBuff.WriteString(strconv.Itoa(element.ExactOcurrenceCount))
+				subpatternRegexBuff.WriteRune('}')
+			}
+
+			subpatternRegex := subpatternRegexBuff.String()
+			regex.WriteString(subpatternRegex)
+
+			if element.Ocurrence == ExactlyOneOcurrence {
+				subpatterns = append(subpatterns, patternElement)
+			} else {
+				subpatterns = append(subpatterns, RepeatedPatternElement{
+					regexp:            regexp.MustCompile(subpatternRegex),
+					ocurrenceModifier: element.Ocurrence,
+					exactCount:        element.ExactOcurrenceCount,
+				})
 			}
 		}
 
-		return &ComplexStringPattern{
-			regexp: regexp.MustCompile(regex.String()),
-			node:   node,
+		return &SequenceStringPattern{
+			regexp:   regexp.MustCompile(regex.String()),
+			node:     node,
+			elements: subpatterns,
 		}, nil
 	default:
 		return nil, fmt.Errorf("cannot compile string pattern element: %T", v)

@@ -6013,3 +6013,94 @@ func TestCompileStringPatternNode(t *testing.T) {
 		assert.Equal(t, "((a)(b)|(c)(d))", patt.Regex())
 	})
 }
+
+func TestRepeatedPatternElementRandom(t *testing.T) {
+
+	t.Run("2 ocurrences of constant string", func(t *testing.T) {
+		patt := RepeatedPatternElement{
+			regexp:            nil,
+			ocurrenceModifier: ExactOcurrence,
+			exactCount:        2,
+			element:           ExactStringMatcher("a"),
+		}
+
+		for i := 0; i < 5; i++ {
+			assert.Equal(t, "aa", patt.Random().(string))
+		}
+	})
+
+	t.Run("optional ocurrence of constant string", func(t *testing.T) {
+		patt := RepeatedPatternElement{
+			regexp:            nil,
+			ocurrenceModifier: OptionalOcurrence,
+			element:           ExactStringMatcher("a"),
+		}
+
+		for i := 0; i < 5; i++ {
+			s := patt.Random().(string)
+			assert.Equal(t, strings.Repeat("a", len(s)), s)
+		}
+	})
+
+	t.Run("zero or more ocurrences of constant string", func(t *testing.T) {
+		patt := RepeatedPatternElement{
+			regexp:            nil,
+			ocurrenceModifier: ZeroOrMoreOcurrence,
+			element:           ExactStringMatcher("a"),
+		}
+
+		for i := 0; i < 5; i++ {
+			s := patt.Random().(string)
+			length := len(s)
+
+			assert.Equal(t, strings.Repeat("a", length), s)
+		}
+	})
+
+	t.Run("at least one ocurrence of constant string", func(t *testing.T) {
+		patt := RepeatedPatternElement{
+			regexp:            nil,
+			ocurrenceModifier: ZeroOrMoreOcurrence,
+			element:           ExactStringMatcher("a"),
+		}
+
+		for i := 0; i < 5; i++ {
+			s := patt.Random().(string)
+			length := len(s)
+
+			assert.Equal(t, strings.Repeat("a", length), s)
+		}
+	})
+}
+
+func TestSequenceStringPatternRandom(t *testing.T) {
+
+	patt1 := SequenceStringPattern{
+		regexp: nil,
+		node:   nil,
+		elements: []StringPatternElement{
+			ExactStringMatcher("a"),
+			ExactStringMatcher("b"),
+		},
+	}
+
+	assert.Equal(t, "ab", patt1.Random())
+}
+
+func TestUnionStringPatternRandom(t *testing.T) {
+
+	patt1 := UnionStringPattern{
+		regexp: nil,
+		node:   nil,
+		cases: []StringPatternElement{
+			ExactStringMatcher("a"),
+			ExactStringMatcher("b"),
+		},
+	}
+
+	for i := 0; i < 5; i++ {
+		s := patt1.Random().(string)
+		assert.True(t, s == "a" || s == "b")
+	}
+
+}
