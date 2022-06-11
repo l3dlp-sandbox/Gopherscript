@@ -1404,6 +1404,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"open-store": func(ctx *gopherscript.Context, fpath gopherscript.Path) (*SmallKVStore, error) {
 			return OpenOrCreateStore(ctx, fpath)
 		},
+		"rand": _rand,
 	})
 
 	return state
@@ -2407,4 +2408,14 @@ func (store *SmallKVStore) persist() error {
 func (store *SmallKVStore) Close() {
 	store.persist()
 	store.closed = true
+}
+
+func _rand(ctx *gopherscript.Context, v interface{}) interface{} {
+
+	switch val := v.(type) {
+	case gopherscript.GenerativePattern:
+		return val.Random()
+	default:
+		panic(fmt.Errorf("rand: cannot generate random value from argument of type %T", v))
+	}
 }

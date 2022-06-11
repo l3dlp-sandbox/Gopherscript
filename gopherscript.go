@@ -6842,8 +6842,7 @@ func (patt UnionStringPattern) Random() interface{} {
 type RuneRangeStringPattern struct {
 	regexp *regexp.Regexp
 	node   Node
-	lower  rune
-	upper  rune
+	runes  RuneRange
 }
 
 func (patt RuneRangeStringPattern) Test(v interface{}) bool {
@@ -6859,9 +6858,7 @@ func (patt RuneRangeStringPattern) Regex() string {
 }
 
 func (patt RuneRangeStringPattern) Random() interface{} {
-	offset := rand.Intn(int(patt.upper - patt.lower + 1))
-	r := patt.lower + rune(offset)
-	return string(r)
+	return patt.runes.Random()
 }
 
 type StringPatternElement interface {
@@ -6961,8 +6958,10 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 		return &RuneRangeStringPattern{
 			regexp: regexp.MustCompile(fmt.Sprintf("[%c-%c]", lower, upper)),
 			node:   node,
-			lower:  lower,
-			upper:  upper,
+			runes: RuneRange{
+				Start: lower,
+				End:   upper,
+			},
 		}, nil
 	case *PatternIdentifierLiteral:
 		pattern, err := Eval(v, state)
@@ -8429,6 +8428,20 @@ func (r IntRange) Iterator() Iterator {
 	}
 }
 
+func (r IntRange) Random() interface{} {
+	if r.unknownStart {
+		panic("Random() not supported for int ranges with no start")
+	}
+	start := r.Start
+	end := r.End
+
+	if !r.inclusiveEnd {
+		end = r.End - 1
+	}
+
+	return start + rand.Intn(end-start+1)
+}
+
 type IntRangeIterator struct {
 	range_ IntRange
 	next   int
@@ -8462,6 +8475,15 @@ type QuantityRange struct {
 type RuneRange struct {
 	Start rune
 	End   rune
+}
+
+func (r RuneRange) RandomRune() rune {
+	offset := rand.Intn(int(r.End - r.Start + 1))
+	return r.Start + rune(offset)
+}
+
+func (r RuneRange) Random() interface{} {
+	return r.RandomRune()
 }
 
 type ByteCount int
