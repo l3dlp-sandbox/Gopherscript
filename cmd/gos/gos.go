@@ -671,7 +671,7 @@ func main() {
 			code := string(b)
 			mod, err := gopherscript.ParseModule(code, filepath)
 			if err != nil {
-				panic(fmt.Sprint("parsing error:", err.Error()))
+				panic(fmt.Sprint("parsing error: ", err.Error()))
 			}
 
 			if err := gopherscript.Check(mod); err != nil {
