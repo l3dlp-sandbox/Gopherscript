@@ -1,0 +1,11 @@
+require {
+    use: {globals: "*"}
+}
+
+
+%hex = | '0'..'9' | 'a'..'z' | 'A'..'Z';
+%uuidv4 = string %hex=8  '-'  %hex=4  '-'  '4' %hex=3  '-'  (| '8' | '9' | 'A' | 'B')=3  '-'  %hex=12;
+
+for (1 .. 5) {
+    log rand(%uuidv4)
+}
