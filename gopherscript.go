@@ -6679,8 +6679,10 @@ func Check(node Node) error {
 				variables = make(map[string]int)
 				localVars[scopeNode] = variables
 			}
-			variables[node.KeyIndexIdent.Name] = 0
-			variables[node.ValueElemIdent.Name] = 0
+			if node.KeyIndexIdent != nil {
+				variables[node.KeyIndexIdent.Name] = 0
+				variables[node.ValueElemIdent.Name] = 0
+			}
 
 		case *FunctionDeclaration:
 
@@ -6858,7 +6860,7 @@ func (patt RuneRangeStringPattern) Regex() string {
 }
 
 func (patt RuneRangeStringPattern) Random() interface{} {
-	return patt.runes.Random()
+	return string(patt.runes.Random().(rune))
 }
 
 type StringPatternElement interface {
@@ -7039,6 +7041,7 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 					regexp:            regexp.MustCompile(subpatternRegex),
 					ocurrenceModifier: element.Ocurrence,
 					exactCount:        element.ExactOcurrenceCount,
+					element:           patternElement,
 				})
 			}
 		}
