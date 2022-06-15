@@ -1771,6 +1771,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
+	eatSpaceAndNewLineAndCommaAndComment := func() {
+		for i < len(s) {
+			switch s[i] {
+			case ' ', '\t', '\n', ',':
+				i++
+			case '#':
+				eatComment()
+			default:
+				return
+			}
+		}
+	}
+
 	eatSpaceNewLineSemiColonComment := func() {
 		for i < len(s) {
 			switch s[i] {
@@ -3440,7 +3453,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var properties []ObjectProperty
 
 			for i < len(s) && s[i] != '}' {
-				eatSpaceNewlineComma()
+				eatSpaceAndNewLineAndCommaAndComment()
 
 				if i < len(s) && s[i] == '}' {
 					break
@@ -3575,7 +3588,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				}
 
-				eatSpaceNewlineComma()
+				eatSpaceAndNewLineAndCommaAndComment()
 			}
 
 			if i >= len(s) {

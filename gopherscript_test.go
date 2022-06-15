@@ -2068,6 +2068,17 @@ func TestMustParseModule(t *testing.T) {
 		})
 	})
 
+	t.Run("object literal : comments are only allowed between entries", func(t *testing.T) {
+		MustParseModule("{ # comment \n}")
+		MustParseModule("{ a : 1 # comment \n}")
+		MustParseModule("{ # comment \n a : 1 }")
+
+		assert.Panics(t, func() {
+			MustParseModule("{ a : # comment \n 1 }")
+		})
+
+	})
+
 	t.Run("single line object literal { : integer} ", func(t *testing.T) {
 		n := MustParseModule("{ : 1 }")
 		assert.EqualValues(t, &Module{
