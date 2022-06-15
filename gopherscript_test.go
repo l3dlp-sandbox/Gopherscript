@@ -4664,6 +4664,14 @@ func TestEval(t *testing.T) {
 		assert.EqualValues(t, Object{"0": 1, IMPLICIT_KEY_LEN_KEY: 1}, res)
 	})
 
+	t.Run("object literal with a spread element", func(t *testing.T) {
+		n := MustParseModule(`o = {name: "foo"}; return { ...$o.{name} }`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, Object{"name": "foo"}, res)
+	})
+
 	t.Run("empty list literal", func(t *testing.T) {
 		n := MustParseModule(`[]`)
 		state := NewState(NewDefaultTestContext())

@@ -7776,10 +7776,23 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				k = strconv.Itoa(indexKey)
 				indexKey++
 			default:
-				log.Panicf("invalid key type %T", n)
+				return nil, fmt.Errorf("invalid key type %T", n)
 			}
 
 			obj[k] = v
+		}
+
+		for _, el := range n.SpreadElements {
+			evaluatedElement, err := Eval(el.Extraction, state)
+			if err != nil {
+				return nil, err
+			}
+
+			object := evaluatedElement.(Object)
+
+			for _, key := range el.Extraction.Keys.Keys {
+				obj[key.Name] = object[key.Name]
+			}
 		}
 
 		if indexKey != 0 {
