@@ -4089,6 +4089,11 @@ func TestCheck(t *testing.T) {
 		assert.Error(t, Check(n.Statements[0]))
 	})
 
+	t.Run("object literal with duplicate key prop : two explicit keys : one in spread element", func(t *testing.T) {
+		n := MustParseModule(`{"a": 1, ... $e.{a}}`)
+		assert.Error(t, Check(n.Statements[0]))
+	})
+
 	t.Run("spawn expression : expression is a nil literal", func(t *testing.T) {
 		n := MustParseModule(`sr {} nil`)
 		assert.Error(t, Check(n.Statements[0]))

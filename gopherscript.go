@@ -6676,6 +6676,18 @@ func Check(node Node) error {
 
 				keys[k] = isExplicit
 			}
+
+			for _, element := range node.SpreadElements {
+
+				for _, key := range element.Extraction.Keys.Keys {
+					_, found := keys[key.Name]
+					if found {
+						return errors.New("duplicate key '" + key.Name + "'")
+					}
+					keys[key.Name] = true
+				}
+			}
+
 		case *SpawnExpression:
 			switch n := node.ExprOrVar.(type) {
 			case *EmbeddedModule, *Variable, *GlobalVariable:
