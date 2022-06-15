@@ -397,7 +397,7 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("member expression : variable '.' <propname> '.' <singltwtwo-letter propname> ", func(t *testing.T) {
+	t.Run("member expression : variable '.' <propname> '.' <two-letter propname> ", func(t *testing.T) {
 		n := MustParseModule("$a.b.cd")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 7}},
@@ -418,6 +418,31 @@ func TestMustParseModule(t *testing.T) {
 					PropertyName: &IdentifierLiteral{
 						NodeBase: NodeBase{NodeSpan{5, 7}},
 						Name:     "cd",
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("extraction expression : object is a variable", func(t *testing.T) {
+		n := MustParseModule("$a.{name}")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 9}},
+			Statements: []Node{
+				&ExtractionExpression{
+					NodeBase: NodeBase{NodeSpan{0, 9}},
+					Object: &Variable{
+						NodeBase: NodeBase{NodeSpan{0, 2}},
+						Name:     "a",
+					},
+					Keys: &KeyListExpression{
+						NodeBase: NodeBase{NodeSpan{2, 9}},
+						Keys: []*IdentifierLiteral{
+							{
+								NodeBase: NodeBase{NodeSpan{4, 8}},
+								Name:     "name",
+							},
+						},
 					},
 				},
 			},

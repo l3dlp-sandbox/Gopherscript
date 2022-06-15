@@ -350,6 +350,12 @@ type ObjectLiteral struct {
 	Properties []ObjectProperty
 }
 
+type ExtractionExpression struct {
+	NodeBase
+	Object Node
+	Keys   *KeyListExpression
+}
+
 func getCommandPermissions(n Node) ([]Permission, error) {
 
 	var perms []Permission
@@ -438,7 +444,7 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
 	runningState *State,
-	handleCustomType func(kind PermissionKind, name string, value Node) ([]Permission, bool, error),
+	handleCustomType func(kind PermissionKind, name string, value Node) (perms []Permission, handled bool, err error),
 ) ([]Permission, []Limitation) {
 
 	perms := make([]Permission, 0)
@@ -4197,7 +4203,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		first = lhs
 
-		//member expressions, index/slice expressions
+		//member expressions, index/slice expressions, extraction expression
 		if lhs != nil && i < len(s) && (s[i] == '[' || s[i] == '.') {
 			i++
 
@@ -4214,7 +4220,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					})
 				}
 
-				if s[i-1] == '[' {
+				if s[i-1] == '[' { //index/slice expression
 					eatSpace()
 
 					if i >= len(s) {
@@ -4316,7 +4322,18 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						Indexed: lhs,
 						Index:   startIndex,
 					}
-				} else {
+				} else if s[i] == '{' { //extraction expression (result is returned, the loop is not continued)
+					i--
+					keyList := parseKeyList()
+
+					return &ExtractionExpression{
+						NodeBase: NodeBase{
+							NodeSpan{lhs.Base().Span.Start, keyList.Span.End},
+						},
+						Object: lhs,
+						Keys:   keyList,
+					}
+				} else { //member expression
 					if !isAlpha(s[i]) && s[i] != '_' {
 						panic(ParsingError{
 							"property name should start with a letter not '" + string(s[i]) + "'",
