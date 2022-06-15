@@ -5190,6 +5190,14 @@ func TestEval(t *testing.T) {
 		assert.Nil(t, res)
 	})
 
+	t.Run("extraction expression", func(t *testing.T) {
+		n := MustParseModule(`return ({a:1}).{a}`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, Object{"a": int(1)}, res)
+	})
+
 	t.Run("index expression : <variable> '[' 0 ']", func(t *testing.T) {
 		n := MustParseModule(`$a = ["a"]; return $a[0]`)
 		state := NewState(NewDefaultTestContext())

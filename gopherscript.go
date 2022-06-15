@@ -6310,6 +6310,13 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		if err := walk(n.PropertyName, node, ancestorChain, fn); err != nil {
 			return err
 		}
+	case *ExtractionExpression:
+		if err := walk(n.Object, node, ancestorChain, fn); err != nil {
+			return err
+		}
+		if err := walk(n.Keys, node, ancestorChain, fn); err != nil {
+			return err
+		}
 	case *IndexExpression:
 		if err := walk(n.Indexed, node, ancestorChain, fn); err != nil {
 			return err
@@ -8099,6 +8106,21 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		res, _, err := memb(left, n.PropertyName.Name)
 		return res, err
+	case *ExtractionExpression:
+		left, err := Eval(n.Object, state)
+		if err != nil {
+			return nil, err
+		}
+		result := Object{}
+
+		for _, key := range n.Keys.Keys {
+			prop, _, err := memb(left, key.Name)
+			if err != nil {
+				return nil, err
+			}
+			result[key.Name] = prop
+		}
+		return result, nil
 	case *IndexExpression:
 		list, err := Eval(n.Indexed, state)
 		if err != nil {
