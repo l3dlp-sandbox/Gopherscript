@@ -347,13 +347,19 @@ type NilLiteral struct {
 
 type ObjectLiteral struct {
 	NodeBase
-	Properties []ObjectProperty
+	Properties     []ObjectProperty
+	SpreadElements []*PropertySpreadElement
 }
 
 type ExtractionExpression struct {
 	NodeBase
 	Object Node
 	Keys   *KeyListExpression
+}
+
+type PropertySpreadElement struct {
+	NodeBase
+	Extraction *ExtractionExpression
 }
 
 func getCommandPermissions(n Node) ([]Permission, error) {
@@ -3457,6 +3463,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			unamedPropCount := 0
 			var properties []ObjectProperty
+			var spreadElements []*PropertySpreadElement
 
 			for i < len(s) && s[i] != '}' {
 				eatSpaceAndNewLineAndCommaAndComment()
@@ -3470,41 +3477,49 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				lastKeyName := ""
 				var propSpanStart int
 
-				if s[i] == ':' {
-					propSpanStart = i
-					i++
-					unamedPropCount++
-					keys = append(keys, nil)
-					lastKeyName = strconv.Itoa(unamedPropCount)
-					if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+				if s[i] == '.' { //spread element
+					spreadStart := i
+
+					if string(s[i:min(len(s), i+3)]) != "..." {
 						panic(ParsingError{
-							"key is too long",
+							"invalid element in object literal",
 							i,
 							openingBraceIndex,
 							KnownType,
 							(*ObjectLiteral)(nil),
 						})
 					}
+
+					i += 3
+					eatSpace()
+
+					expr := parseExpression()
+
+					extractionExpr, ok := expr.(*ExtractionExpression)
+					if !ok {
+						panic(ParsingError{
+							fmt.Sprintf("invalid spread element in object literal : expression should be an extraction expression not a(n) %T", expr),
+							i,
+							openingBraceIndex,
+							KnownType,
+							(*ObjectLiteral)(nil),
+						})
+					}
+
+					spreadElements = append(spreadElements, &PropertySpreadElement{
+						NodeBase: NodeBase{
+							NodeSpan{spreadStart, extractionExpr.Span.End},
+						},
+						Extraction: extractionExpr,
+					})
+
 				} else {
-					for {
-						lastKey = parseExpression()
-						keys = append(keys, lastKey)
-
-						switch k := lastKey.(type) {
-						case *IdentifierLiteral:
-							lastKeyName = k.Name
-						case *StringLiteral:
-							lastKeyName = k.Value
-						default:
-							panic(ParsingError{
-								"Only identifiers and strings are valid object keys",
-								i,
-								openingBraceIndex,
-								KnownType,
-								(*ObjectLiteral)(nil),
-							})
-						}
-
+					if s[i] == ':' { //implicit key
+						propSpanStart = i
+						i++
+						unamedPropCount++
+						keys = append(keys, nil)
+						lastKeyName = strconv.Itoa(unamedPropCount)
 						if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
 							panic(ParsingError{
 								"key is too long",
@@ -3513,85 +3528,119 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ObjectLiteral)(nil),
 							})
+
 						}
+					} else { //explicit key(s)
 
-						if len(keys) == 1 {
-							propSpanStart = lastKey.Base().Span.Start
-						}
-						singleKey := true
+						//shared value properties
+						for {
+							lastKey = parseExpression()
+							keys = append(keys, lastKey)
 
-						eatSpace()
-
-						if s[i] == ',' {
-							i++
-							eatSpace()
-							singleKey = false
-						}
-
-						if i >= len(s) || s[i] == '}' {
-							panic(ParsingError{
-								"invalid object literal, missing colon after key '" + lastKeyName + "'",
-								i,
-								openingBraceIndex,
-								KnownType,
-								(*ObjectLiteral)(nil),
-							})
-						}
-
-						if singleKey {
-							if s[i] != ':' {
+							switch k := lastKey.(type) {
+							case *IdentifierLiteral:
+								lastKeyName = k.Name
+							case *StringLiteral:
+								lastKeyName = k.Value
+							default:
 								panic(ParsingError{
-									"invalid object literal, following key should be followed by a colon : '" + lastKeyName + "'",
+									"Only identifiers and strings are valid object keys",
 									i,
 									openingBraceIndex,
 									KnownType,
 									(*ObjectLiteral)(nil),
 								})
 							}
-							i++
-							break
+
+							if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
+								panic(ParsingError{
+									"key is too long",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectLiteral)(nil),
+								})
+							}
+
+							if len(keys) == 1 {
+								propSpanStart = lastKey.Base().Span.Start
+							}
+							singleKey := true
+
+							eatSpace()
+
+							if s[i] == ',' {
+								i++
+								eatSpace()
+								singleKey = false
+							}
+
+							if i >= len(s) || s[i] == '}' {
+								panic(ParsingError{
+									"invalid object literal, missing colon after key '" + lastKeyName + "'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectLiteral)(nil),
+								})
+							}
+
+							if singleKey {
+								if s[i] != ':' {
+									panic(ParsingError{
+										"invalid object literal, following key should be followed by a colon : '" + lastKeyName + "'",
+										i,
+										openingBraceIndex,
+										KnownType,
+										(*ObjectLiteral)(nil),
+									})
+								}
+								i++
+								break
+							}
 						}
+
 					}
-				}
 
-				eatSpace()
+					eatSpace()
 
-				if i >= len(s) || s[i] == '}' {
-					panic(ParsingError{
-						"invalid object literal, missing value after colon, key '" + lastKeyName + "'",
-						i,
-						openingBraceIndex,
-						KnownType,
-						(*ObjectLiteral)(nil),
-					})
-				}
-				v := parseExpression()
+					if i >= len(s) || s[i] == '}' {
+						panic(ParsingError{
+							"invalid object literal, missing value after colon, key '" + lastKeyName + "'",
+							i,
+							openingBraceIndex,
+							KnownType,
+							(*ObjectLiteral)(nil),
+						})
+					}
+					v := parseExpression()
 
-				if len(keys) > 1 {
-					switch v.(type) {
-					case *Variable, *GlobalVariable:
-					default:
-						if !isSimpleValueLiteral(v) {
-							panic(ParsingError{
-								"invalid object literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
-								i,
-								openingBraceIndex,
-								KnownType,
-								(*ObjectLiteral)(nil),
-							})
+					if len(keys) > 1 {
+						switch v.(type) {
+						case *Variable, *GlobalVariable:
+						default:
+							if !isSimpleValueLiteral(v) {
+								panic(ParsingError{
+									"invalid object literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectLiteral)(nil),
+								})
+							}
 						}
+
 					}
 
-				}
-
-				for _, key := range keys {
-					properties = append(properties, ObjectProperty{
-						NodeBase: NodeBase{
-							Span: NodeSpan{propSpanStart, i},
-						},
-						Key:   key,
-						Value: v,
-					})
+					for _, key := range keys {
+						properties = append(properties, ObjectProperty{
+							NodeBase: NodeBase{
+								Span: NodeSpan{propSpanStart, i},
+							},
+							Key:   key,
+							Value: v,
+						})
+					}
 				}
 
 				eatSpaceAndNewLineAndCommaAndComment()
@@ -3612,7 +3661,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					Span: NodeSpan{openingBraceIndex, i},
 				},
-				Properties: properties,
+				Properties:     properties,
+				SpreadElements: spreadElements,
 			}
 		case '[': //list
 			openingBracketIndex := i
@@ -6284,6 +6334,11 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 	case *ObjectLiteral:
 		for _, prop := range n.Properties {
 			if err := walk(&prop, node, ancestorChain, fn); err != nil {
+				return err
+			}
+		}
+		for _, el := range n.SpreadElements {
+			if err := walk(el, node, ancestorChain, fn); err != nil {
 				return err
 			}
 		}

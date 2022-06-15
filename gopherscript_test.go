@@ -2331,7 +2331,51 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("empty single linge list literal 1", func(t *testing.T) {
+	t.Run("single line object literal : spread element ", func(t *testing.T) {
+		n := MustParseModule("{ ... $e.{name} }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 17}},
+			Statements: []Node{
+				&ObjectLiteral{
+					NodeBase:   NodeBase{NodeSpan{0, 17}},
+					Properties: nil,
+					SpreadElements: []*PropertySpreadElement{
+						{
+							NodeBase: NodeBase{
+								NodeSpan{2, 15},
+							},
+							Extraction: &ExtractionExpression{
+								NodeBase: NodeBase{
+									NodeSpan{6, 15},
+								},
+								Object: &Variable{
+									NodeBase: NodeBase{
+										NodeSpan{6, 8},
+									},
+									Name: "e",
+								},
+								Keys: &KeyListExpression{
+									NodeBase: NodeBase{
+										NodeSpan{8, 15},
+									},
+									Keys: []*IdentifierLiteral{
+										{
+											NodeBase: NodeBase{
+												NodeSpan{10, 14},
+											},
+											Name: "name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("empty single line list literal 1", func(t *testing.T) {
 		n := MustParseModule("[]")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
@@ -2348,7 +2392,7 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("empty single linge list literal 2", func(t *testing.T) {
+	t.Run("empty single line list literal 2", func(t *testing.T) {
 		n := MustParseModule("[ ]")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
