@@ -254,6 +254,32 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("named-segment path pattern literal  ", func(t *testing.T) {
+		n := MustParseModule("%/home/$username$")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 17}},
+			Statements: []Node{
+				&NamedSegmentPathPatternLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 17}},
+					Slices: []Node{
+						&PathSlice{
+							NodeBase: NodeBase{
+								NodeSpan{1, 7},
+							},
+							Value: "/home/",
+						},
+						&Variable{
+							NodeBase: NodeBase{
+								NodeSpan{7, 17},
+							},
+							Name: "username",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("absolute path pattern literal containg /... in the middle", func(t *testing.T) {
 		assert.Panics(t, func() {
 			MustParseModule("/a/.../ee")

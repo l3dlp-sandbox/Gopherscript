@@ -302,6 +302,12 @@ type RelativePathPatternLiteral struct {
 	Value string
 }
 
+//TODO: rename
+type NamedSegmentPathPatternLiteral struct {
+	NodeBase
+	Slices []Node
+}
+
 type RelativePathExpression struct {
 	NodeBase
 	Slices []Node
@@ -2033,7 +2039,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		return slices
 	}
 
-	parsePathLikeExpression := func() Node {
+	parsePathLikeExpression := func(isPercentPrefixed bool) Node {
 		start := i
 		isAbsolute := s[i] == '/'
 		i++
@@ -2048,16 +2054,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		for _, r := range value {
-			if (r == '[' || r == '*' || r == '?') && countPrevBackslashes()%2 == 0 {
-				if strings.Contains(value, "$") {
-					panic(ParsingError{
-						"a path pattern cannot be interpolated '" + value + "'",
-						i,
-						start,
-						Pathlike,
-						nil,
-					})
-				}
+
+			//pattern
+			if isPercentPrefixed || ((r == '[' || r == '*' || r == '?') && countPrevBackslashes()%2 == 0) {
 
 				if strings.HasSuffix(value, "/...") {
 					panic(ParsingError{
@@ -2067,6 +2066,40 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						Pathlike,
 						nil,
 					})
+				}
+
+				if isPercentPrefixed {
+					base.Span.Start = base.Span.Start - 1
+				}
+
+				if strings.Contains(value, "$") {
+
+					if !isPercentPrefixed {
+						panic(ParsingError{
+							"a path pattern with no leading '%' cannot be interpolated '" + value + "'",
+							i,
+							start,
+							Pathlike,
+							nil,
+						})
+					}
+
+					if strings.Contains(value, "$$") {
+						panic(ParsingError{
+							"a complex path pattern literal cannot contain interpolations next to each others",
+							i,
+							start,
+							Pathlike,
+							nil,
+						})
+					}
+
+					slices := parsePathExpressionSlices(start, i)
+
+					return &NamedSegmentPathPatternLiteral{
+						NodeBase: base,
+						Slices:   slices,
+					}
 				}
 
 				if isAbsolute {
@@ -3866,11 +3899,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Value: value,
 			}
 		case '/':
-			return parsePathLikeExpression()
+			return parsePathLikeExpression(false)
 		case '.':
 			if i < len(s)-1 {
 				if s[i+1] == '/' || i < len(s)-2 && s[i+1] == '.' && s[i+2] == '/' {
-					return parsePathLikeExpression()
+					return parsePathLikeExpression(false)
 				}
 				switch s[i+1] {
 				case '{':
@@ -3984,7 +4017,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 		case '%':
-			return parseComplexPatternStuff(false)
+			if i < len(s)-1 && (s[i+1] == '.' || s[i+1] == '/') {
+				i++
+				return parsePathLikeExpression(true)
+			} else {
+				return parseComplexPatternStuff(false)
+			}
 		case '(': //parenthesized expression and binary expressions
 			openingParenIndex := i
 			i++
@@ -6544,6 +6582,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		}
 		if err := walk(n.Upper, node, ancestorChain, fn); err != nil {
 			return err
+		}
+	case *NamedSegmentPathPatternLiteral:
+		for _, e := range n.Slices {
+			if err := walk(e, node, ancestorChain, fn); err != nil {
+				return err
+			}
 		}
 	case *AbsolutePathExpression:
 		for _, e := range n.Slices {
