@@ -447,6 +447,8 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 	return perms, nil
 }
 
+//this function get permissions limitations & by evaluating a "requirement" object literal
+//custom permissions & most limitations are handled by the handleCustomType argument (optional)
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
 	runningState *State,
@@ -7192,6 +7194,7 @@ func MustEval(node Node, state *State) interface{} {
 	return res
 }
 
+//Evaluates a node, panics are always recovered so this function should not panic.
 func Eval(node Node, state *State) (result interface{}, err error) {
 
 	defer func() {
@@ -7969,8 +7972,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		for _, switchCase := range n.Cases {
-			m, err := Eval(switchCase.Value, state)
+		for _, matchCase := range n.Cases {
+			m, err := Eval(matchCase.Value, state)
 			if err != nil {
 				return nil, err
 			}
@@ -7980,7 +7983,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				if reflect.TypeOf(m) == reflect.TypeOf(discriminant) { //TODO: change
 
 					if m == discriminant {
-						_, err := Eval(switchCase.Block, state)
+						_, err := Eval(matchCase.Block, state)
 						if err != nil {
 							return nil, err
 						}
@@ -7994,7 +7997,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 
 			if matcher.Test(discriminant) {
-				_, err := Eval(switchCase.Block, state)
+				_, err := Eval(matchCase.Block, state)
 				if err != nil {
 					return nil, err
 				}
