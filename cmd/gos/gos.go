@@ -1099,21 +1099,32 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 			return result, nil
 		},
-		"filter": func(ctx *gopherscript.Context, node gopherscript.Node, list gopherscript.List) (gopherscript.List, error) {
+		"filter": func(ctx *gopherscript.Context, filter interface{}, list gopherscript.List) (gopherscript.List, error) {
 			result := gopherscript.List{}
 
-			state.PushScope()
-			defer state.PopScope()
+			switch fil := filter.(type) {
+			case gopherscript.Node:
+				state.PushScope()
+				defer state.PopScope()
 
-			for _, e := range list {
-				state.CurrentScope()[""] = e
-				res, err := gopherscript.Eval(node.(*gopherscript.LazyExpression).Expression, state)
-				if err != nil {
-					return nil, err
+				for _, e := range list {
+					state.CurrentScope()[""] = e
+					res, err := gopherscript.Eval(fil.(*gopherscript.LazyExpression).Expression, state)
+					if err != nil {
+						return nil, err
+					}
+					if res.(bool) {
+						result = append(result, e)
+					}
 				}
-				if res.(bool) {
-					result = append(result, e)
+			case gopherscript.Matcher:
+				for _, e := range list {
+					if fil.Test(e) {
+						result = append(result, e)
+					}
 				}
+			default:
+				return nil, fmt.Errorf("invalid filter : type is %T", fil)
 			}
 
 			return result, nil
