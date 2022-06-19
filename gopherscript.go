@@ -6926,6 +6926,10 @@ func Check(node Node) error {
 				break
 			}
 
+			if _, isNamedSegmentPathLiteral := parent.(*NamedSegmentPathPatternLiteral); isNamedSegmentPathLiteral {
+				break
+			}
+
 			variables, ok := localVars[scopeNode]
 
 			if !ok {
@@ -7234,6 +7238,49 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 	}
 }
 
+type NamedSegmentPathPattern struct {
+	node *NamedSegmentPathPatternLiteral
+}
+
+func (patt NamedSegmentPathPattern) Test(v interface{}) bool {
+	pth, ok := v.(Path)
+	if !ok {
+		return false
+	}
+
+	str := string(pth)
+	i := 0
+
+	for index, s := range patt.node.Slices {
+
+		if i >= len(str) {
+			return false
+		}
+
+		switch n := s.(type) {
+		case *PathSlice:
+			if i+len(n.Value) >= len(str) {
+				return false
+			}
+			if str[i:len(n.Value)] != n.Value {
+				return false
+			}
+			i += len(n.Value)
+		case *Variable:
+			segmentEnd := strings.Index(str[i:], "/")
+			if segmentEnd < 0 {
+				return true
+			} else if index == len(patt.node.Slices)-1 { //if $var$ is at the end of the pattern there should not be a '/'
+				return false
+			} else {
+				i += segmentEnd + 1
+			}
+		}
+	}
+
+	return true
+}
+
 type EntryMatcher struct {
 	Key   Matcher
 	Value Matcher
@@ -7324,6 +7371,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return PathPattern(n.Value), nil
 	case *RelativePathPatternLiteral:
 		return PathPattern(n.Value), nil
+	case *NamedSegmentPathPatternLiteral:
+		return NamedSegmentPathPattern{n}, nil
 	case *PathSlice:
 		return n.Value, nil
 	case *URLQueryParameterSlice:

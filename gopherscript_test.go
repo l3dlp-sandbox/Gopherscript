@@ -11,6 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func parseEval(t *testing.T, s string) interface{} {
+	mod, err := ParseAndCheckModule(s, "")
+	assert.NoError(t, err)
+
+	res, err := Eval(mod, NewState(NewDefaultTestContext()))
+	assert.NoError(t, err)
+	return res
+}
+
 func TestMustParseModule(t *testing.T) {
 
 	t.Run("empty module", func(t *testing.T) {
@@ -4435,6 +4444,13 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, PathPattern("./*"), res)
 	})
 
+	t.Run("named-segment path pattern literal", func(t *testing.T) {
+		n := MustParseModule(`%/home/$username$`)
+		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext()))
+		assert.NoError(t, err)
+		assert.IsType(t, NamedSegmentPathPattern{}, res)
+	})
+
 	t.Run("absolute path expression : interpolation value is a string", func(t *testing.T) {
 		n := MustParseModule(`/home/$username$`)
 		res, err := Eval(n.Statements[0], NewState(NewDefaultTestContext(), map[string]interface{}{
@@ -5991,6 +6007,18 @@ func TestPathPatternTest(t *testing.T) {
 	assert.True(t, PathPattern("/*").Test(Path("/e")))
 	assert.False(t, PathPattern("/*").Test(Path("/e/")))
 	assert.False(t, PathPattern("/*").Test(Path("/e/e")))
+}
+
+func TestNamedSegmentPathPatternTest(t *testing.T) {
+
+	res := parseEval(t, `%/home/$username$`)
+	patt := res.(NamedSegmentPathPattern)
+
+	assert.False(t, patt.Test(Path("/home")))
+	assert.False(t, patt.Test(Path("/home/")))
+	assert.True(t, patt.Test(Path("/home/user")))
+	assert.False(t, patt.Test(Path("/home/user/")))
+	assert.False(t, patt.Test(Path("/home/user/e")))
 }
 
 func TestCompileStringPatternNode(t *testing.T) {
