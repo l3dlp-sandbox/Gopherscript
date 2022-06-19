@@ -53,6 +53,7 @@ var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "us
 var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
 var ERROR_INTERFACE_TYPE = reflect.TypeOf((*error)(nil)).Elem()
 var ITERABLE_INTERFACE_TYPE = reflect.TypeOf((*Iterable)(nil)).Elem()
+var UINT8_SLICE_TYPE = reflect.TypeOf(([]uint8)(nil)).Elem()
 var MODULE_CACHE = map[string]string{
 	RETURN_1_MODULE_HASH:        "return 1",
 	RETURN_GLOBAL_A_MODULE_HASH: "return $$a",
@@ -880,11 +881,12 @@ const (
 	Or
 	Match
 	NotMatch
+	Substrof
 )
 
 var BINARY_OPERATOR_STRINGS = []string{
 	"+", "+.", "-", "-.", "*", "*.", "/", "/.", "++", "<", "<.", "<=", "<=", ">", ">.", ">=", ">=.", "==", "!=",
-	"in", "not-in", "keyof", ".", "..", "..<", "and", "or", "match", "not-match",
+	"in", "not-in", "keyof", ".", "..", "..<", "and", "or", "match", "not-match", "Substrof",
 }
 
 func (operator BinaryOperator) String() string {
@@ -4242,6 +4244,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if len(s)-i >= OR_LEN && string(s[i:i+OR_LEN]) == "or" {
 					operator = Or
 					i += OR_LEN - 1
+					break
+				}
+				panic(ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				})
+			case 's':
+				SUBSTROF_LEN := len("substrof")
+				if len(s)-i >= SUBSTROF_LEN && string(s[i:i+SUBSTROF_LEN]) == "substrof" {
+					operator = Substrof
+					i += SUBSTROF_LEN - 1
 					break
 				}
 				panic(ParsingError{
@@ -8319,6 +8335,30 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				ok = !ok
 			}
 			return ok, nil
+		case Substrof:
+			leftVal := ToReflectVal(left)
+			rightVal := ToReflectVal(right)
+
+			l := ""
+			r := ""
+
+			if leftVal.Kind() == reflect.String {
+				l = leftVal.String()
+			}
+
+			if rightVal.Kind() == reflect.String {
+				r = rightVal.String()
+			}
+
+			if leftVal.Type() == UINT8_SLICE_TYPE {
+				l = string(leftVal.Interface().([]uint8))
+			}
+
+			if rightVal.Type() == UINT8_SLICE_TYPE {
+				r = string(rightVal.Interface().([]uint8))
+			}
+
+			return strings.Contains(r, l), nil
 		default:
 			return nil, errors.New("invalid binary operator " + strconv.Itoa(int(n.Operator)))
 		}
