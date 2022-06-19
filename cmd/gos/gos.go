@@ -675,7 +675,7 @@ func main() {
 			}
 
 			if err := gopherscript.Check(mod); err != nil {
-				panic(fmt.Sprint("checking error:", err.Error()))
+				panic(fmt.Sprint("checking error: ", err.Error()))
 			}
 
 			var ctx *gopherscript.Context

@@ -20,6 +20,16 @@ match / {
     }
 
     /e* {
-        log "/e..."
+        log "/e*"
+    }
+}
+
+
+match /home/user {
+    %/home/$username$ {
+        log "username is" $username
+    }
+    /* {
+        log "/*"
     }
 }

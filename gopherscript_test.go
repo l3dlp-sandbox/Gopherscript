@@ -4848,8 +4848,14 @@ func TestEval(t *testing.T) {
 		assert.EqualValues(t, 2, res)
 	})
 
-	t.Run("switch statement : singe case (matches)", func(t *testing.T) {
-		n := MustParseModule(`$a = 0; switch 0 { 0 { $a = 1 } }; return $a`)
+	t.Run("switch statement : single case (matches)", func(t *testing.T) {
+		n := MustParseModule(`
+			$a = 0; 
+			switch 0 { 
+				0 { $a = 1 } 
+			}; 
+			return $a
+		`)
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -4857,7 +4863,14 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("switch statement : two cases (first matches)", func(t *testing.T) {
-		n := MustParseModule(`$a = 0; $b = 0; switch 0 { 0 { $a = 1 } 1 { $b = 1} }; return [$a,$b]`)
+		n := MustParseModule(`
+			$a = 0; 
+			$b = 0; 
+			switch 0 { 
+				0 { $a = 1 } 1 { $b = 1} 
+			}; 
+			return [$a,$b]
+		`)
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -4865,7 +4878,14 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("switch statement : two cases (second matches)", func(t *testing.T) {
-		n := MustParseModule(`$a = 0; $b = 0; switch 1 { 0 { $a = 1 } 1 { $b = 1 } }; return [$a,$b]`)
+		n := MustParseModule(`
+			$a = 0; 
+			$b = 0; 
+			switch 1 { 
+				0 { $a = 1 } 1 { $b = 1 } 
+			}; 
+			return [$a,$b]
+		`)
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
@@ -4873,11 +4893,34 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("match statement : matchers : two cases (first matches)", func(t *testing.T) {
-		n := MustParseModule(`$a = 0; $b = 0; match / { /* { $a = 1 } /e* { $b = 1} }; return [$a,$b]`)
+		n := MustParseModule(`
+			$a = 0; 
+			$b = 0; 
+			match / { 
+				/* { $a = 1 } /e* { $b = 1} 
+			}; 
+			return [$a,$b]
+		`)
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.Equal(t, List{1, 0}, res)
+	})
+
+	t.Run("match statement : group matchers : two cases (first matches)", func(t *testing.T) {
+		n := MustParseModule(`
+			$a = 0; 
+			$b = 0; 
+			match /home/user { 
+				%/home/$username$ { $a = $username } 
+				%/hom/$username$ { $b = 1} 
+			}; 
+			return [$a,$b]
+		`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, List{"user", 0}, res)
 	})
 
 	t.Run("match statement : matchers : two cases (second matches)", func(t *testing.T) {
@@ -6014,11 +6057,45 @@ func TestNamedSegmentPathPatternTest(t *testing.T) {
 	res := parseEval(t, `%/home/$username$`)
 	patt := res.(NamedSegmentPathPattern)
 
-	assert.False(t, patt.Test(Path("/home")))
-	assert.False(t, patt.Test(Path("/home/")))
-	assert.True(t, patt.Test(Path("/home/user")))
-	assert.False(t, patt.Test(Path("/home/user/")))
-	assert.False(t, patt.Test(Path("/home/user/e")))
+	for _, testCase := range []struct {
+		ok   bool
+		path Path
+	}{
+		{false, "/home"},
+		{false, "/home/"},
+		{true, "/home/user"},
+		{false, "/home/user/"},
+		{false, "/home/user/e"},
+	} {
+		t.Run(string(testCase.path), func(t *testing.T) {
+			assert.Equal(t, testCase.ok, patt.Test(testCase.path))
+		})
+	}
+}
+
+func TestNamedSegmentPathPatternMatchGroups(t *testing.T) {
+	res := parseEval(t, `%/home/$username$`)
+	patt := res.(NamedSegmentPathPattern)
+
+	for _, testCase := range []struct {
+		groups map[string]interface{}
+		path   Path
+	}{
+		{nil, "/home"},
+		{nil, "/home/"},
+		{map[string]interface{}{"username": "user"}, "/home/user"},
+		{nil, "/home/user/"},
+		{nil, "/home/user/e"},
+	} {
+		t.Run(string(testCase.path), func(t *testing.T) {
+			ok, groups := patt.MatchGroups(testCase.path)
+			if ok != (testCase.groups != nil) {
+				assert.FailNow(t, "invalid match")
+			}
+			assert.Equal(t, testCase.groups, groups)
+		})
+
+	}
 }
 
 func TestCompileStringPatternNode(t *testing.T) {

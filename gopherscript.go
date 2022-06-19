@@ -1148,6 +1148,11 @@ type Matcher interface {
 	Test(interface{}) bool
 }
 
+type GroupMatcher interface {
+	Matcher
+	MatchGroups(interface{}) (ok bool, groups map[string]interface{})
+}
+
 //todo: improve name
 type GenerativePattern interface {
 	Random() interface{}
@@ -6921,6 +6926,32 @@ func Check(node Node) error {
 					return fmt.Errorf("invalid break/continue statement: should be in a for statement")
 				}
 			}
+		case *NamedSegmentPathPatternLiteral:
+			//define the variables named after groups if the literal is used as a case in a match statement
+
+			if _, isCase := parent.(*Case); isCase {
+
+				stmt := ancestorChain[len(ancestorChain)-2]
+				_, isMatchStmt := stmt.(*MatchStatement)
+				if !isMatchStmt {
+					break
+				}
+
+				variables, ok := localVars[scopeNode]
+
+				if !ok {
+					variables = make(map[string]int)
+					localVars[scopeNode] = variables
+				}
+
+				for _, slice := range node.Slices {
+
+					if variable, isVar := slice.(*Variable); isVar {
+						variables[variable.Name] = 0
+					}
+				}
+			}
+
 		case *Variable:
 			if node.Name == "" {
 				break
@@ -7243,42 +7274,50 @@ type NamedSegmentPathPattern struct {
 }
 
 func (patt NamedSegmentPathPattern) Test(v interface{}) bool {
+	ok, _ := patt.MatchGroups(v)
+	return ok
+}
+
+func (patt NamedSegmentPathPattern) MatchGroups(v interface{}) (ok bool, groups map[string]interface{}) {
 	pth, ok := v.(Path)
 	if !ok {
-		return false
+		return false, nil
 	}
 
 	str := string(pth)
 	i := 0
+	groups = make(map[string]interface{})
 
 	for index, s := range patt.node.Slices {
 
 		if i >= len(str) {
-			return false
+			return false, nil
 		}
 
 		switch n := s.(type) {
 		case *PathSlice:
 			if i+len(n.Value) >= len(str) {
-				return false
+				return false, nil
 			}
 			if str[i:len(n.Value)] != n.Value {
-				return false
+				return false, nil
 			}
 			i += len(n.Value)
 		case *Variable:
 			segmentEnd := strings.Index(str[i:], "/")
 			if segmentEnd < 0 {
-				return true
+				groups[n.Name] = str[i:]
+				return true, groups
 			} else if index == len(patt.node.Slices)-1 { //if $var$ is at the end of the pattern there should not be a '/'
-				return false
+				return false, nil
 			} else {
+				groups[n.Name] = str[i : segmentEnd+1]
 				i += segmentEnd + 1
 			}
 		}
 	}
 
-	return true
+	return true, groups
 }
 
 type EntryMatcher struct {
@@ -8099,30 +8138,47 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				return nil, err
 			}
 
-			matcher, ok := m.(Matcher)
-			if !ok {
-				if reflect.TypeOf(m) == reflect.TypeOf(discriminant) { //TODO: change
+			if matcher, ok := m.(Matcher); ok {
+				groupMatcher, isGroupMatcher := matcher.(GroupMatcher)
+				if isGroupMatcher {
+					ok, groups := groupMatcher.MatchGroups(discriminant)
+					if ok {
+						scope := state.CurrentScope()
 
-					if m == discriminant {
+						for name, value := range groups {
+							_, isAlreadyDefined := scope[name]
+							if isAlreadyDefined {
+								return nil, errors.New("match statement: group matching: cannot define twice a variable named after a group")
+							}
+							scope[name] = value
+						}
+
 						_, err := Eval(matchCase.Block, state)
 						if err != nil {
 							return nil, err
 						}
 						break
-					} else {
-						continue
 					}
 
+				} else if matcher.Test(discriminant) {
+					_, err := Eval(matchCase.Block, state)
+					if err != nil {
+						return nil, err
+					}
+					break
 				}
+			} else if reflect.TypeOf(m) == reflect.TypeOf(discriminant) { //TODO: change
+				if m == discriminant {
+					_, err := Eval(matchCase.Block, state)
+					if err != nil {
+						return nil, err
+					}
+					break
+				} else {
+					continue
+				}
+			} else {
 				return nil, fmt.Errorf("match statement: value of type %T does not implement Matcher interface nor has the same type as value as the discriminant", m)
-			}
-
-			if matcher.Test(discriminant) {
-				_, err := Eval(matchCase.Block, state)
-				if err != nil {
-					return nil, err
-				}
-				break
 			}
 
 		}
