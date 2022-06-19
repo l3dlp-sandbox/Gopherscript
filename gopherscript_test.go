@@ -280,6 +280,18 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("invalid named-segment path pattern literals", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustParseModule("%/home/e$username$")
+		})
+		assert.Panics(t, func() {
+			MustParseModule("%/home/$username$e")
+		})
+		assert.Panics(t, func() {
+			MustParseModule("%/home/e$username$e")
+		})
+	})
+
 	t.Run("absolute path pattern literal containg /... in the middle", func(t *testing.T) {
 		assert.Panics(t, func() {
 			MustParseModule("/a/.../ee")

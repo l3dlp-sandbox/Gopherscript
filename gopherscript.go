@@ -305,7 +305,7 @@ type RelativePathPatternLiteral struct {
 //TODO: rename
 type NamedSegmentPathPatternLiteral struct {
 	NodeBase
-	Slices []Node
+	Slices []Node //PathSlice | Variable
 }
 
 type RelativePathExpression struct {
@@ -1031,7 +1031,7 @@ type PatternUnion struct {
 func isSimpleValueLiteral(node Node) bool {
 	switch node.(type) {
 	case *StringLiteral, *IdentifierLiteral, *IntLiteral, *FloatLiteral, *AbsolutePathLiteral, *AbsolutePathPatternLiteral, *RelativePathLiteral,
-		*RelativePathPatternLiteral, *BooleanLiteral, *NilLiteral, *HTTPHostLiteral, *HTTPHostPatternLiteral, *URLLiteral, *URLPatternLiteral:
+		*RelativePathPatternLiteral, *NamedSegmentPathPatternLiteral, *BooleanLiteral, *NilLiteral, *HTTPHostLiteral, *HTTPHostPatternLiteral, *URLLiteral, *URLPatternLiteral:
 		return true
 	default:
 		return false
@@ -2095,6 +2095,34 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 
 					slices := parsePathExpressionSlices(start, i)
+
+					for j := 0; j < len(slices); j++ {
+						_, isVar := slices[j].(*Variable)
+						if isVar {
+							prev := slices[j-1].(*PathSlice).Value
+							if prev[len(prev)-1] != '/' {
+								panic(ParsingError{
+									"invalid path pattern literal with named segments",
+									i,
+									start,
+									Pathlike,
+									nil,
+								})
+							}
+							if j < len(slices)-1 {
+								next := slices[j+1].(*PathSlice).Value
+								if next[0] != '/' {
+									panic(ParsingError{
+										"invalid path pattern literal with named segments",
+										i,
+										start,
+										Pathlike,
+										nil,
+									})
+								}
+							}
+						}
+					}
 
 					return &NamedSegmentPathPatternLiteral{
 						NodeBase: base,
