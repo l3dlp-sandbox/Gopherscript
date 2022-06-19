@@ -6074,8 +6074,8 @@ func TestNamedSegmentPathPatternTest(t *testing.T) {
 }
 
 func TestNamedSegmentPathPatternMatchGroups(t *testing.T) {
-	res := parseEval(t, `%/home/$username$`)
-	patt := res.(NamedSegmentPathPattern)
+	res1 := parseEval(t, `%/home/$username$`)
+	patt1 := res1.(NamedSegmentPathPattern)
 
 	for _, testCase := range []struct {
 		groups map[string]interface{}
@@ -6088,7 +6088,30 @@ func TestNamedSegmentPathPatternMatchGroups(t *testing.T) {
 		{nil, "/home/user/e"},
 	} {
 		t.Run(string(testCase.path), func(t *testing.T) {
-			ok, groups := patt.MatchGroups(testCase.path)
+			ok, groups := patt1.MatchGroups(testCase.path)
+			if ok != (testCase.groups != nil) {
+				assert.FailNow(t, "invalid match")
+			}
+			assert.Equal(t, testCase.groups, groups)
+		})
+
+	}
+
+	res2 := parseEval(t, `%/home/$username$/`)
+	patt2 := res2.(NamedSegmentPathPattern)
+
+	for _, testCase := range []struct {
+		groups map[string]interface{}
+		path   Path
+	}{
+		{nil, "/home"},
+		{nil, "/home/"},
+		{nil, "/home/user"},
+		{map[string]interface{}{"username": "user"}, "/home/user/"},
+		{nil, "/home/user/e"},
+	} {
+		t.Run("pattern ends with slash, "+string(testCase.path), func(t *testing.T) {
+			ok, groups := patt2.MatchGroups(testCase.path)
 			if ok != (testCase.groups != nil) {
 				assert.FailNow(t, "invalid match")
 			}

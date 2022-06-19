@@ -7278,7 +7278,7 @@ func (patt NamedSegmentPathPattern) Test(v interface{}) bool {
 	return ok
 }
 
-func (patt NamedSegmentPathPattern) MatchGroups(v interface{}) (ok bool, groups map[string]interface{}) {
+func (patt NamedSegmentPathPattern) MatchGroups(v interface{}) (bool, map[string]interface{}) {
 	pth, ok := v.(Path)
 	if !ok {
 		return false, nil
@@ -7286,7 +7286,7 @@ func (patt NamedSegmentPathPattern) MatchGroups(v interface{}) (ok bool, groups 
 
 	str := string(pth)
 	i := 0
-	groups = make(map[string]interface{})
+	groups := make(map[string]interface{})
 
 	for index, s := range patt.node.Slices {
 
@@ -7296,28 +7296,35 @@ func (patt NamedSegmentPathPattern) MatchGroups(v interface{}) (ok bool, groups 
 
 		switch n := s.(type) {
 		case *PathSlice:
-			if i+len(n.Value) >= len(str) {
+			if i+len(n.Value) > len(str) {
 				return false, nil
 			}
-			if str[i:len(n.Value)] != n.Value {
+			if str[i:i+len(n.Value)] != n.Value {
 				return false, nil
 			}
 			i += len(n.Value)
 		case *Variable:
 			segmentEnd := strings.Index(str[i:], "/")
 			if segmentEnd < 0 {
+				if index < len(patt.node.Slices)-1 {
+					return false, nil
+				}
 				groups[n.Name] = str[i:]
 				return true, groups
 			} else if index == len(patt.node.Slices)-1 { //if $var$ is at the end of the pattern there should not be a '/'
 				return false, nil
 			} else {
-				groups[n.Name] = str[i : segmentEnd+1]
-				i += segmentEnd + 1
+				groups[n.Name] = str[i : i+segmentEnd]
+				i += segmentEnd
 			}
 		}
 	}
 
-	return true, groups
+	if i == len(str) {
+		return true, groups
+	}
+
+	return false, nil
 }
 
 type EntryMatcher struct {
