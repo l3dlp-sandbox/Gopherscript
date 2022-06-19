@@ -3787,6 +3787,25 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("single line object pattern literal [ integer ] ", func(t *testing.T) {
+		n := MustParseModule("%[ 1 ]")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 6}},
+			Statements: []Node{
+				&ListPatternLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 6}},
+					Elements: []Node{
+						&IntLiteral{
+							NodeBase: NodeBase{NodeSpan{3, 4}},
+							Raw:      "1",
+							Value:    1,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("pattern definition : RHS is a pattern identifier literal ", func(t *testing.T) {
 		n := MustParseModule("%i = %int;")
 		assert.EqualValues(t, &Module{
@@ -5662,6 +5681,31 @@ func TestEval(t *testing.T) {
 		}, res)
 	})
 
+	t.Run("list pattern literal : empty", func(t *testing.T) {
+		n := MustParseModule(`%[]`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, &ListPattern{
+			ElementMatchers: make([]Matcher, 0),
+		}, res)
+	})
+
+	t.Run("list pattern literal : not empty", func(t *testing.T) {
+		n := MustParseModule(`%[ 2 ]`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.Equal(t, &ListPattern{
+			ElementMatchers: []Matcher{
+				ExactSimpleValueMatcher{int(2)},
+			},
+		}, res)
+	})
 }
 
 func TestHttpPermission(t *testing.T) {

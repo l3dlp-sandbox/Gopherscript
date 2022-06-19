@@ -766,6 +766,11 @@ type ObjectPatternLiteral struct {
 	Properties []ObjectProperty
 }
 
+type ListPatternLiteral struct {
+	NodeBase
+	Elements []Node
+}
+
 type GlobalConstantDeclarations struct {
 	NodeBase
 	NamesValues [][2]Node
@@ -3068,6 +3073,41 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						Span: NodeSpan{openingBraceIndex - 1, i},
 					},
 					Properties: properties,
+				}
+			case s[i] == '[': //list pattern literal
+				openingBracketIndex := i
+				i++
+
+				var elements []Node
+				for i < len(s) && s[i] != ']' {
+					eatSpaceNewlineComma()
+
+					if i < len(s) && s[i] == ']' {
+						break
+					}
+
+					e := parseExpression()
+					elements = append(elements, e)
+
+					eatSpaceNewlineComma()
+				}
+
+				if i >= len(s) || s[i] != ']' {
+					panic(ParsingError{
+						"unterminated list pattern literal, missing closing bracket ']'",
+						i,
+						openingBracketIndex,
+						KnownType,
+						(*ListPatternLiteral)(nil),
+					})
+				}
+				i++
+
+				return &ListPatternLiteral{
+					NodeBase: NodeBase{
+						Span: NodeSpan{openingBracketIndex - 1, i},
+					},
+					Elements: elements,
 				}
 			default:
 				panic(ParsingError{
@@ -6450,6 +6490,12 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 				return err
 			}
 		}
+	case *ListPatternLiteral:
+		for _, elem := range n.Elements {
+			if err := walk(elem, node, ancestorChain, fn); err != nil {
+				return err
+			}
+		}
 	case *MemberExpression:
 		if err := walk(n.Left, node, ancestorChain, fn); err != nil {
 			return err
@@ -7169,6 +7215,17 @@ func CompilePatternNode(node Node, state *State) (Matcher, error) {
 		}
 
 		return objPattern, nil
+	case *ListPatternLiteral:
+		pattern, err := Eval(n, state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate an object pattern literal: %s", err.Error())
+		}
+		listPattern, ok := pattern.(*ListPattern)
+		if !ok {
+			return nil, fmt.Errorf("failed to evaluate an object pattern literal: %s", err.Error())
+		}
+
+		return listPattern, nil
 	case *PatternPiece:
 		if n.Kind == StringPattern {
 			return CompileStringPatternNode(node, state)
@@ -7367,6 +7424,26 @@ func (patt ObjectPattern) Test(v interface{}) bool {
 	for key, valueMatcher := range patt.EntryMatchers {
 		value, ok := obj[key]
 		if !ok || !valueMatcher.Test(value) {
+			return false
+		}
+	}
+	return true
+}
+
+type ListPattern struct {
+	ElementMatchers []Matcher
+}
+
+func (patt ListPattern) Test(v interface{}) bool {
+	list, ok := v.(List)
+	if !ok {
+		return false
+	}
+	if len(list) != len(patt.ElementMatchers) {
+		return false
+	}
+	for i, elementMatcher := range patt.ElementMatchers {
+		if !ok || !elementMatcher.Test(list[i]) {
 			return false
 		}
 	}
@@ -8538,6 +8615,29 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 					pattern.EntryMatchers[name] = ExactSimpleValueMatcher{m}
 				} else {
 					return nil, fmt.Errorf("failed to evaluate object pattern literal, matcher for key '%s' is not a matcher or a simple value but a %T", name, value)
+				}
+			}
+		}
+
+		return pattern, nil
+	case *ListPatternLiteral:
+		pattern := &ListPattern{
+			ElementMatchers: []Matcher{},
+		}
+		for _, e := range n.Elements {
+			value, err := Eval(e, state)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate list pattern literal, error when evaluating an element: %s", err.Error())
+			}
+
+			switch m := value.(type) {
+			case Matcher:
+				pattern.ElementMatchers = append(pattern.ElementMatchers, m)
+			default:
+				if IsSimpleGopherVal(m) {
+					pattern.ElementMatchers = append(pattern.ElementMatchers, ExactSimpleValueMatcher{m})
+				} else {
+					return nil, fmt.Errorf("failed to evaluate list pattern literal, matcher for an alement is not a matcher or a simple value but a %T", value)
 				}
 			}
 		}
