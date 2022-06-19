@@ -4296,6 +4296,14 @@ func TestCheck(t *testing.T) {
 		assert.NoError(t, Check(n))
 	})
 
+	t.Run("local variable in a lazy expression", func(t *testing.T) {
+		n := MustParseModule(`
+			@($a)
+		`)
+		assert.NoError(t, Check(n))
+	})
+
+
 	t.Run("argument variable in a function", func(t *testing.T) {
 		n := MustParseModule(`
 			fn f(a){

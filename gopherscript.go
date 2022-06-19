@@ -151,7 +151,7 @@ func (base NodeBase) IncludedIn(node Node) bool {
 
 func isScopeContainerNode(node Node) bool {
 	switch node.(type) {
-	case *Module, *EmbeddedModule, *FunctionExpression:
+	case *Module, *EmbeddedModule, *FunctionExpression, *LazyExpression:
 		return true
 	default:
 		return false
@@ -6958,6 +6958,10 @@ func Check(node Node) error {
 			}
 
 			if _, isNamedSegmentPathLiteral := parent.(*NamedSegmentPathPatternLiteral); isNamedSegmentPathLiteral {
+				break
+			}
+
+			if _, isLazyExpr := scopeNode.(*LazyExpression); isLazyExpr {
 				break
 			}
 
