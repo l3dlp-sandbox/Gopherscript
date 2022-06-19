@@ -2132,7 +2132,7 @@ func parseJson(ctx *gopherscript.Context, v interface{}) (interface{}, error) {
 	case string:
 		b = []byte(val)
 	default:
-		return "", errors.New("cannot parse non string|bytes")
+		return "", fmt.Errorf("cannot parse non string|bytes: %T", val)
 	}
 
 	var result interface{}
