@@ -4303,7 +4303,6 @@ func TestCheck(t *testing.T) {
 		assert.NoError(t, Check(n))
 	})
 
-
 	t.Run("argument variable in a function", func(t *testing.T) {
 		n := MustParseModule(`
 			fn f(a){
@@ -5623,7 +5622,7 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, ExactStringMatcher("s"), res)
+		assert.Equal(t, ExactSimpleValueMatcher{"s"}, res)
 	})
 
 	t.Run("pattern definition & identifiers : RHS is another pattern identifier", func(t *testing.T) {
@@ -5633,7 +5632,7 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 
 		assert.NoError(t, err)
-		assert.Equal(t, ExactStringMatcher("p"), res)
+		assert.Equal(t, ExactSimpleValueMatcher{"p"}, res)
 	})
 
 	t.Run("object pattern literal : empty", func(t *testing.T) {
@@ -5649,7 +5648,7 @@ func TestEval(t *testing.T) {
 	})
 
 	t.Run("object pattern literal : not empty", func(t *testing.T) {
-		n := MustParseModule(`%s = "s"; return %{name: %s}`)
+		n := MustParseModule(`%s = "s"; return %{name: %s, count: 2}`)
 
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
@@ -5657,7 +5656,8 @@ func TestEval(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, &ObjectPattern{
 			EntryMatchers: map[string]Matcher{
-				"name": ExactStringMatcher("s"),
+				"name":  ExactSimpleValueMatcher{"s"},
+				"count": ExactSimpleValueMatcher{int(2)},
 			},
 		}, res)
 	})
@@ -6133,7 +6133,7 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 	t.Run("single element : string literal", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
-		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		ctx.addNamedPattern("s", ExactSimpleValueMatcher{"s"})
 		state := NewState(ctx)
 
 		patt, err := CompileStringPatternNode(&PatternPiece{
@@ -6173,7 +6173,7 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 	t.Run("single element : string literal (ocurrence modifier i '*')", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
-		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		ctx.addNamedPattern("s", ExactSimpleValueMatcher{"s"})
 		state := NewState(ctx)
 
 		patt, err := CompileStringPatternNode(&PatternPiece{
@@ -6192,7 +6192,7 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 	t.Run("single element : string literal (ocurrence modifier i '=' 2)", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
-		ctx.addNamedPattern("s", ExactStringMatcher("s"))
+		ctx.addNamedPattern("s", ExactSimpleValueMatcher{"s"})
 		state := NewState(ctx)
 
 		patt, err := CompileStringPatternNode(&PatternPiece{
@@ -6212,7 +6212,7 @@ func TestCompileStringPatternNode(t *testing.T) {
 
 	t.Run("two elements : one string literal + a pattern identifier (exact string matcher)", func(t *testing.T) {
 		ctx := NewContext(nil, nil, nil)
-		ctx.addNamedPattern("b", ExactStringMatcher("c"))
+		ctx.addNamedPattern("b", ExactSimpleValueMatcher{"c"})
 		state := NewState(ctx)
 
 		patt, err := CompileStringPatternNode(&PatternPiece{
@@ -6296,7 +6296,7 @@ func TestRepeatedPatternElementRandom(t *testing.T) {
 			regexp:            nil,
 			ocurrenceModifier: ExactOcurrence,
 			exactCount:        2,
-			element:           ExactStringMatcher("a"),
+			element:           ExactSimpleValueMatcher{"a"},
 		}
 
 		for i := 0; i < 5; i++ {
@@ -6308,7 +6308,7 @@ func TestRepeatedPatternElementRandom(t *testing.T) {
 		patt := RepeatedPatternElement{
 			regexp:            nil,
 			ocurrenceModifier: OptionalOcurrence,
-			element:           ExactStringMatcher("a"),
+			element:           ExactSimpleValueMatcher{"a"},
 		}
 
 		for i := 0; i < 5; i++ {
@@ -6321,7 +6321,7 @@ func TestRepeatedPatternElementRandom(t *testing.T) {
 		patt := RepeatedPatternElement{
 			regexp:            nil,
 			ocurrenceModifier: ZeroOrMoreOcurrence,
-			element:           ExactStringMatcher("a"),
+			element:           ExactSimpleValueMatcher{"a"},
 		}
 
 		for i := 0; i < 5; i++ {
@@ -6336,7 +6336,7 @@ func TestRepeatedPatternElementRandom(t *testing.T) {
 		patt := RepeatedPatternElement{
 			regexp:            nil,
 			ocurrenceModifier: ZeroOrMoreOcurrence,
-			element:           ExactStringMatcher("a"),
+			element:           ExactSimpleValueMatcher{"a"},
 		}
 
 		for i := 0; i < 5; i++ {
@@ -6354,8 +6354,8 @@ func TestSequenceStringPatternRandom(t *testing.T) {
 		regexp: nil,
 		node:   nil,
 		elements: []StringPatternElement{
-			ExactStringMatcher("a"),
-			ExactStringMatcher("b"),
+			ExactSimpleValueMatcher{"a"},
+			ExactSimpleValueMatcher{"b"},
 		},
 	}
 
@@ -6368,8 +6368,8 @@ func TestUnionStringPatternRandom(t *testing.T) {
 		regexp: nil,
 		node:   nil,
 		cases: []StringPatternElement{
-			ExactStringMatcher("a"),
-			ExactStringMatcher("b"),
+			ExactSimpleValueMatcher{"a"},
+			ExactSimpleValueMatcher{"b"},
 		},
 	}
 

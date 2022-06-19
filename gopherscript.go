@@ -1229,19 +1229,22 @@ func (patt URLPattern) Test(v interface{}) bool {
 	}
 }
 
-type ExactStringMatcher string
+type ExactSimpleValueMatcher struct{ value interface{} }
 
-func (matcher ExactStringMatcher) Test(v interface{}) bool {
-	str, ok := v.(string)
-	return ok && string(matcher) == str
+func (matcher ExactSimpleValueMatcher) Test(v interface{}) bool {
+	return matcher.value == v
 }
 
-func (matcher ExactStringMatcher) Regex() string {
-	return regexp.QuoteMeta(string(matcher))
+func (matcher ExactSimpleValueMatcher) Regex() string {
+	s, isString := matcher.value.(string)
+	if !isString {
+		panic(errors.New("cannot get regex for a ExactSimpleValueMatcher that has a non-string value"))
+	}
+	return regexp.QuoteMeta(string(s))
 }
 
-func (matcher ExactStringMatcher) Random() interface{} {
-	return string(matcher)
+func (matcher ExactSimpleValueMatcher) Random() interface{} {
+	return matcher.value
 }
 
 func samePointer(a, b interface{}) bool {
@@ -7183,9 +7186,9 @@ func CompilePatternNode(node Node, state *State) (Matcher, error) {
 func CompileStringPatternNode(node Node, state *State) (StringPatternElement, error) {
 	switch v := node.(type) {
 	case *StringLiteral:
-		return ExactStringMatcher(v.Value), nil
+		return ExactSimpleValueMatcher{v.Value}, nil
 	case *RuneLiteral:
-		return ExactStringMatcher(v.Value), nil
+		return ExactSimpleValueMatcher{v.Value}, nil
 	case *RuneRangeExpression:
 		lower := v.Lower.Value
 		upper := v.Upper.Value
@@ -8526,11 +8529,17 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate object pattern literal, error when evaluating value for '%s': %s", name, err.Error())
 			}
-			matcher, ok := value.(Matcher)
-			if !ok {
-				return nil, fmt.Errorf("failed to evaluate object pattern literal, matcher for key '%s' is not a matcher but a %T", name, value)
+
+			switch m := value.(type) {
+			case Matcher:
+				pattern.EntryMatchers[name] = m
+			default:
+				if IsSimpleGopherVal(m) {
+					pattern.EntryMatchers[name] = ExactSimpleValueMatcher{m}
+				} else {
+					return nil, fmt.Errorf("failed to evaluate object pattern literal, matcher for key '%s' is not a matcher or a simple value but a %T", name, value)
+				}
 			}
-			pattern.EntryMatchers[name] = matcher
 		}
 
 		return pattern, nil
