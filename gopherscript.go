@@ -319,6 +319,12 @@ type AbsolutePathExpression struct {
 	Slices []Node
 }
 
+type RegularExpressionLiteral struct {
+	NodeBase
+	Raw   string
+	Value string
+}
+
 type URLExpression struct {
 	NodeBase
 	Raw         string
@@ -1038,7 +1044,7 @@ type PatternUnion struct {
 func isSimpleValueLiteral(node Node) bool {
 	switch node.(type) {
 	case *StringLiteral, *IdentifierLiteral, *IntLiteral, *FloatLiteral, *AbsolutePathLiteral, *AbsolutePathPatternLiteral, *RelativePathLiteral,
-		*RelativePathPatternLiteral, *NamedSegmentPathPatternLiteral, *BooleanLiteral, *NilLiteral, *HTTPHostLiteral, *HTTPHostPatternLiteral, *URLLiteral, *URLPatternLiteral:
+		*RelativePathPatternLiteral, *NamedSegmentPathPatternLiteral, *RegularExpressionLiteral, *BooleanLiteral, *NilLiteral, *HTTPHostLiteral, *HTTPHostPatternLiteral, *URLLiteral, *URLPatternLiteral:
 		return true
 	default:
 		return false
@@ -3075,6 +3081,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Properties: properties,
 				}
 			case s[i] == '[': //list pattern literal
+
 				openingBracketIndex := i
 				i++
 
@@ -3108,6 +3115,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						Span: NodeSpan{openingBracketIndex - 1, i},
 					},
 					Elements: elements,
+				}
+			case s[i] == '"':
+				str := parseExpression().(*StringLiteral)
+				return &RegularExpressionLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{start, str.Base().Span.End},
+					},
+					Raw:   str.Raw,
+					Value: str.Value,
 				}
 			default:
 				panic(ParsingError{

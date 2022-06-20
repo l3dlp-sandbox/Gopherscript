@@ -365,6 +365,34 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("regex literal : empty", func(t *testing.T) {
+		n := MustParseModule(`%""`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 3}},
+			Statements: []Node{
+				&RegularExpressionLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 3}},
+					Raw:      `""`,
+					Value:    "",
+				},
+			},
+		}, n)
+	})
+
+	t.Run("regex literal : not empty", func(t *testing.T) {
+		n := MustParseModule(`%"a+"`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}},
+			Statements: []Node{
+				&RegularExpressionLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 5}},
+					Raw:      `"a+"`,
+					Value:    "a+",
+				},
+			},
+		}, n)
+	})
+
 	t.Run("nil literal", func(t *testing.T) {
 		n := MustParseModule("nil")
 		assert.EqualValues(t, &Module{
@@ -5706,6 +5734,7 @@ func TestEval(t *testing.T) {
 			},
 		}, res)
 	})
+
 }
 
 func TestHttpPermission(t *testing.T) {
