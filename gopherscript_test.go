@@ -5735,6 +5735,16 @@ func TestEval(t *testing.T) {
 		}, res)
 	})
 
+	t.Run("regex literal : empty", func(t *testing.T) {
+		n := MustParseModule(`%"a"`)
+
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+
+		assert.NoError(t, err)
+		assert.IsType(t, RegexMatcher{}, res)
+	})
+
 }
 
 func TestHttpPermission(t *testing.T) {

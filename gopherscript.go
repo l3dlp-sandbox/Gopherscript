@@ -1258,6 +1258,20 @@ func (matcher ExactSimpleValueMatcher) Random() interface{} {
 	return matcher.value
 }
 
+type RegexMatcher struct{ regexp *regexp.Regexp }
+
+func (matcher RegexMatcher) Test(v interface{}) bool {
+	str, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return matcher.regexp.MatchString(str)
+}
+
+func (matcher RegexMatcher) Regex() string {
+	return matcher.regexp.String()
+}
+
 func samePointer(a, b interface{}) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
@@ -7535,6 +7549,8 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return PathPattern(n.Value), nil
 	case *NamedSegmentPathPatternLiteral:
 		return NamedSegmentPathPattern{n}, nil
+	case *RegularExpressionLiteral:
+		return RegexMatcher{regexp.MustCompile(n.Value)}, nil
 	case *PathSlice:
 		return n.Value, nil
 	case *URLQueryParameterSlice:
