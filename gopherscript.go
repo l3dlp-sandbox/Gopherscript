@@ -103,6 +103,14 @@ func isNotPairedOrIsClosingDelim(r rune) bool {
 	}
 }
 
+func HasPathLikeStart(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	return s[0] == '/' || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../")
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -7617,7 +7625,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, errors.New("path expression: error: result should not contain the substring '..' ")
 		}
 
-		if pth[0] != '.' && pth[0] != '/' {
+		if !HasPathLikeStart(pth) {
 			pth = "./" + pth
 		}
 

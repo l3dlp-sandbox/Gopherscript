@@ -394,7 +394,27 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 			switch len(suggestions) {
 			case 0:
+				//do nothing
 			case 1:
+				//replace the incomplete element with the suggestion
+				suggestion := suggestions[0]
+				beforeElem := input[:suggestion.span.Start]
+				afterElem := input[suggestion.span.End:]
+
+				prevLen := len(input)
+				input = append(beforeElem, []rune(suggestion.value)...)
+				input = append(input, afterElem...)
+				newCharCount := len(input) - prevLen
+
+				termenv.SaveCursorPosition()
+
+				termenv.ClearLine()
+				moveCursorLineStart()
+				writePrompt()
+				fmt.Print(string(input))
+
+				termenv.RestoreCursorPosition()
+				termenv.CursorForward(newCharCount)
 			default:
 				var texts []string
 				for _, sug := range suggestions {
@@ -528,6 +548,7 @@ func findLongestCommonPrefix(strs []string) string {
 type suggestion struct {
 	shownString string
 	value       string
+	span        gopherscript.NodeSpan
 }
 
 func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
@@ -549,6 +570,16 @@ func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name, base) {
 			pth := path.Join(dir, e.Name)
+
+			if !gopherscript.HasPathLikeStart(pth) {
+				pth = "./" + pth
+			}
+
+			stat, _ := os.Stat(pth)
+			if stat.IsDir() {
+				pth += "/"
+			}
+
 			suggestions = append(suggestions, suggestion{
 				shownString: e.Name,
 				value:       pth,
@@ -594,6 +625,11 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 	case *gopherscript.AbsolutePathLiteral:
 		suggestions = findPathSuggestions(ctx, n.Value)
 
+	}
+
+	for i, suggestion := range suggestions {
+		suggestion.span = nodeAtCursor.Base().Span
+		suggestions[i] = suggestion
 	}
 
 	return suggestions
