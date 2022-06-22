@@ -6173,8 +6173,10 @@ type State struct {
 	ScopeStack  []map[string]interface{}
 	ReturnValue *interface{}
 	IterationChange
-	ctx       *Context
-	constants map[string]int
+	ctx        *Context
+	constants  map[string]int
+	Script     []rune
+	ScriptName string
 }
 
 func (state State) GlobalScope() map[string]interface{} {
@@ -7498,6 +7500,26 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				err = fmt.Errorf("eval: error: %s %s", er, debug.Stack())
 			} else {
 				err = fmt.Errorf("eval: %s", e)
+			}
+		}
+
+		if err != nil && len(state.Script) != 0 && state.ScriptName != "" {
+			line := 1
+			col := 1
+			i := 0
+
+			for i < node.Base().Span.Start {
+				if state.Script[i] == '\n' {
+					line++
+					col = 1
+				} else {
+					col++
+				}
+
+				i++
+			}
+			if !strings.HasPrefix(err.Error(), state.ScriptName) {
+				err = fmt.Errorf("%s:%d:%d: %s", state.ScriptName, line, col, err)
 			}
 		}
 	}()

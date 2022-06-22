@@ -712,6 +712,8 @@ func main() {
 			//CONTEXT & STATE
 
 			state := NewState(ctx)
+			state.Script = []rune(code)
+			state.ScriptName = filepath
 
 			if passCLIArguments {
 				args := gopherscript.List{}
