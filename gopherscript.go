@@ -148,6 +148,7 @@ type NodeSpan struct {
 
 type NodeBase struct {
 	Span NodeSpan
+	Err  *ParsingError
 }
 
 func (base NodeBase) Base() NodeBase {
@@ -156,6 +157,39 @@ func (base NodeBase) Base() NodeBase {
 
 func (base NodeBase) IncludedIn(node Node) bool {
 	return base.Span.Start >= node.Base().Span.Start && base.Span.End <= node.Base().Span.End
+}
+
+type InvalidURLPattern struct {
+	NodeBase
+	Value string
+}
+
+type InvalidURL struct {
+	NodeBase
+	Value string
+}
+
+type InvalidAliasRelatedNode struct {
+	NodeBase
+	Value string
+}
+
+type InvalidComplexPatternElement struct {
+	NodeBase
+}
+
+type InvalidObjectElement struct {
+	NodeBase
+}
+
+type InvalidMemberLike struct {
+	NodeBase
+	Left  Node
+	Right Node //can be nil
+}
+
+type UnknownNode struct {
+	NodeBase
 }
 
 func isScopeContainerNode(node Node) bool {
@@ -487,8 +521,8 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 	if globalConsts != nil {
 		state = NewState(NewContext([]Permission{GlobalVarPermission{ReadPerm, "*"}}, nil, nil))
 		globalScope := state.GlobalScope()
-		for _, nameValueNodes := range globalConsts.NamesValues {
-			globalScope[nameValueNodes[0].(*IdentifierLiteral).Name] = MustEval(nameValueNodes[1], nil)
+		for _, decl := range globalConsts.Declarations {
+			globalScope[decl.Left.Name] = MustEval(decl.Right, nil)
 		}
 	} else {
 		state = runningState
@@ -787,7 +821,13 @@ type ListPatternLiteral struct {
 
 type GlobalConstantDeclarations struct {
 	NodeBase
-	NamesValues [][2]Node
+	Declarations []*GlobalConstantDeclaration
+}
+
+type GlobalConstantDeclaration struct {
+	NodeBase
+	Left  *IdentifierLiteral
+	Right Node
 }
 
 type Assignment struct {
@@ -938,7 +978,7 @@ type RuneRangeExpression struct {
 
 type FunctionExpression struct {
 	NodeBase
-	Parameters   []FunctionParameter
+	Parameters   []*FunctionParameter
 	Body         *Block
 	Requirements *Requirements
 }
@@ -950,6 +990,7 @@ type FunctionDeclaration struct {
 }
 
 type FunctionParameter struct {
+	NodeBase
 	Var *IdentifierLiteral
 }
 
@@ -1749,6 +1790,8 @@ func MustParseModule(str string) (result *Module) {
 	return n
 }
 
+//parses a file module, resultErr is either a non-sntax error or an aggregation of syntax errors.
+//result and resultErr can be both non-nil at the same time because syntax errors are also stored in each node.
 func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	s := []rune(str)
 
@@ -1758,28 +1801,46 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			resultErr = err
 		}
 
-		//add location in error message
-		if parsingErr, ok := resultErr.(ParsingError); ok {
-			line := 1
-			col := 1
-			i := 0
-
-			for i < parsingErr.Index {
-				if s[i] == '\n' {
-					line++
-					col = 1
-				} else {
-					col++
-				}
-
-				i++
-			}
-
-			parsingErr.Message = fmt.Sprintf("%s:%d:%d: %s: %s", fpath, line, col, parsingErr.Message, debug.Stack())
-			resultErr = parsingErr
-		} else if resultErr != nil {
+		if resultErr != nil {
 			resultErr = fmt.Errorf("%s: %s", resultErr.Error(), debug.Stack())
 		}
+
+		if result != nil {
+			Walk(result, func(node, parent, scopeNode Node, ancestorChain []Node) error {
+				if reflect.ValueOf(node).IsNil() {
+					return nil
+				}
+
+				parsingErr := node.Base().Err
+				if parsingErr == nil {
+					return nil
+				}
+
+				if resultErr == nil {
+					resultErr = errors.New("")
+				}
+
+				//add location in error message
+				line := 1
+				col := 1
+				i := 0
+
+				for i < parsingErr.Index {
+					if s[i] == '\n' {
+						line++
+						col = 1
+					} else {
+						col++
+					}
+
+					i++
+				}
+
+				resultErr = fmt.Errorf("%s\n%s:%d:%d: %s", resultErr.Error(), fpath, line, col, parsingErr.Message)
+				return nil
+			})
+		}
+
 	}()
 
 	mod := &Module{
@@ -1888,6 +1949,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parseBlock = func() *Block {
 		openingBraceIndex := i
 		i++
+		var parsingErr *ParsingError
 
 		var stmts []Node
 
@@ -1903,13 +1965,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if i >= len(s) {
-			panic(ParsingError{
+			parsingErr = &ParsingError{
 				"unterminated block, missing closing brace '}",
 				i,
 				openingBraceIndex,
 				KnownType,
 				(*Block)(nil),
-			})
+			}
+
 		}
 
 		if s[i] != '}' {
@@ -1929,6 +1992,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		return &Block{
 			NodeBase: NodeBase{
 				Span: NodeSpan{openingBraceIndex, end},
+				Err:  parsingErr,
 			},
 			Statements: stmts,
 		}
@@ -1957,25 +2021,34 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		for index < exclEnd {
 
 			if inInterpolation {
-				if s[index] == '$' {
+				if s[index] == '$' { //end if interpolation
 					name := string(s[sliceStart+1 : index])
 
 					slices = append(slices, &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{sliceStart, index + 1},
+							nil,
 						},
 						Name: name,
 					})
 					inInterpolation = false
 					sliceStart = index + 1
 				} else if !isIdentChar(s[index]) {
-					panic(ParsingError{
-						"a path interpolation should contain an identifier without spaces, example: $name$ ",
-						i,
-						-1,
-						UnspecifiedCategory,
-						nil,
+					slices = append(slices, &PathSlice{
+						NodeBase: NodeBase{
+							NodeSpan{sliceStart, exclEnd},
+							&ParsingError{
+								"a path interpolation should contain an identifier without spaces, example: $name$ ",
+								i,
+								-1,
+								UnspecifiedCategory,
+								nil,
+							},
+						},
+						Value: string(s[sliceStart:exclEnd]),
 					})
+
+					return slices
 				}
 
 			} else if s[index] == '$' {
@@ -1984,6 +2057,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				slices = append(slices, &PathSlice{
 					NodeBase: NodeBase{
 						NodeSpan{sliceStart, index},
+						nil,
 					},
 					Value: slice,
 				})
@@ -2008,6 +2082,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			slices = append(slices, &PathSlice{
 				NodeBase: NodeBase{
 					NodeSpan{sliceStart, index},
+					nil,
 				},
 				Value: string(s[sliceStart:index]),
 			})
@@ -2030,19 +2105,29 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					slices = append(slices, &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{sliceStart, index + 1},
+							nil,
 						},
 						Name: name,
 					})
 					inInterpolation = false
 					sliceStart = index + 1
 				} else if !isIdentChar(s[index]) {
-					panic(ParsingError{
-						"a query parameter interpolation should contain an identifier without spaces, example: $name$ ",
-						i,
-						-1,
-						UnspecifiedCategory,
-						nil,
+
+					slices = append(slices, &URLQueryParameterSlice{
+						NodeBase: NodeBase{
+							NodeSpan{sliceStart, exclEnd},
+							&ParsingError{
+								"a query parameter interpolation should contain an identifier without spaces, example: $name$ ",
+								i,
+								-1,
+								UnspecifiedCategory,
+								nil,
+							},
+						},
+						Value: string(s[sliceStart:exclEnd]),
 					})
+
+					return slices
 				}
 
 			} else if s[index] == '$' {
@@ -2051,6 +2136,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				slices = append(slices, &URLQueryParameterSlice{
 					NodeBase: NodeBase{
 						NodeSpan{sliceStart, index},
+						nil,
 					},
 					Value: slice,
 				})
@@ -2075,6 +2161,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			slices = append(slices, &PathSlice{
 				NodeBase: NodeBase{
 					NodeSpan{sliceStart, index},
+					nil,
 				},
 				Value: string(s[sliceStart:index]),
 			})
@@ -2118,23 +2205,31 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if strings.Contains(value, "$") {
 
 					if !isPercentPrefixed {
-						panic(ParsingError{
+						base.Err = &ParsingError{
 							"a path pattern with no leading '%' cannot be interpolated '" + value + "'",
 							i,
 							start,
 							Pathlike,
 							nil,
-						})
+						}
+						return &NamedSegmentPathPatternLiteral{
+							NodeBase: base,
+							Slices:   nil,
+						}
 					}
 
 					if strings.Contains(value, "$$") {
-						panic(ParsingError{
+						base.Err = &ParsingError{
 							"a complex path pattern literal cannot contain interpolations next to each others",
 							i,
 							start,
 							Pathlike,
 							nil,
-						})
+						}
+						return &NamedSegmentPathPatternLiteral{
+							NodeBase: base,
+							Slices:   nil,
+						}
 					}
 
 					slices := parsePathExpressionSlices(start, i)
@@ -2144,24 +2239,35 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						if isVar {
 							prev := slices[j-1].(*PathSlice).Value
 							if prev[len(prev)-1] != '/' {
-								panic(ParsingError{
+
+								base.Err = &ParsingError{
 									"invalid path pattern literal with named segments",
 									i,
 									start,
 									Pathlike,
 									nil,
-								})
+								}
+
+								return &NamedSegmentPathPatternLiteral{
+									NodeBase: base,
+									Slices:   slices,
+								}
 							}
 							if j < len(slices)-1 {
 								next := slices[j+1].(*PathSlice).Value
 								if next[0] != '/' {
-									panic(ParsingError{
+									base.Err = &ParsingError{
 										"invalid path pattern literal with named segments",
 										i,
 										start,
 										Pathlike,
 										nil,
-									})
+									}
+
+									return &NamedSegmentPathPatternLiteral{
+										NodeBase: base,
+										Slices:   slices,
+									}
 								}
 							}
 						}
@@ -2187,18 +2293,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if strings.Contains(value, "$") {
+			var parsingErr *ParsingError
 
 			if strings.Contains(value, "$$") {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"a path expression cannot contain interpolations next to each others",
 					i,
 					start,
 					Pathlike,
 					nil,
-				})
+				}
 			}
 
 			slices := parsePathExpressionSlices(start, i)
+
+			base.Err = parsingErr
 
 			if isAbsolute {
 				return &AbsolutePathExpression{
@@ -2213,15 +2322,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if strings.Contains(value, "/...") {
+			var parsingErr *ParsingError
+
 			if !strings.HasSuffix(value, "/...") {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"'/...' can only be present at the end of a path pattern  '" + value + "'",
 					i,
 					start,
 					Pathlike,
 					nil,
-				})
+				}
+				base.Err = parsingErr
 			}
+
 			if isAbsolute {
 				return &AbsolutePathPatternLiteral{
 					NodeBase: base,
@@ -2257,17 +2370,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		//TODO: think about escaping in URLs with '\': specs, server implementations
 
-		if strings.Contains(_url, "..") && (!isPrefixPattern || strings.Count(_url, "..") != 1) {
-			panic(ParsingError{
-				"URL-like patterns cannot contain more than two subsequents dots except /... at the end for URL patterns",
-				i,
-				start,
-				URLlike,
-				nil,
-			})
-		}
-
 		span := NodeSpan{start, i}
+
+		if strings.Contains(_url, "..") && (!isPrefixPattern || strings.Count(_url, "..") != 1) {
+			return &InvalidURLPattern{
+				Value: _url,
+				NodeBase: NodeBase{
+					Span: span,
+					Err: &ParsingError{
+						"URL-like patterns cannot contain more than two subsequents dots except /... at the end for URL patterns",
+						i,
+						start,
+						URLlike,
+						nil,
+					},
+				},
+			}
+		}
 
 		if !HTTP_URL_REGEX.MatchString(_url) {
 
@@ -2277,55 +2396,60 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				pattern = strings.Split(pattern, ":")[0]
 				parts := strings.Split(pattern, ".")
 
+				var parsingErr *ParsingError
+
 				if len(parts) == 1 {
 					if parts[0] != "*" {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"invalid HTTP host pattern '" + _url,
 							i,
 							start,
 							URLlike,
 							(*HTTPHostPatternLiteral)(nil),
-						})
+						}
 					}
 				} else {
 					replaced := strings.ReplaceAll(_url, "*", "com")
 					if _, err := url.Parse(replaced); err != nil {
 
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"invalid HTTP host pattern '" + _url + "' : " + err.Error(),
 							i,
 							start,
 							URLlike,
 							(*HTTPHostPatternLiteral)(nil),
-						})
+						}
 					}
 				}
 
 				return &HTTPHostPatternLiteral{
 					NodeBase: NodeBase{
 						Span: span,
+						Err:  parsingErr,
 					},
 					Value: _url,
 				}
 			case LOOSE_URL_EXPR_PATTERN_REGEX.MatchString(_url):
+				var parsingErr *ParsingError
+
 				if strings.Contains(_url, "$$") {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"an URL expression cannot contain interpolations next to each others",
 						i,
 						start,
 						URLlike,
 						nil,
-					})
+					}
 				}
 
 				if isPrefixPattern {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"an URL expression cannot ends with /...",
 						i,
 						start,
 						URLlike,
 						(*URLExpression)(nil),
-					})
+					}
 				}
 
 				pathStart := start
@@ -2346,13 +2470,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					_, err := url.ParseQuery(string(s[pathExclEnd+1 : start+len(_url)]))
 					if err != nil {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"invalid query",
 							i,
 							start,
-							URLlike,
+							KnownType,
 							(*URLExpression)(nil),
-						})
+						}
 					}
 
 					j := pathExclEnd + 1
@@ -2364,13 +2488,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							j++
 						}
 						if j > queryEnd {
-							panic(ParsingError{
+							parsingErr = &ParsingError{
 								"invalid query: missing '=' after key " + string(s[keyStart:j]),
 								i,
 								start,
-								URLlike,
+								KnownType,
 								(*URLExpression)(nil),
-							})
+							}
 						}
 
 						key := string(s[keyStart:j])
@@ -2379,13 +2503,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						//check key
 
 						if strings.Contains(key, "$") {
-							panic(ParsingError{
+							parsingErr = &ParsingError{
 								"invalid query: keys cannot contain '$': key " + string(s[keyStart:j]),
 								i,
 								start,
 								URLlike,
 								(*URLExpression)(nil),
-							})
+							}
 						}
 
 						//value
@@ -2404,6 +2528,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						queryParams = append(queryParams, &URLQueryParameter{
 							NodeBase: NodeBase{
 								NodeSpan{keyStart, j},
+								nil,
 							},
 							Name:  key,
 							Value: slices,
@@ -2422,6 +2547,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				hostPartString := string(s[span.Start:pathStart])
 				hostPartBase := NodeBase{
 					NodeSpan{span.Start, pathStart},
+					nil,
 				}
 
 				if strings.Contains(hostPartString, "://") {
@@ -2437,12 +2563,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				return &URLExpression{
-					NodeBase: NodeBase{span},
+					NodeBase: NodeBase{span, parsingErr},
 					Raw:      _url,
 					HostPart: hostPart,
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{
 							NodeSpan{pathStart, pathExclEnd},
+							nil,
 						},
 						Slices: slices,
 					},
@@ -2453,39 +2580,54 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		//remove this check ?
 		if !HTTP_URL_REGEX.MatchString(_url) && _url != "https://localhost" {
-			panic(ParsingError{
-				"invalid URL '" + _url + "'",
-				i,
-				start,
-				URLlike,
-				nil,
-			})
+
+			return &InvalidURL{
+				NodeBase: NodeBase{
+					Span: span,
+					Err: &ParsingError{
+						"invalid URL '" + _url + "'",
+						i,
+						start,
+						URLlike,
+						nil,
+					},
+				},
+				Value: _url,
+			}
 		}
 
 		parsed, err := url.Parse(_url)
 		if err != nil {
-			panic(ParsingError{
-				"invalid URL '" + _url + "'",
-				i,
-				start,
-				URLlike,
-				nil,
-			})
+			return &InvalidURL{
+				NodeBase: NodeBase{
+					Span: span,
+					Err: &ParsingError{
+						"invalid URL '" + _url + "'",
+						i,
+						start,
+						URLlike,
+						nil,
+					},
+				},
+				Value: _url,
+			}
 		}
 
 		if isPrefixPattern {
+			var parsingErr *ParsingError
 			if strings.Contains(_url, "?") {
-				panic(ParsingError{
-					"URL pattern literals with a query part are not supported yet'" + _url,
+				parsingErr = &ParsingError{
+					"URL patt&ern literals with a query part are not supported yet'" + _url,
 					i,
 					start,
 					URLlike,
 					nil,
-				})
+				}
 			}
 			return &URLPatternLiteral{
 				NodeBase: NodeBase{
 					Span: span,
+					Err:  parsingErr,
 				},
 				Value: _url,
 			}
@@ -2500,19 +2642,22 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 		}
 
+		var parsingErr *ParsingError
+
 		if strings.Contains(_url, "?") {
-			panic(ParsingError{
+			parsingErr = &ParsingError{
 				"HTTP host literals cannot contain a query part",
 				i,
 				start,
 				URLlike,
 				nil,
-			})
+			}
 		}
 
 		return &HTTPHostLiteral{
 			NodeBase: NodeBase{
 				Span: span,
+				Err:  parsingErr,
 			},
 			Value: _url,
 		}
@@ -2548,23 +2693,26 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				start := i
 
 				if i >= len(s) {
-					panic(ParsingError{
+					memberExpr.NodeBase.Err = &ParsingError{
 						"unterminated identifier member expression",
 						i,
 						start,
 						IdentLike,
 						(*IdentifierMemberExpression)(nil),
-					})
+					}
+
+					return memberExpr
 				}
 
 				if !isAlpha(s[i]) && s[i] != '_' {
-					panic(ParsingError{
+					memberExpr.NodeBase.Err = &ParsingError{
 						"property name should start with a letter not '" + string(s[i]) + "'",
 						i,
 						start,
 						IdentLike,
 						(*IdentifierMemberExpression)(nil),
-					})
+					}
+					return memberExpr
 				}
 
 				for i < len(s) && isAlpha(s[i]) {
@@ -2576,6 +2724,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				memberExpr.PropertyNames = append(memberExpr.PropertyNames, &IdentifierLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						nil,
 					},
 					Name: propName,
 				})
@@ -2618,13 +2767,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if i < len(s) && strings.HasPrefix(string(s[i:]), "://") {
-			panic(ParsingError{
+			base := ident.NodeBase
+			base.Err = &ParsingError{
 				"invalid URI : unsupported protocol",
 				i,
 				start,
 				URLlike,
 				nil,
-			})
+			}
+
+			return &InvalidURL{
+				NodeBase: base,
+				Value:    name,
+			}
 		}
 
 		return ident
@@ -2640,13 +2795,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			eatSpaceComma()
 
 			if i >= len(s) {
-				panic(ParsingError{
-					"unterminated key list, missing closing brace '}'",
-					i,
-					start,
-					KnownType,
-					(*KeyListExpression)(nil),
-				})
+				//this case is handled next
+				break
 			}
 
 			if ident, ok := parseExpression().(*IdentifierLiteral); ok {
@@ -2664,20 +2814,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			eatSpaceComma()
 		}
 
+		var parsingErr *ParsingError
+
 		if i >= len(s) {
-			panic(ParsingError{
+			parsingErr = &ParsingError{
 				"unterminated key list, missing closing brace '}'",
 				i,
 				start,
 				KnownType,
 				(*KeyListExpression)(nil),
-			})
+			}
 		}
 		i++
 
 		return &KeyListExpression{
 			NodeBase: NodeBase{
 				NodeSpan{start, i},
+				parsingErr,
 			},
 			Keys: idents,
 		}
@@ -2688,6 +2841,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parsePatternPiece := func() Node {
 		start := i
 		patternKind := UnspecifiedPatternKind
+
+		var parsingErr *ParsingError
 
 		if isAlpha(s[i]) {
 			for i < len(s) && isIdentChar(s[i]) {
@@ -2704,24 +2859,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case "string":
 				patternKind = StringPattern
 			default:
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					fmt.Sprintf("invalid pattern kind: '%s'", patternKindName),
 					i,
 					start,
 					UnspecifiedCategory,
 					nil,
-				})
+				}
 			}
 
 			eatSpace()
 			if i >= len(s) {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					fmt.Sprintf("invalid pattern piece: the kind '%s' should be followed elements of the pattern", patternKindName),
 					i,
 					start,
 					UnspecifiedCategory,
 					nil,
-				})
+				}
 			}
 
 		}
@@ -2742,6 +2897,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) {
+
 					panic(ParsingError{
 						fmt.Sprintf("unterminated parenthesized pattern"),
 						i,
@@ -2755,13 +2911,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) || s[i] != ')' {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						fmt.Sprintf("unterminated parenthesized pattern, missing closing parenthesis"),
 						i,
 						start,
 						UnspecifiedCategory,
 						nil,
-					})
+					}
+					break
 				}
 				i++
 			} else {
@@ -2771,6 +2928,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			ocurrenceModifier := ExactlyOneOcurrence
 			count := 0
 			elementEnd := i
+
+			var elemParsingErr *ParsingError
 
 			if i < len(s) && (s[i] == '+' || s[i] == '*' || s[i] == '?' || s[i] == '=') {
 				switch s[i] {
@@ -2790,13 +2949,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i++
 					numberStart := i
 					if i >= len(s) || !isDigit(s[i]) {
-						panic(ParsingError{
+						elemParsingErr = &ParsingError{
 							fmt.Sprintf("unterminated pattern: unterminated exact ocurrence count: missing count after '='"),
 							i,
 							start,
 							KnownType,
 							(*PatternPieceElement)(nil),
-						})
+						}
+						elementEnd = i
+						goto after_ocurrence
 					}
 
 					for i < len(s) && isDigit(s[i]) {
@@ -2805,13 +2966,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					_count, err := strconv.ParseUint(string(s[numberStart:i]), 10, 32)
 					if err != nil {
-						panic(ParsingError{
+						elemParsingErr = &ParsingError{
 							fmt.Sprintf("invalid pattern: invalid exact ocurrence count"),
 							i,
 							start,
 							KnownType,
 							(*PatternPieceElement)(nil),
-						})
+						}
 					}
 					count = int(_count)
 					ocurrenceModifier = ExactOcurrence
@@ -2819,9 +2980,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 			}
 
+		after_ocurrence:
 			elements = append(elements, &PatternPieceElement{
 				NodeBase: NodeBase{
 					NodeSpan{elementStart, elementEnd},
+					elemParsingErr,
 				},
 				Ocurrence:           ocurrenceModifier,
 				ExactOcurrenceCount: int(count),
@@ -2832,6 +2995,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		return &PatternPiece{
 			NodeBase: NodeBase{
 				NodeSpan{start, i},
+				parsingErr,
 			},
 			Kind:     patternKind,
 			Elements: elements,
@@ -2857,13 +3021,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 
 					if s[i] != '|' {
-						panic(ParsingError{
-							"invalid pattern union : elements should be separated by '|'",
-							i,
-							start,
-							UnspecifiedCategory,
-							nil,
-						})
+
+						for i < len(s) && s[i] != ';' && s[i] != ')' {
+							i++
+						}
+
+						return &PatternUnion{
+							NodeBase: NodeBase{
+								NodeSpan{start, i},
+								&ParsingError{
+									"invalid pattern union : elements should be separated by '|'",
+									i,
+									start,
+									UnspecifiedCategory,
+									nil,
+								},
+							},
+							Cases: cases,
+						}
 					}
 					i++
 
@@ -2876,6 +3051,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &PatternUnion{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						nil,
 					},
 					Cases: cases,
 				}
@@ -2885,13 +3061,18 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		if s[i] == '%' {
 			i++
 			if i >= len(s) {
-				panic(ParsingError{
-					"unterminated pattern: '%'",
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
+				return &InvalidComplexPatternElement{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							"unterminated pattern: '%'",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+				}
 			}
 
 			switch {
@@ -2904,6 +3085,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				left := &PatternIdentifierLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						nil,
 					},
 					Name: string(s[start+1 : i]),
 				}
@@ -2921,20 +3103,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
+				var parsingErr *ParsingError
+
 				if i >= len(s) || s[i] != ';' {
-					log.Println("x=", string(s[i]))
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated pattern definition: must end with ';'",
 						i,
 						start,
 						KnownType,
 						(*PatternDefinition)(nil),
-					})
+					}
+				} else {
+					i++
 				}
-				i++
+
 				return &PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						parsingErr,
 					},
 					Left:  left,
 					Right: right,
@@ -2946,8 +3132,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				unamedPropCount := 0
 				var properties []ObjectProperty
 
+			top_object_pattern_loop:
 				for i < len(s) && s[i] != '}' {
 					eatSpaceNewlineComma()
+
+					var objectPropertyErr *ParsingError
 
 					if i < len(s) && s[i] == '}' {
 						break
@@ -2965,13 +3154,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						keys = append(keys, nil)
 						lastKeyName = strconv.Itoa(unamedPropCount)
 						if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
-							panic(ParsingError{
+							objectPropertyErr = &ParsingError{
 								"key is too long",
 								i,
 								openingBraceIndex,
 								KnownType,
 								(*ObjectPatternLiteral)(nil),
-							})
+							}
 						}
 					} else {
 						for {
@@ -2984,23 +3173,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							case *StringLiteral:
 								lastKeyName = k.Value
 							default:
-								panic(ParsingError{
+								objectPropertyErr = &ParsingError{
 									"Only identifiers and strings are valid object pattern keys",
 									i,
 									openingBraceIndex,
 									KnownType,
 									(*ObjectPatternLiteral)(nil),
-								})
+								}
 							}
 
 							if len(lastKeyName) > MAX_OBJECT_KEY_BYTE_LEN {
-								panic(ParsingError{
+								objectPropertyErr = &ParsingError{
 									"key is too long",
 									i,
 									openingBraceIndex,
 									KnownType,
 									(*ObjectPatternLiteral)(nil),
-								})
+								}
 							}
 
 							if len(keys) == 1 {
@@ -3017,24 +3206,41 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							}
 
 							if i >= len(s) || s[i] == '}' {
-								panic(ParsingError{
-									"invalid object pattern literal, missing colon after key '" + lastKeyName + "'",
-									i,
-									openingBraceIndex,
-									KnownType,
-									(*ObjectPatternLiteral)(nil),
+								properties = append(properties, ObjectProperty{
+									NodeBase: NodeBase{
+										Span: NodeSpan{propSpanStart, i},
+										Err: &ParsingError{
+											"invalid object pattern literal, missing colon after key '" + lastKeyName + "'",
+											i,
+											openingBraceIndex,
+											KnownType,
+											(*ObjectPatternLiteral)(nil),
+										},
+									},
+									Key:   lastKey,
+									Value: nil,
 								})
+								break top_object_pattern_loop
 							}
 
 							if singleKey {
 								if s[i] != ':' {
-									panic(ParsingError{
-										"invalid object pattern literal, following key should be followed by a colon : '" + lastKeyName + "'",
-										i,
-										openingBraceIndex,
-										KnownType,
-										(*ObjectPatternLiteral)(nil),
+									properties = append(properties, ObjectProperty{
+										NodeBase: NodeBase{
+											Span: NodeSpan{propSpanStart, i},
+											Err: &ParsingError{
+												"invalid object pattern literal, following key should be followed by a colon : '" + lastKeyName + "'",
+												i,
+												openingBraceIndex,
+												KnownType,
+												(*ObjectPatternLiteral)(nil),
+											},
+										},
+										Key:   lastKey,
+										Value: nil,
 									})
+
+									continue top_object_pattern_loop
 								}
 								i++
 								break
@@ -3045,13 +3251,22 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i >= len(s) || s[i] == '}' {
-						panic(ParsingError{
-							"invalid object pattern literal, missing value after colon, key '" + lastKeyName + "'",
-							i,
-							openingBraceIndex,
-							KnownType,
-							(*ObjectPatternLiteral)(nil),
+						properties = append(properties, ObjectProperty{
+							NodeBase: NodeBase{
+								Span: NodeSpan{propSpanStart, i},
+								Err: &ParsingError{
+									"invalid object pattern literal, missing value after colon, key '" + lastKeyName + "'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectPatternLiteral)(nil),
+								},
+							},
+							Key:   lastKey,
+							Value: nil,
 						})
+
+						continue top_object_pattern_loop
 					}
 					v := parseExpression()
 
@@ -3060,13 +3275,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						case *Variable, *GlobalVariable:
 						default:
 							if !isSimpleValueLiteral(v) {
-								panic(ParsingError{
+								objectPropertyErr = &ParsingError{
 									"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 									i,
 									openingBraceIndex,
 									KnownType,
 									(*ObjectPatternLiteral)(nil),
-								})
+								}
 							}
 						}
 
@@ -3076,6 +3291,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						properties = append(properties, ObjectProperty{
 							NodeBase: NodeBase{
 								Span: NodeSpan{propSpanStart, i},
+								Err:  objectPropertyErr,
 							},
 							Key:   key,
 							Value: v,
@@ -3085,20 +3301,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpaceNewlineComma()
 				}
 
+				var parsingErr *ParsingError
 				if i >= len(s) {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated object pattern literal, missing closing brace '}'",
 						i,
 						openingBraceIndex,
 						KnownType,
 						(*ObjectPatternLiteral)(nil),
-					})
+					}
+				} else {
+					i++
 				}
-				i++
 
 				return &ObjectPatternLiteral{
 					NodeBase: NodeBase{
 						Span: NodeSpan{openingBraceIndex - 1, i},
+						Err:  parsingErr,
 					},
 					Properties: properties,
 				}
@@ -3121,20 +3340,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpaceNewlineComma()
 				}
 
+				var parsingErr *ParsingError
+
 				if i >= len(s) || s[i] != ']' {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated list pattern literal, missing closing bracket ']'",
 						i,
 						openingBracketIndex,
 						KnownType,
 						(*ListPatternLiteral)(nil),
-					})
+					}
+				} else {
+					i++
 				}
-				i++
 
 				return &ListPatternLiteral{
 					NodeBase: NodeBase{
 						Span: NodeSpan{openingBracketIndex - 1, i},
+						Err:  parsingErr,
 					},
 					Elements: elements,
 				}
@@ -3143,31 +3366,42 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &RegularExpressionLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, str.Base().Span.End},
+						str.Err,
 					},
 					Raw:   str.Raw,
 					Value: str.Value,
 				}
 			default:
-				panic(ParsingError{
-					"unterminated pattern: '%'",
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
+				return &InvalidComplexPatternElement{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							"unterminated pattern: '%'",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+				}
 			}
 		}
 
 		left := string(s[max(0, i-5):i])
 		right := string(s[i:min(len(s), i+5)])
 
-		panic(ParsingError{
-			fmt.Sprintf("a pattern was expected: ...%s<<here>>%s...", left, right),
-			i,
-			start,
-			UnspecifiedCategory,
-			nil,
-		})
+		return &InvalidComplexPatternElement{
+			NodeBase: NodeBase{
+				NodeSpan{start, i},
+				&ParsingError{
+					fmt.Sprintf("a pattern was expected: ...%s<<here>>%s...", left, right),
+					i,
+					start,
+					UnspecifiedCategory,
+					nil,
+				},
+			},
+		}
 	}
 
 	parseExpression = func() Node {
@@ -3214,6 +3448,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				lhs = &BooleanConversionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{__start, i},
+						nil,
 					},
 					Expr: lhs,
 				}
@@ -3266,13 +3501,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				if i >= len(s) {
-					panic(ParsingError{
-						"invalid spawn expression: sr should be followed by two expressions",
-						i,
-						spawnExprStart,
-						KnownType,
-						(*SpawnExpression)(nil),
-					})
+					return &SpawnExpression{
+						NodeBase: NodeBase{
+							NodeSpan{identLike.Base().Span.Start, i},
+							&ParsingError{
+								"invalid spawn expression: sr should be followed by two expressions",
+								i,
+								spawnExprStart,
+								KnownType,
+								(*SpawnExpression)(nil),
+							},
+						},
+						GroupIdent: routineGroupIdent,
+						Globals:    globals,
+					}
 				}
 
 				var expr Node
@@ -3294,22 +3536,25 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						eatSpaceNewLineSemiColonComment()
 					}
 
+					var embeddedModuleErr *ParsingError
+
 					if i >= len(s) || s[i] != '}' {
-						panic(ParsingError{
+						embeddedModuleErr = &ParsingError{
 							"unterminated embedded module",
 							i,
 							start,
 							KnownType,
 							(*EmbeddedModule)(nil),
-						})
+						}
+					} else {
+						i++
 					}
-
-					i++
 
 					emod.Requirements = requirements
 					emod.Statements = stmts
 					emod.NodeBase = NodeBase{
 						NodeSpan{start, i},
+						embeddedModuleErr,
 					}
 					expr = emod
 				} else {
@@ -3318,37 +3563,43 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 				var grantedPermsLit *ObjectLiteral
+				var parsingErr *ParsingError
+
 				if i < len(s) && s[i] == 'a' {
 					allowIdent := parseExpression()
 					if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
-						panic(ParsingError{
+
+						parsingErr = &ParsingError{
 							"spawn expression: argument should be followed by a the 'allow' keyword",
 							i,
 							spawnExprStart,
 							KnownType,
 							(*SpawnExpression)(nil),
-						})
+						}
+					} else {
+						//if ok
+						eatSpace()
+
+						grantedPerms := parseExpression()
+						var ok bool
+						grantedPermsLit, ok = grantedPerms.(*ObjectLiteral)
+						if !ok {
+							parsingErr = &ParsingError{
+								"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
+								i,
+								spawnExprStart,
+								KnownType,
+								(*SpawnExpression)(nil),
+							}
+						}
 					}
 
-					eatSpace()
-
-					grantedPerms := parseExpression()
-					var ok bool
-					grantedPermsLit, ok = grantedPerms.(*ObjectLiteral)
-					if !ok {
-						panic(ParsingError{
-							"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
-							i,
-							spawnExprStart,
-							KnownType,
-							(*SpawnExpression)(nil),
-						})
-					}
 				}
 
 				return &SpawnExpression{
 					NodeBase: NodeBase{
 						NodeSpan{identLike.Base().Span.Start, i},
+						parsingErr,
 					},
 					GroupIdent:         routineGroupIdent,
 					Globals:            globals,
@@ -3387,6 +3638,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				call := &Call{
 					NodeBase: NodeBase{
 						NodeSpan{identLike.Base().Span.Start, 0},
+						nil,
 					},
 					Callee:    identLike,
 					Arguments: nil,
@@ -3414,15 +3666,6 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return call
 			case s[i] == '$': //funcname$ ...
 				i++
-				if i >= len(s) || (s[i] != '\t' && s[i] != ' ') {
-					panic(ParsingError{
-						"a non-parenthesized call expression should have arguments and the callee (<name>$) should be followed by a space",
-						i,
-						identLike.Base().Span.Start,
-						KnownType,
-						(*Call)(nil),
-					})
-				}
 
 				call := &Call{
 					NodeBase: NodeBase{
@@ -3431,6 +3674,17 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Callee:    identLike,
 					Arguments: nil,
 					Must:      true,
+				}
+
+				if i >= len(s) || (s[i] != '\t' && s[i] != ' ') {
+					call.Err = &ParsingError{
+						"a non-parenthesized call expression should have arguments and the callee (<name>$) should be followed by a space",
+						i,
+						identLike.Base().Span.Start,
+						KnownType,
+						(*Call)(nil),
+					}
+					return call
 				}
 
 				for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
@@ -3457,22 +3711,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			return identLike
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': //integers and floating point numbers
 			start := i
+			var parsingErr *ParsingError
 
 			parseIntegerLiteral := func(raw string, start, end int) (*IntLiteral, int64) {
 				integer, err := strconv.ParseInt(raw, 10, 32)
 				if err != nil {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"invalid integer literal '" + raw + "'",
 						end,
 						start,
 						KnownType,
 						(*IntLiteral)(nil),
-					})
+					}
 				}
 
 				return &IntLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, end},
+						parsingErr,
 					},
 					Raw:   raw,
 					Value: int(integer),
@@ -3492,13 +3748,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					i++
 					if i >= len(s) || !isDigit(s[i]) {
-						panic(ParsingError{
-							"unterminated integer range literal '" + string(s[start:i]) + "'",
-							i,
-							start,
-							KnownType,
-							(*IntLiteral)(nil),
-						})
+						return &IntegerRangeLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{start, i},
+								&ParsingError{
+									"unterminated integer range literal '" + string(s[start:i]) + "'",
+									i,
+									start,
+									KnownType,
+									(*IntLiteral)(nil),
+								},
+							},
+							LowerBound: nil,
+							UpperBound: nil,
+						}
 					}
 
 					upperStart := i
@@ -3513,6 +3776,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return &IntegerRangeLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{lowerIntLiteral.Base().Span.Start, upperIntLiteral.Base().Span.End},
+							nil,
 						},
 						LowerBound: lowerIntLiteral,
 						UpperBound: upperIntLiteral,
@@ -3533,17 +3797,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				float, err := strconv.ParseFloat(raw, 64)
 				if err != nil {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"invalid floating point literal '" + raw + "'",
 						i,
 						start,
 						KnownType,
 						(*FloatLiteral)(nil),
-					})
+					}
 				}
+
 				literal = &FloatLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						parsingErr,
 					},
 					Raw:   raw,
 					Value: float,
@@ -3586,18 +3852,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						raw := string(s[start:i])
 
 						if !ok {
-							panic(ParsingError{
+							parsingErr = &ParsingError{
 								"invalid rate literal '" + raw + "', '/' should be immeditately followed by an identifier ('s' for example)",
 								i,
 								start,
 								KnownType,
 								(*IntLiteral)(nil),
-							})
+							}
 						}
 
 						return &RateLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{literal.Base().Span.Start, ident.Base().Span.End},
+								parsingErr,
 							},
 							Quantity: literal.(*QuantityLiteral),
 							Unit:     ident,
@@ -3615,8 +3882,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			unamedPropCount := 0
 			var properties []ObjectProperty
 			var spreadElements []*PropertySpreadElement
+			var invalidElements []*InvalidObjectElement
+			var parsingErr *ParsingError
 
+		object_literal_top_loop:
 			for i < len(s) && s[i] != '}' {
+				var elementParsingErr *ParsingError
 				eatSpaceAndNewLineAndCommaAndComment()
 
 				if i < len(s) && s[i] == '}' {
@@ -3632,13 +3903,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					spreadStart := i
 
 					if string(s[i:min(len(s), i+3)]) != "..." {
-						panic(ParsingError{
-							"invalid element in object literal",
-							i,
-							openingBraceIndex,
-							KnownType,
-							(*ObjectLiteral)(nil),
-						})
+
+						for i < len(s) && s[i] != '}' && s[i] != ',' {
+							invalidElements = append(invalidElements, &InvalidObjectElement{
+								NodeBase: NodeBase{
+									NodeSpan{spreadStart, i},
+									&ParsingError{
+										"invalid element in object literal",
+										i,
+										openingBraceIndex,
+										KnownType,
+										(*ObjectLiteral)(nil),
+									},
+								},
+							})
+
+							eatSpace()
+							continue object_literal_top_loop
+						}
 					}
 
 					i += 3
@@ -3648,18 +3930,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					extractionExpr, ok := expr.(*ExtractionExpression)
 					if !ok {
-						panic(ParsingError{
+						elementParsingErr = &ParsingError{
 							fmt.Sprintf("invalid spread element in object literal : expression should be an extraction expression not a(n) %T", expr),
 							i,
 							openingBraceIndex,
 							KnownType,
 							(*ObjectLiteral)(nil),
-						})
+						}
 					}
 
 					spreadElements = append(spreadElements, &PropertySpreadElement{
 						NodeBase: NodeBase{
 							NodeSpan{spreadStart, extractionExpr.Span.End},
+							elementParsingErr,
 						},
 						Extraction: extractionExpr,
 					})
@@ -3756,13 +4039,22 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i >= len(s) || s[i] == '}' {
-						panic(ParsingError{
-							"invalid object literal, missing value after colon, key '" + lastKeyName + "'",
-							i,
-							openingBraceIndex,
-							KnownType,
-							(*ObjectLiteral)(nil),
+						properties = append(properties, ObjectProperty{
+							NodeBase: NodeBase{
+								Span: NodeSpan{propSpanStart, i},
+								Err: &ParsingError{
+									"invalid object pattern literal, missing value after colon, key '" + lastKeyName + "'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectLiteral)(nil),
+								},
+							},
+							Key:   lastKey,
+							Value: nil,
 						})
+
+						continue object_literal_top_loop
 					}
 					v := parseExpression()
 
@@ -3771,13 +4063,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						case *Variable, *GlobalVariable:
 						default:
 							if !isSimpleValueLiteral(v) {
-								panic(ParsingError{
-									"invalid object literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
+								elementParsingErr = &ParsingError{
+									"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 									i,
 									openingBraceIndex,
 									KnownType,
 									(*ObjectLiteral)(nil),
-								})
+								}
 							}
 						}
 
@@ -3787,6 +4079,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						properties = append(properties, ObjectProperty{
 							NodeBase: NodeBase{
 								Span: NodeSpan{propSpanStart, i},
+								Err:  elementParsingErr,
 							},
 							Key:   key,
 							Value: v,
@@ -3798,19 +4091,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			if i >= len(s) {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"unterminated object literal, missing closing brace '}'",
 					i,
 					openingBraceIndex,
 					KnownType,
 					(*ObjectLiteral)(nil),
-				})
+				}
+			} else {
+				i++
 			}
-			i++
 
 			return &ObjectLiteral{
 				NodeBase: NodeBase{
 					Span: NodeSpan{openingBraceIndex, i},
+					Err:  parsingErr,
 				},
 				Properties:     properties,
 				SpreadElements: spreadElements,
@@ -3833,20 +4128,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpaceNewlineComma()
 			}
 
+			var parsingErr *ParsingError
+
 			if i >= len(s) || s[i] != ']' {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"unterminated list literal, missing closing bracket ']'",
 					i,
 					openingBracketIndex,
 					KnownType,
 					(*ListLiteral)(nil),
-				})
+				}
+			} else {
+				i++
 			}
-			i++
 
 			return &ListLiteral{
 				NodeBase: NodeBase{
 					Span: NodeSpan{openingBracketIndex, i},
+					Err:  parsingErr,
 				},
 				Elements: elements,
 			}
@@ -3858,25 +4157,37 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 
 				if i >= len(s) {
-					panic(ParsingError{
-						"unterminated rune literal",
-						i,
-						start,
-						KnownType,
-						(*RuneLiteral)(nil),
-					})
+					return &RuneLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{start, i},
+							&ParsingError{
+								"unterminated rune literal",
+								i,
+								start,
+								KnownType,
+								(*RuneLiteral)(nil),
+							},
+						},
+						Value: 0,
+					}
 				}
 
 				value := s[i]
 
 				if value == '\'' {
-					panic(ParsingError{
-						"invalid rune literal : no character",
-						i,
-						start,
-						KnownType,
-						(*RuneLiteral)(nil),
-					})
+					return &RuneLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{start, i},
+							&ParsingError{
+								"invalid rune literal : no character",
+								i,
+								start,
+								KnownType,
+								(*RuneLiteral)(nil),
+							},
+						},
+						Value: 0,
+					}
 				}
 
 				if value == '\\' {
@@ -3902,33 +4213,41 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					case '\'':
 						value = '\''
 					default:
-						panic(ParsingError{
-							"invalid rune literal: invalid single character escape" + string(s[start:i]),
-							i,
-							start,
-							KnownType,
-							(*RuneLiteral)(nil),
-						})
+						return &RuneLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{start, i},
+								&ParsingError{
+									"invalid rune literal: invalid single character escape" + string(s[start:i]),
+									i,
+									start,
+									KnownType,
+									(*RuneLiteral)(nil),
+								},
+							},
+							Value: 0,
+						}
 					}
 				}
 
 				i++
 
+				var parsingErr *ParsingError
 				if i >= len(s) || s[i] != '\'' {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated rune literal, missing ' at the end",
 						i,
 						start,
 						KnownType,
 						(*RuneLiteral)(nil),
-					})
+					}
+				} else {
+					i++
 				}
-
-				i++
 
 				return &RuneLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						parsingErr,
 					},
 					Value: value,
 				}
@@ -3943,24 +4262,38 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			i++
 			if i >= len(s) || s[i] != '.' {
-				panic(ParsingError{
-					"invalid rune range expression",
-					i,
-					start,
-					KnownType,
-					(*RuneRangeExpression)(nil),
-				})
+				return &RuneRangeExpression{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							"invalid rune range expression",
+							i,
+							start,
+							KnownType,
+							(*RuneRangeExpression)(nil),
+						},
+					},
+					Lower: lower,
+					Upper: nil,
+				}
 			}
 			i++
 
 			if i >= len(s) || s[i] != '\'' {
-				panic(ParsingError{
-					"invalid rune range expression",
-					i,
-					start,
-					KnownType,
-					(*RuneRangeExpression)(nil),
-				})
+				return &RuneRangeExpression{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							"invalid rune range expression",
+							i,
+							start,
+							KnownType,
+							(*RuneRangeExpression)(nil),
+						},
+					},
+					Lower: lower,
+					Upper: nil,
+				}
 			}
 
 			upper := parseRuneLiteral()
@@ -3968,6 +4301,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			return &RuneRangeExpression{
 				NodeBase: NodeBase{
 					NodeSpan{start, upper.Base().Span.End},
+					nil,
 				},
 				Lower: lower,
 				Upper: upper,
@@ -4032,6 +4366,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					expr := &UpperBoundRangeExpression{
 						NodeBase: NodeBase{
 							NodeSpan{start, i},
+							nil,
 						},
 						UpperBound: upperBound,
 					}
@@ -4044,13 +4379,18 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			start := i
 			i++
 			if i >= len(s) {
-				panic(ParsingError{
-					"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
+				return &UnknownNode{
+					NodeBase: NodeBase{
+						Span: NodeSpan{start, i},
+						Err: &ParsingError{
+							"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+				}
 			}
 
 			if s[i] == '(' {
@@ -4078,13 +4418,18 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				if j >= len(s) {
-					panic(ParsingError{
-						"unterminated AtHostLiteral | URLExpression | HostAliasDefinition",
-						j,
-						start,
-						UnspecifiedCategory,
-						nil,
-					})
+					return &InvalidAliasRelatedNode{
+						NodeBase: NodeBase{
+							NodeSpan{start, j},
+							&ParsingError{
+								"unterminated AtHostLiteral | URLExpression | HostAliasDefinition",
+								j,
+								start,
+								UnspecifiedCategory,
+								nil,
+							},
+						},
+					}
 				}
 
 				//@alias = <host>
@@ -4093,27 +4438,32 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					left := &AtHostLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{start, aliasEndIndex},
+							nil,
 						},
 						Value: string(s[start:aliasEndIndex]),
 					}
 
 					i = j + 1
 					eatSpace()
+					var parsingErr *ParsingError
+					var right Node
 
 					if i >= len(s) {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"unterminated HostAliasDefinition, missing value after '='",
 							i,
 							start,
 							KnownType,
 							(*HostAliasDefinition)(nil),
-						})
+						}
+					} else {
+						right = parseExpression()
 					}
 
-					right := parseExpression()
 					return &HostAliasDefinition{
 						NodeBase: NodeBase{
 							NodeSpan{start, right.Base().Span.End},
+							parsingErr,
 						},
 						Left:  left,
 						Right: right,
@@ -4123,15 +4473,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return parseURLLike(start)
 			} else {
 
-				panic(ParsingError{
-					"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
-			}
+				return &UnknownNode{
+					NodeBase: NodeBase{
+						Span: NodeSpan{start, i},
+						Err: &ParsingError{
+							"'@' should be followed by '(' <expr> ')' or a host alias (@api/path)",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+				}
 
+			}
 		case '%':
 			if i < len(s)-1 && (s[i+1] == '.' || s[i+1] == '/') {
 				i++
@@ -4157,14 +4512,46 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			NON_EXISTING_OPERATOR := "invalid binary expression, non existing operator"
 
 			if i >= len(s) {
-				panic(ParsingError{
-					UNTERMINATED_BIN_EXPR + " missing operator",
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				})
+				return &BinaryExpression{
+					NodeBase: NodeBase{
+						Span: NodeSpan{openingParenIndex, i},
+						Err: &ParsingError{
+							UNTERMINATED_BIN_EXPR + " missing operator",
+							i,
+							openingParenIndex,
+							KnownType,
+							(*BinaryExpression)(nil),
+						},
+					},
+					Operator: -1,
+					Left:     left,
+				}
 			}
+
+			makeInvalidOperatorMissingRightOperand := func(operator BinaryOperator) Node {
+				return &BinaryExpression{
+					NodeBase: NodeBase{
+						Span: NodeSpan{openingParenIndex, i},
+						Err: &ParsingError{
+							UNTERMINATED_BIN_EXPR + " missing right operand and/or invalid operator",
+							i,
+							openingParenIndex,
+							KnownType,
+							(*BinaryExpression)(nil),
+						},
+					},
+					Operator: operator,
+					Left:     left,
+				}
+			}
+
+			eatInvalidOperator := func() {
+				for i < len(s) && !isSpace(string(s[i])) && !isDelim(s[i]) && s[i] != '$' {
+					i++
+				}
+			}
+
+			var parsingErr *ParsingError
 
 			var operator BinaryOperator
 			switch s[i] {
@@ -4193,83 +4580,78 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case '!':
 				i++
 				if i >= len(s) {
-					panic(ParsingError{
-						NON_EXISTING_OPERATOR,
-						i,
-						openingParenIndex,
-						KnownType,
-						(*BinaryExpression)(nil),
-					})
+					return makeInvalidOperatorMissingRightOperand(-1)
 				}
 				if s[i] == '=' {
 					operator = NotEqual
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case '=':
 				i++
 				if i >= len(s) {
-					panic(ParsingError{
-						NON_EXISTING_OPERATOR,
-						i,
-						openingParenIndex,
-						KnownType,
-						(*BinaryExpression)(nil),
-					})
+					return makeInvalidOperatorMissingRightOperand(-1)
 				}
 				if s[i] == '=' {
 					operator = Equal
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'a':
 				AND_LEN := len("and")
+
 				if len(s)-i >= AND_LEN && string(s[i:i+AND_LEN]) == "and" {
 					operator = And
 					i += AND_LEN - 1
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'i':
 				i++
 				if i >= len(s) {
-					panic(ParsingError{
-						UNTERMINATED_BIN_EXPR,
-						i,
-						openingParenIndex,
-						KnownType,
-						(*BinaryExpression)(nil),
-					})
+					return makeInvalidOperatorMissingRightOperand(-1)
 				}
 				if s[i] == 'n' {
 					operator = In
 					break
 				}
-				panic(ParsingError{
+
+				//TODO: eat some chars
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'k':
 				KEYOF_LEN := len("keyof")
 				if len(s)-i >= KEYOF_LEN && string(s[i:i+KEYOF_LEN]) == "keyof" {
@@ -4277,13 +4659,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i += KEYOF_LEN - 1
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'n':
 				NOTIN_LEN := len("not-in")
 				if len(s)-i >= NOTIN_LEN && string(s[i:i+NOTIN_LEN]) == "not-in" {
@@ -4299,13 +4684,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					break
 				}
 
-				panic(ParsingError{
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'm':
 				MATCH_LEN := len("match")
 				if len(s)-i >= MATCH_LEN && string(s[i:i+MATCH_LEN]) == "match" {
@@ -4313,13 +4700,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i += MATCH_LEN - 1
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 'o':
 				OR_LEN := len("or")
 				if len(s)-i >= OR_LEN && string(s[i:i+OR_LEN]) == "or" {
@@ -4327,13 +4717,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i += OR_LEN - 1
 					break
 				}
-				panic(ParsingError{
+
+				eatInvalidOperator()
+
+				parsingErr = &ParsingError{
 					NON_EXISTING_OPERATOR,
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			case 's':
 				SUBSTROF_LEN := len("substrof")
 				if len(s)-i >= SUBSTROF_LEN && string(s[i:i+SUBSTROF_LEN]) == "substrof" {
@@ -4351,6 +4744,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case '.':
 				operator = Dot
 			}
+
 			i++
 
 			if i < len(s)-1 && s[i] == '.' {
@@ -4359,13 +4753,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i++
 					operator++
 				default:
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"invalid binary expression, non existing operator",
 						i,
 						openingParenIndex,
 						KnownType,
 						(*BinaryExpression)(nil),
-					})
+					}
 				}
 			}
 
@@ -4377,36 +4771,36 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			eatSpace()
 
 			if i >= len(s) {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing right operand",
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			}
 
 			right := parseExpression()
 
 			eatSpace()
 			if i >= len(s) {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing closing parenthesis",
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			}
 
 			if s[i] != ')' {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"invalid binary expression",
 					i,
 					openingParenIndex,
 					KnownType,
 					(*BinaryExpression)(nil),
-				})
+				}
 			}
 
 			i++
@@ -4414,6 +4808,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			lhs = &BinaryExpression{
 				NodeBase: NodeBase{
 					Span: NodeSpan{openingParenIndex, i},
+					Err:  parsingErr,
 				},
 				Operator: operator,
 				Left:     left,
@@ -4431,13 +4826,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				start := i
 
 				if i >= len(s) {
-					panic(ParsingError{
-						"unterminated member/index expression",
-						i,
-						first.Base().Span.Start,
-						UnspecifiedCategory,
-						nil,
-					})
+					return &InvalidMemberLike{
+						NodeBase: NodeBase{
+							NodeSpan{first.Base().Span.Start, i},
+							&ParsingError{
+								"unterminated member/index expression",
+								i,
+								first.Base().Span.Start,
+								UnspecifiedCategory,
+								nil,
+							},
+						},
+						Left: lhs,
+					}
 				}
 
 				if s[i-1] == '[' { //index/slice expression
@@ -4466,24 +4867,38 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i >= len(s) {
-						panic(ParsingError{
-							"unterminated index/slice expression",
-							i,
-							first.Base().Span.Start,
-							UnspecifiedCategory,
-							nil,
-						})
+						return &InvalidMemberLike{
+							NodeBase: NodeBase{
+								NodeSpan{first.Base().Span.Start, i},
+								&ParsingError{
+									"unterminated index/slice expression",
+									i,
+									first.Base().Span.Start,
+									UnspecifiedCategory,
+									nil,
+								},
+							},
+							Left: lhs,
+						}
 					}
 
 					if s[i] == ':' {
 						if isSliceExpr {
-							panic(ParsingError{
-								"invalid slice expression, a single colon should be present",
-								i,
-								first.Base().Span.Start,
-								KnownType,
-								(*SliceExpression)(nil),
-							})
+							return &SliceExpression{
+								NodeBase: NodeBase{
+									NodeSpan{first.Base().Span.Start, i},
+									&ParsingError{
+										"invalid slice expression, a single colon should be present",
+										i,
+										first.Base().Span.Start,
+										UnspecifiedCategory,
+										nil,
+									},
+								},
+								Indexed:    lhs,
+								StartIndex: startIndex,
+								EndIndex:   endIndex,
+							}
 						}
 						isSliceExpr = true
 						i++
@@ -4492,13 +4907,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if isSliceExpr && startIndex == nil && (i >= len(s) || s[i] == ']') {
-						panic(ParsingError{
-							"unterminated slice expression, missing end index",
-							i,
-							first.Base().Span.Start,
-							KnownType,
-							(*SliceExpression)(nil),
-						})
+						return &SliceExpression{
+							NodeBase: NodeBase{
+								NodeSpan{first.Base().Span.Start, i},
+								&ParsingError{
+									"unterminated slice expression, missing end index",
+									i,
+									first.Base().Span.Start,
+									UnspecifiedCategory,
+									nil,
+								},
+							},
+							Indexed:    lhs,
+							StartIndex: startIndex,
+							EndIndex:   endIndex,
+						}
 					}
 
 					if i < len(s) && s[i] != ']' && isSliceExpr {
@@ -4508,13 +4931,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i >= len(s) || s[i] != ']' {
-						panic(ParsingError{
-							"unterminated index/slice expression, missing closing bracket ']'",
-							i,
-							first.Base().Span.Start,
-							UnspecifiedCategory,
-							nil,
-						})
+						return &InvalidMemberLike{
+							NodeBase: NodeBase{
+								NodeSpan{first.Base().Span.Start, i},
+								&ParsingError{
+									"unterminated index/slice expression, missing closing bracket ']'",
+									i,
+									first.Base().Span.Start,
+									UnspecifiedCategory,
+									nil,
+								},
+							},
+							Left: lhs,
+						}
 					}
 
 					i++
@@ -4528,6 +4957,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						return &SliceExpression{
 							NodeBase: NodeBase{
 								NodeSpan{spanStart, i},
+								nil,
 							},
 							Indexed:    lhs,
 							StartIndex: startIndex,
@@ -4538,6 +4968,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					lhs = &IndexExpression{
 						NodeBase: NodeBase{
 							NodeSpan{spanStart, i},
+							nil,
 						},
 						Indexed: lhs,
 						Index:   startIndex,
@@ -4549,19 +4980,27 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return &ExtractionExpression{
 						NodeBase: NodeBase{
 							NodeSpan{lhs.Base().Span.Start, keyList.Span.End},
+							nil,
 						},
 						Object: lhs,
 						Keys:   keyList,
 					}
 				} else { //member expression
 					if !isAlpha(s[i]) && s[i] != '_' {
-						panic(ParsingError{
-							"property name should start with a letter not '" + string(s[i]) + "'",
-							i,
-							first.Base().Span.Start,
-							KnownType,
-							(*MemberExpression)(nil),
-						})
+						return &MemberExpression{
+							NodeBase: NodeBase{
+								NodeSpan{lhs.Base().Span.Start, i},
+								&ParsingError{
+									"property name should start with a letter not '" + string(s[i]) + "'",
+									i,
+									first.Base().Span.Start,
+									KnownType,
+									(*MemberExpression)(nil),
+								},
+							},
+							Left:         lhs,
+							PropertyName: nil,
+						}
 					}
 
 					for i < len(s) && isIdentChar(s[i]) {
@@ -4577,11 +5016,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					lhs = &MemberExpression{
 						NodeBase: NodeBase{
 							NodeSpan{spanStart, i},
+							nil,
 						},
 						Left: lhs,
 						PropertyName: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{start, i},
+								nil,
 							},
 							Name: propName,
 						},
@@ -4607,6 +5048,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			call := &Call{
 				NodeBase: NodeBase{
 					NodeSpan{spanStart, 0},
+					nil,
 				},
 				Callee:    lhs,
 				Arguments: nil,
@@ -4625,16 +5067,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpaceNewlineComma()
 			}
 
+			var parsingErr *ParsingError
+
 			if i >= len(s) || s[i] != ')' {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"unterminated call, missing closing parenthesis ')'",
 					i,
 					first.Base().Span.Start,
 					KnownType,
 					(*Call)(nil),
-				})
+				}
+			} else {
+				i++
 			}
-			i++
 
 			if i < len(s) && s[i] == '!' {
 				call.Must = true
@@ -4642,6 +5087,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			call.NodeBase.Span.End = i
+			call.Err = parsingErr
 			return call
 		}
 
@@ -4678,35 +5124,43 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	parseGlobalConstantDeclarations = func() *GlobalConstantDeclarations {
 		start := i
+
 		if i < len(s) && strings.HasPrefix(string(s[i:]), "const") {
 			i += len("const")
 
 			eatSpace()
+			var declarations []*GlobalConstantDeclaration
+			var parsingErr *ParsingError
 
 			if i >= len(s) {
-				panic(ParsingError{
-					"unterminated global const declarations",
-					i,
-					start,
-					KnownType,
-					(*GlobalConstantDeclarations)(nil),
-				})
+				return &GlobalConstantDeclarations{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							"unterminated global const declarations",
+							i,
+							start,
+							KnownType,
+							(*GlobalConstantDeclarations)(nil),
+						},
+					},
+				}
 			}
 
 			if s[i] != '(' {
-				panic(ParsingError{
+				parsingErr = &ParsingError{
 					"invalid global const declarations, expected opening parenthesis after 'const'",
 					i,
 					start,
 					KnownType,
 					(*GlobalConstantDeclarations)(nil),
-				})
+				}
 			}
 
 			i++
-			var namesValues [][2]Node
 
 			for i < len(s) && s[i] != ')' {
+				var declParsingErr *ParsingError
 				eatSpaceAndNewLineAndComment()
 
 				if i < len(s) && s[i] == ')' {
@@ -4714,64 +5168,86 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				if i >= len(s) {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"invalid global const declarations, missing closing parenthesis",
 						i,
 						start,
 						KnownType,
 						(*GlobalConstantDeclarations)(nil),
-					})
+					}
+					break
 				}
 
 				lhs := parseExpression()
 				globvar, ok := lhs.(*IdentifierLiteral)
 				if !ok {
-					panic(ParsingError{
-						"invalid global const declarations, left hand sides must be identifiers",
+					declParsingErr = &ParsingError{
+						"invalid global const declaration, left hand sides must be an identifier",
 						i,
 						start,
 						KnownType,
 						(*GlobalConstantDeclarations)(nil),
-					})
+					}
 				}
 
 				eatSpace()
 
 				if i >= len(s) || s[i] != '=' {
-					panic(ParsingError{
-						fmt.Sprintf("invalid global const declarations, missing '=' after name %s", globvar.Name),
+					declParsingErr = &ParsingError{
+						fmt.Sprintf("invalid global const declaration, missing '=' after name %s", globvar.Name),
 						i,
 						start,
 						KnownType,
 						(*GlobalConstantDeclarations)(nil),
+					}
+
+					if i < len(s) {
+						i++
+					}
+					declarations = append(declarations, &GlobalConstantDeclaration{
+						NodeBase: NodeBase{
+							NodeSpan{lhs.Base().Span.Start, i},
+							declParsingErr,
+						},
+						Left: lhs.(*IdentifierLiteral),
 					})
+					break
 				}
 
 				i++
 				eatSpace()
 
+				var rhs Node
+
 				if i >= len(s) || s[i] == ')' {
-					panic(ParsingError{
-						fmt.Sprintf("invalid global const declarations, missing value after '$$%s ='", globvar.Name),
+					declParsingErr = &ParsingError{
+						fmt.Sprintf("invalid global const declarations, missing value after '%s ='", globvar.Name),
 						i,
 						start,
 						KnownType,
 						(*GlobalConstantDeclarations)(nil),
-					})
+					}
+				} else {
+					rhs = parseExpression()
+					if !isSimpleValueLiteral(rhs) {
+						declParsingErr = &ParsingError{
+							fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
+							i,
+							start,
+							KnownType,
+							(*GlobalConstantDeclarations)(nil),
+						}
+					}
 				}
 
-				rhs := parseExpression()
-				if !isSimpleValueLiteral(rhs) {
-					panic(ParsingError{
-						fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
-						i,
-						start,
-						KnownType,
-						(*GlobalConstantDeclarations)(nil),
-					})
-				}
-
-				namesValues = append(namesValues, [2]Node{lhs, rhs})
+				declarations = append(declarations, &GlobalConstantDeclaration{
+					NodeBase: NodeBase{
+						NodeSpan{lhs.Base().Span.Start, rhs.Base().Span.End},
+						declParsingErr,
+					},
+					Left:  lhs.(*IdentifierLiteral),
+					Right: rhs,
+				})
 
 				eatSpaceAndNewLineAndComment()
 			}
@@ -4781,8 +5257,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			decls := &GlobalConstantDeclarations{
 				NodeBase: NodeBase{
 					NodeSpan{start, i},
+					parsingErr,
 				},
-				NamesValues: namesValues,
+				Declarations: declarations,
 			}
 
 			return decls
@@ -4810,34 +5287,59 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		eatSpace()
 
 		var ident *IdentifierLiteral
+		var parsingErr *ParsingError
 
 		if i < len(s) && isAlpha(s[i]) {
 			idnt := parseIdentLike()
 			var ok bool
 			if ident, ok = idnt.(*IdentifierLiteral); !ok {
-				panic(ParsingError{
-					fmt.Sprintf("function name should be an identifier not a %T", idnt),
-					i,
-					start,
-					KnownType,
-					(*FunctionDeclaration)(nil),
-				})
+				return &FunctionDeclaration{
+					NodeBase: NodeBase{
+						Span: NodeSpan{start, i},
+						Err: &ParsingError{
+							fmt.Sprintf("function name should be an identifier not a(n) %T", idnt),
+							i,
+							start,
+							KnownType,
+							(*FunctionDeclaration)(nil),
+						},
+					},
+					Function: nil,
+					Name:     nil,
+				}
 			}
 		}
 
 		if i >= len(s) || s[i] != '(' {
-			panic(ParsingError{
+			parsingErr = &ParsingError{
 				"function : fn keyword (or function name) should be followed by '(' <param list> ')' ",
 				i,
 				start,
 				UnspecifiedCategory,
 				nil,
-			})
+			}
+
+			fn := FunctionExpression{
+				NodeBase: NodeBase{
+					Span: NodeSpan{start, i},
+				},
+			}
+
+			if ident != nil {
+				return &FunctionDeclaration{
+					NodeBase: NodeBase{
+						Span: fn.Span,
+						Err:  parsingErr,
+					},
+					Function: &fn,
+					Name:     ident,
+				}
+			}
 		}
 
 		i++
 
-		var parameters []FunctionParameter
+		var parameters []*FunctionParameter
 
 		for i < len(s) && s[i] != ')' {
 			eatSpaceNewlineComma()
@@ -4849,8 +5351,62 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			varNode := parseExpression()
 
 			if _, ok := varNode.(*IdentifierLiteral); !ok {
+				parameters = append(parameters, &FunctionParameter{
+					NodeBase: NodeBase{
+						varNode.Base().Span,
+						&ParsingError{
+							"function : the parameter list should contain variables separated by a comma",
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+					Var: nil,
+				})
+			} else {
+				parameters = append(parameters, &FunctionParameter{
+					NodeBase: NodeBase{
+						varNode.Base().Span,
+						nil,
+					},
+					Var: varNode.(*IdentifierLiteral),
+				})
+			}
+
+			eatSpaceNewlineComma()
+		}
+
+		var requirements *Requirements
+		var blk *Block
+
+		if i >= len(s) {
+			parsingErr = &ParsingError{
+				"function : unterminated parameter list : missing closing parenthesis",
+				i,
+				start,
+				UnspecifiedCategory,
+				nil,
+			}
+		} else if s[i] != ')' {
+			parsingErr = &ParsingError{
+				"function : invalid syntax",
+				i,
+				start,
+				UnspecifiedCategory,
+				nil,
+			}
+		} else {
+			i++
+
+			eatSpace()
+
+			requirements = parseRequirements()
+
+			eatSpace()
+			if i >= len(s) || s[i] != '{' {
 				panic(ParsingError{
-					"function : the parameter list should contain variables separated by a comma",
+					"function : parameter list should be followed by a block, not " + string(s[i]),
 					i,
 					start,
 					UnspecifiedCategory,
@@ -4858,54 +5414,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				})
 			}
 
-			parameters = append(parameters, FunctionParameter{
-				Var: varNode.(*IdentifierLiteral),
-			})
-
-			eatSpaceNewlineComma()
+			blk = parseBlock()
 		}
 
-		if i >= len(s) {
-			panic(ParsingError{
-				"function : unterminated parameter list : missing closing parenthesis",
-				i,
-				start,
-				UnspecifiedCategory,
-				nil,
-			})
-		}
-
-		if s[i] != ')' {
-			panic(ParsingError{
-				"function : invalid syntax",
-				i,
-				start,
-				UnspecifiedCategory,
-				nil,
-			})
-		}
-
-		i++
-
-		eatSpace()
-
-		requirements := parseRequirements()
-
-		eatSpace()
-		if i >= len(s) || s[i] != '{' {
-			panic(ParsingError{
-				"function : parameter list should be followed by a block, not " + string(s[i]),
-				i,
-				start,
-				UnspecifiedCategory,
-				nil,
-			})
-		}
-
-		blk := parseBlock()
 		fn := FunctionExpression{
 			NodeBase: NodeBase{
 				Span: NodeSpan{start, blk.Span.End},
+				Err:  parsingErr,
 			},
 			Parameters:   parameters,
 			Body:         blk,
@@ -4913,9 +5428,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if ident != nil {
+			fn.Err = nil
 			return &FunctionDeclaration{
 				NodeBase: NodeBase{
 					Span: fn.Span,
+					Err:  parsingErr,
 				},
 				Function: &fn,
 				Name:     ident,
@@ -4947,73 +5464,74 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		case *IdentifierLiteral:
 			switch ev.Name {
 			case "if":
+				var alternate *Block
+				var blk *Block
+				var end int
+				var parsingErr *ParsingError
+
 				eatSpace()
 				test := parseExpression()
 				eatSpace()
 
 				if i >= len(s) {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated if statement, missing block",
 						i,
 						expr.Base().Span.Start,
 						KnownType,
 						(*IfStatement)(nil),
-					})
-				}
-
-				if s[i] != '{' {
-					panic(ParsingError{
+					}
+				} else if s[i] != '{' {
+					parsingErr = &ParsingError{
 						"invalid if statement, test expression should be followed by a block, not " + string(s[i]),
 						i,
 						expr.Base().Span.Start,
 						KnownType,
 						(*IfStatement)(nil),
-					})
-				}
-
-				blk := parseBlock()
-				end := blk.Span.End
-				eatSpace()
-
-				var alternate *Block
-
-				if i < len(s)-4 && string(s[i:i+4]) == "else" {
-					i += 4
+					}
+				} else {
+					blk = parseBlock()
+					end = blk.Span.End
 					eatSpace()
 
-					if i >= len(s) {
-						panic(ParsingError{
-							"unterminated if statement, missing block after 'else'",
-							i,
-							expr.Base().Span.Start,
-							KnownType,
-							(*IfStatement)(nil),
-						})
-					}
+					if i < len(s)-4 && string(s[i:i+4]) == "else" {
+						i += 4
+						eatSpace()
 
-					if s[i] != '{' {
-						panic(ParsingError{
-							"invalid if statement, else should be followed by a block, not " + string(s[i]),
-							i,
-							expr.Base().Span.Start,
-							KnownType,
-							(*IfStatement)(nil),
-						})
+						if i >= len(s) {
+							parsingErr = &ParsingError{
+								"unterminated if statement, missing block after 'else'",
+								i,
+								expr.Base().Span.Start,
+								KnownType,
+								(*IfStatement)(nil),
+							}
+						} else if s[i] != '{' {
+							parsingErr = &ParsingError{
+								"invalid if statement, else should be followed by a block, not " + string(s[i]),
+								i,
+								expr.Base().Span.Start,
+								KnownType,
+								(*IfStatement)(nil),
+							}
+						} else {
+							alternate = parseBlock()
+							end = alternate.Span.End
+						}
 					}
-
-					alternate = parseBlock()
-					end = alternate.Span.End
 				}
 
 				return &IfStatement{
 					NodeBase: NodeBase{
 						Span: NodeSpan{ev.Span.Start, end},
+						Err:  parsingErr,
 					},
 					Test:       test,
 					Consequent: blk,
 					Alternate:  alternate,
 				}
 			case "for":
+				var parsingErr *ParsingError
 				forStart := expr.Base().Span.Start
 				eatSpace()
 				keyIndexIdent := parseExpression()
@@ -5023,114 +5541,151 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i > len(s) {
-						panic(ParsingError{
-							"invalid for statement",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"invalid for statement",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+						}
 					}
 
 					if s[i] != ',' {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"for statement : key/index name should be followed by a comma ',' , not " + string(s[i]),
 							i,
 							forStart,
 							KnownType,
 							(*ForStatement)(nil),
-						})
+						}
 					}
 
 					i++
 					eatSpace()
 
 					if i > len(s) {
-						panic(ParsingError{
-							"unterminated for statement",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"unterminated for statement",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+						}
 					}
 
 					valueElemIdent := parseExpression()
 
 					if _, isVar := valueElemIdent.(*IdentifierLiteral); !isVar {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexIdent),
 							i,
 							forStart,
 							KnownType,
 							(*ForStatement)(nil),
-						})
+						}
 					}
 
 					eatSpace()
 
 					if i >= len(s) {
-						panic(ParsingError{
-							"unterminated for statement",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"unterminated for statement",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+						}
 					}
 
 					if s[i] != 'i' || i > len(s)-2 || s[i+1] != 'n' {
-						panic(ParsingError{
-							"invalid for statement : missing 'in' keyword ",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"invalid for statement : missing 'in' keyword ",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
+							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+						}
 					}
 
 					i += 2
 
 					if i < len(s) && s[i] != ' ' {
-						panic(ParsingError{
-							"invalid for statement : 'in' keyword should be followed by a space",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"invalid for statement : 'in' keyword should be followed by a space",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
+							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+						}
 					}
 					eatSpace()
 
 					if i >= len(s) {
-						panic(ParsingError{
-							"unterminated for statement, missing value after 'in'",
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
-						})
+						return &ForStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"unterminated for statement, missing value after 'in'",
+									i,
+									forStart,
+									KnownType,
+									(*ForStatement)(nil),
+								},
+							},
+							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
+							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+						}
 					}
 
 					iteratedValue := parseExpression()
-
 					eatSpace()
+					var blk *Block
 
 					if i >= len(s) {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"unterminated for statement, missing block",
 							i,
 							forStart,
 							KnownType,
 							(*ForStatement)(nil),
-						})
+						}
+					} else {
+						blk = parseBlock()
 					}
-
-					blk := parseBlock()
 
 					return &ForStatement{
 						NodeBase: NodeBase{
 							Span: NodeSpan{ev.Span.Start, blk.Span.End},
+							Err:  parsingErr,
 						},
 						KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
 						ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
@@ -5143,22 +5698,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						keyIndexIdent = nil
 
 						eatSpace()
+						var blk *Block
 
 						if i >= len(s) {
-							panic(ParsingError{
+							parsingErr = &ParsingError{
 								"unterminated for statement, missing block",
 								i,
 								forStart,
 								KnownType,
 								(*ForStatement)(nil),
-							})
+							}
+						} else {
+							blk = parseBlock()
 						}
-
-						blk := parseBlock()
 
 						return &ForStatement{
 							NodeBase: NodeBase{
 								Span: NodeSpan{ev.Span.Start, blk.Span.End},
+								Err:  parsingErr,
 							},
 							KeyIndexIdent:  nil,
 							ValueElemIdent: nil,
@@ -5166,21 +5723,32 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							IteratedValue:  iteratedValue,
 						}
 					}
-					panic(ParsingError{
-						fmt.Sprintf("invalid for statement : 'for' should be followed by a binary range expression, operator is %s", v.Operator.String()),
-						i,
-						forStart,
-						KnownType,
-						(*ForStatement)(nil),
-					})
+					return &ForStatement{
+						NodeBase: NodeBase{
+							Span: NodeSpan{ev.Span.Start, i},
+							Err: &ParsingError{
+								fmt.Sprintf("invalid for statement : 'for' should be followed by a binary range expression, operator is %s", v.Operator.String()),
+								i,
+								forStart,
+								KnownType,
+								(*ForStatement)(nil),
+							},
+						},
+					}
+
 				default:
-					panic(ParsingError{
-						fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexIdent),
-						i,
-						forStart,
-						KnownType,
-						(*ForStatement)(nil),
-					})
+					return &ForStatement{
+						NodeBase: NodeBase{
+							Span: NodeSpan{ev.Span.Start, i},
+							Err: &ParsingError{
+								fmt.Sprintf("invalid for statement : 'for' should be followed by a variable or a binary range expression (binary range operator), not a(n) %T", keyIndexIdent),
+								i,
+								forStart,
+								KnownType,
+								(*ForStatement)(nil),
+							},
+						},
+					}
 				}
 
 			case "switch", "match":
@@ -5216,21 +5784,34 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				if i >= len(s) || s[i] != '{' {
 					if ev.Name == "switch" {
-						panic(ParsingError{
-							"unterminated switch statement : missing body",
-							i,
-							switchMatchStart,
-							KnownType,
-							(*SwitchStatement)(nil),
-						})
+						return &SwitchStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"unterminated switch statement : missing body",
+									i,
+									switchMatchStart,
+									KnownType,
+									(*SwitchStatement)(nil),
+								},
+							},
+							Discriminant: discriminant,
+						}
 					}
-					panic(ParsingError{
-						"unterminated match statement : missing body",
-						i,
-						switchMatchStart,
-						KnownType,
-						(*MatchStatement)(nil),
-					})
+
+					return &MatchStatement{
+						NodeBase: NodeBase{
+							Span: NodeSpan{ev.Span.Start, i},
+							Err: &ParsingError{
+								"unterminated match statement : missing body",
+								i,
+								switchMatchStart,
+								KnownType,
+								(*SwitchStatement)(nil),
+							},
+						},
+						Discriminant: discriminant,
+					}
 				}
 
 				i++
@@ -5239,46 +5820,62 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpaceNewLineSemiColonComment()
 
 					var valueNodes []Node
+					var caseParsingErr *ParsingError
 
+					//parse gathered cases
 					for i < len(s) && s[i] != '{' {
 						if i >= len(s) {
 							if ev.Name == "switch" {
-								panic(ParsingError{
-									"unterminated switch statement",
-									i,
-									switchMatchStart,
-									KnownType,
-									(*SwitchStatement)(nil),
-								})
+								return &SwitchStatement{
+									NodeBase: NodeBase{
+										Span: NodeSpan{ev.Span.Start, i},
+										Err: &ParsingError{
+											"unterminated switch statement",
+											i,
+											switchMatchStart,
+											KnownType,
+											(*SwitchStatement)(nil),
+										},
+									},
+									Discriminant: discriminant,
+								}
 							}
 
-							panic(ParsingError{
-								"unterminated match statement",
-								i,
-								switchMatchStart,
-								KnownType,
-								(*MatchStatement)(nil),
-							})
+							return &MatchStatement{
+								NodeBase: NodeBase{
+									Span: NodeSpan{ev.Span.Start, i},
+									Err: &ParsingError{
+										"unterminated match statement",
+										i,
+										switchMatchStart,
+										KnownType,
+										(*SwitchStatement)(nil),
+									},
+								},
+								Discriminant: discriminant,
+							}
+
 						}
 						valueNode := parseExpression()
+
 						if !isSimpleValueLiteral(valueNode) {
 							if ev.Name == "switch" {
-								panic(ParsingError{
+								caseParsingErr = &ParsingError{
 									"invalid switch case : only simple value literals are supported (1, 1.0, /home, ..)",
 									i,
 									switchMatchStart,
 									KnownType,
 									(*SwitchStatement)(nil),
-								})
+								}
+							} else {
+								caseParsingErr = &ParsingError{
+									"invalid match case : only simple value literals are supported (1, 1.0, /home, ..)",
+									i,
+									switchMatchStart,
+									KnownType,
+									(*MatchStatement)(nil),
+								}
 							}
-							panic(ParsingError{
-								"invalid match case : only simple value literals are supported (1, 1.0, /home, ..)",
-								i,
-								switchMatchStart,
-								KnownType,
-								(*MatchStatement)(nil),
-							})
-
 						}
 						valueNodes = append(valueNodes, valueNode)
 
@@ -5295,21 +5892,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					if i >= len(s) || s[i] != '{' {
 						if ev.Name == "switch" {
-							panic(ParsingError{
+							caseParsingErr = &ParsingError{
 								"invalid switch case : missing block",
 								i,
 								switchMatchStart,
 								KnownType,
 								(*SwitchStatement)(nil),
-							})
+							}
+						} else {
+
+							caseParsingErr = &ParsingError{
+								"invalid match case : missing block",
+								i,
+								switchMatchStart,
+								KnownType,
+								(*MatchStatement)(nil),
+							}
 						}
-						panic(ParsingError{
-							"invalid match case : missing block",
-							i,
-							switchMatchStart,
-							KnownType,
-							(*MatchStatement)(nil),
-						})
 					}
 
 					blk := parseBlock()
@@ -5318,6 +5917,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						switchCase := &Case{
 							NodeBase: NodeBase{
 								NodeSpan{valNode.Base().Span.Start, blk.Span.End},
+								caseParsingErr,
 							},
 							Value: valNode,
 							Block: blk,
@@ -5329,23 +5929,26 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpaceNewLineSemiColonComment()
 				}
 
+				var parsingErr *ParsingError
+
 				if i >= len(s) || s[i] != '}' {
 					if ev.Name == "switch" {
-						panic(ParsingError{
+						parsingErr = &ParsingError{
 							"unterminated switch statement : missing closing body brace '}'",
 							i,
 							switchMatchStart,
 							KnownType,
 							(*SwitchStatement)(nil),
-						})
+						}
+					} else {
+						parsingErr = &ParsingError{
+							"unterminated match statement : missing closing body brace '}'",
+							i,
+							switchMatchStart,
+							KnownType,
+							(*MatchStatement)(nil),
+						}
 					}
-					panic(ParsingError{
-						"unterminated match statement : missing closing body brace '}'",
-						i,
-						switchMatchStart,
-						KnownType,
-						(*MatchStatement)(nil),
-					})
 
 				}
 
@@ -5356,6 +5959,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return &SwitchStatement{
 						NodeBase: NodeBase{
 							NodeSpan{ev.Span.Start, i},
+							parsingErr,
 						},
 						Discriminant: discriminant,
 						Cases:        switchCases,
@@ -5365,6 +5969,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &MatchStatement{
 					NodeBase: NodeBase{
 						NodeSpan{ev.Span.Start, i},
+						parsingErr,
 					},
 					Discriminant: discriminant,
 					Cases:        switchCases,
@@ -5378,19 +5983,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				objLit, ok := parseExpression().(*ObjectLiteral)
+				var parsingErr *ParsingError
 				if !ok {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"permission dropping statement: 'drop-perms' keyword should be followed by an object literal (permissions)",
 						i,
 						expr.Base().Span.Start,
 						KnownType,
 						(*ImportStatement)(nil),
-					})
+					}
 				}
 
 				return &PermissionDroppingStatement{
 					NodeBase: NodeBase{
 						NodeSpan{expr.Base().Span.Start, objLit.Span.End},
+						parsingErr,
 					},
 					Object: objLit,
 				}
@@ -5402,83 +6009,121 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				identifier := parseIdentLike()
 				if _, ok := identifier.(*IdentifierLiteral); !ok {
-					panic(ParsingError{
-						"import statement: import should be followed by an identifier",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: import should be followed by an identifier",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+					}
 
 				}
 
 				eatSpace()
 
 				url_ := parseExpression()
+
 				if _, ok := url_.(*URLLiteral); !ok {
-					panic(ParsingError{
-						"import statement: URL should be a URL literal",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: URL should be a URL literal",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+					}
 				}
 
 				eatSpace()
 
 				checksum := parseExpression()
 				if _, ok := checksum.(*StringLiteral); !ok {
-					panic(ParsingError{
-						"import statement: checksum should be a string literal",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: checksum should be a string literal",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+						URL: url_.(*URLLiteral),
+					}
 				}
 
 				eatSpace()
 
 				argumentObject := parseExpression()
 				if _, ok := argumentObject.(*ObjectLiteral); !ok {
-					panic(ParsingError{
-						"import statement: argument should be an object literal",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: argument should be an object literal",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+						URL: url_.(*URLLiteral),
+					}
 				}
 
 				eatSpace()
 				allowIdent := parseExpression()
 				if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
-					panic(ParsingError{
-						"import statement: argument should be followed by a the 'allow' keyword",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: argument should be followed by a the 'allow' keyword",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+						URL:            url_.(*URLLiteral),
+						ArgumentObject: argumentObject.(*ObjectLiteral),
+					}
 				}
 
 				eatSpace()
 				grantedPerms := parseExpression()
 				grantedPermsLit, ok := grantedPerms.(*ObjectLiteral)
 				if !ok {
-					panic(ParsingError{
-						"import statement: 'allow' keyword should be followed by an object literal (permissions)",
-						i,
-						importStart,
-						KnownType,
-						(*ImportStatement)(nil),
-					})
+					return &ImportStatement{
+						NodeBase: NodeBase{
+							NodeSpan{ev.Span.Start, i},
+							&ParsingError{
+								"import statement: 'allow' keyword should be followed by an object literal (permissions)",
+								i,
+								importStart,
+								KnownType,
+								(*ImportStatement)(nil),
+							},
+						},
+						URL:            url_.(*URLLiteral),
+						ArgumentObject: argumentObject.(*ObjectLiteral),
+					}
 				}
 
 				return &ImportStatement{
 					NodeBase: NodeBase{
 						NodeSpan{ev.Span.Start, i},
+						nil,
 					},
 					Identifier:         identifier.(*IdentifierLiteral),
 					URL:                url_.(*URLLiteral),
@@ -5525,36 +6170,46 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 					e := parseExpression()
 					if _, ok := e.(*IdentifierLiteral); !ok {
-						panic(ParsingError{
-							"assign keyword should be followed by identifiers (assign a b = <value>)",
-							i,
-							expr.Base().Span.Start,
-							KnownType,
-							(*MultiAssignment)(nil),
-						})
+						return &MultiAssignment{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"assign keyword should be followed by identifiers (assign a b = <value>)",
+									i,
+									expr.Base().Span.Start,
+									KnownType,
+									(*MultiAssignment)(nil),
+								},
+							},
+							Variables: vars,
+						}
 					}
 					vars = append(vars, e)
 					eatSpace()
 
 				}
 
+				var right Node
+				var parsingErr *ParsingError
+
 				if i >= len(s) {
-					panic(ParsingError{
+					parsingErr = &ParsingError{
 						"unterminated multi assign statement, missing '='",
 						i,
 						expr.Base().Span.Start,
 						KnownType,
 						(*MultiAssignment)(nil),
-					})
+					}
+				} else {
+					i++
+					eatSpace()
+					right = parseExpression()
 				}
-
-				i++
-				eatSpace()
-				right := parseExpression()
 
 				return &MultiAssignment{
 					NodeBase: NodeBase{
 						Span: NodeSpan{ev.Span.Start, right.Base().Span.End},
+						Err:  parsingErr,
 					},
 					Variables: vars,
 					Right:     right,
@@ -5659,6 +6314,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				stmt := &PipelineStatement{
 					NodeBase: NodeBase{
 						NodeSpan{call.Span.Start, 0},
+						nil,
 					},
 					Stages: []*PipelineStage{
 						{
@@ -5672,25 +6328,27 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i >= len(s) {
-					panic(ParsingError{
+					stmt.Err = &ParsingError{
 						"unterminated pipeline statement, last stage is empty",
 						i,
 						expr.Base().Span.Start,
 						UnspecifiedCategory,
 						nil,
-					})
+					}
+					return stmt
 				}
 
 				for i < len(s) && s[i] != '\n' {
 					eatSpace()
 					if i >= len(s) {
-						panic(ParsingError{
+						stmt.Err = &ParsingError{
 							"unterminated pipeline statement, last stage is empty",
 							i,
 							expr.Base().Span.Start,
 							UnspecifiedCategory,
 							nil,
-						})
+						}
+						return stmt
 					}
 
 					callee := parseExpression()
@@ -5739,22 +6397,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							i++
 							return stmt
 						default:
-							panic(ParsingError{
+							stmt.Err = &ParsingError{
 								fmt.Sprintf("invalid pipeline stage, unexpected char '%c'", s[i]),
 								i,
 								expr.Base().Span.Start,
 								UnspecifiedCategory,
 								nil,
-							})
+							}
+							return stmt
 						}
 					default:
-						panic(ParsingError{
+						stmt.Err = &ParsingError{
 							"invalid pipeline stage, all pipeline stages should be calls",
 							i,
 							expr.Base().Span.Start,
 							UnspecifiedCategory,
 							nil,
-						})
+						}
+						return stmt
 					}
 				}
 			}
@@ -6386,6 +7046,10 @@ func Walk(node Node, fn func(Node, Node, Node, []Node) error) error {
 
 func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []Node) error) error {
 
+	if reflect.ValueOf(node).IsNil() {
+		return nil
+	}
+
 	//refactor with panics ?
 
 	if ancestorChain != nil {
@@ -6489,7 +7153,7 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		}
 	case *FunctionExpression:
 		for _, p := range n.Parameters {
-			if err := walk(p.Var, node, ancestorChain, fn); err != nil {
+			if err := walk(p, node, ancestorChain, fn); err != nil {
 				return err
 			}
 		}
@@ -6499,6 +7163,16 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 
 		if n.Requirements != nil {
 			if err := walk(n.Requirements.Object, node, ancestorChain, fn); err != nil {
+				return err
+			}
+		}
+	case *FunctionParameter:
+		if err := walk(n.Var, node, ancestorChain, fn); err != nil {
+			return err
+		}
+	case *GlobalConstantDeclarations:
+		for _, decl := range n.Declarations {
+			if err := walk(decl, node, ancestorChain, fn); err != nil {
 				return err
 			}
 		}
@@ -6884,8 +7558,8 @@ func Check(node Node) error {
 				return errors.New("invalid spawn expression: the expression should be a global func call, an embedded module or a variable (that can be global)")
 			}
 		case *GlobalConstantDeclarations:
-			for _, nameAndValue := range node.NamesValues {
-				name := nameAndValue[0].(*IdentifierLiteral).Name
+			for _, decl := range node.Declarations {
+				name := decl.Left.Name
 
 				variables, ok := globalVars[parent]
 
@@ -7871,9 +8545,9 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		//CONSTANTS
 		if n.GlobalConstantDeclarations != nil {
 			globalScope := state.GlobalScope()
-			for _, nameValueNodes := range n.GlobalConstantDeclarations.NamesValues {
-				name := nameValueNodes[0].(*IdentifierLiteral).Name
-				globalScope[name] = MustEval(nameValueNodes[1], nil)
+			for _, decl := range n.GlobalConstantDeclarations.Declarations {
+				name := decl.Left.Name
+				globalScope[name] = MustEval(decl.Right, nil)
 				state.constants[name] = 0
 			}
 		}
