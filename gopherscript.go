@@ -232,7 +232,7 @@ type MemberExpression struct {
 
 type IdentifierMemberExpression struct {
 	NodeBase
-	Left          Node
+	Left          *IdentifierLiteral
 	PropertyNames []*IdentifierLiteral
 }
 
@@ -1351,7 +1351,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		methodName = c.Name
 		callee = state.GlobalScope()[c.Name]
 	case *IdentifierMemberExpression:
-		name := c.Left.(*IdentifierLiteral).Name
+		name := c.Left.Name
 		err := state.ctx.CheckHasPermission(GlobalVarPermission{Kind_: UsePerm, Name: name})
 		if err != nil {
 			return nil, err
@@ -3465,7 +3465,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case *IdentifierLiteral:
 				name = v.Name
 			case *IdentifierMemberExpression:
-				name = v.Left.(*IdentifierLiteral).Name
+				name = v.Left.Name
 			default:
 				return v
 			}
