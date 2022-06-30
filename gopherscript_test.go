@@ -1918,6 +1918,34 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("identifier member expression with missing last property name", func(t *testing.T) {
+		n, err := ParseModule("http.", "")
+
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			Statements: []Node{
+				&IdentifierMemberExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						&ParsingError{
+							Message:        "unterminated identifier member expression",
+							Index:          5,
+							NodeStartIndex: 5,
+							NodeCategory:   KnownType,
+							NodeType:       (*IdentifierMemberExpression)(nil),
+						},
+					},
+					Left: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						Name:     "http",
+					},
+					PropertyNames: nil,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("call <string> shorthand", func(t *testing.T) {
 		n := MustParseModule(`mime"json"`)
 		assert.EqualValues(t, &Module{

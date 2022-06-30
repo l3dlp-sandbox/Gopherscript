@@ -2678,7 +2678,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			Name: name,
 		}
 
-		if i < len(s)-1 && s[i] == '.' {
+		if i < len(s) && s[i] == '.' {
 			i++
 
 			memberExpr := &IdentifierMemberExpression{
@@ -2693,11 +2693,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				start := i
 
 				if i >= len(s) {
+					memberExpr.NodeBase.Span.End = len(s)
 					memberExpr.NodeBase.Err = &ParsingError{
 						"unterminated identifier member expression",
 						i,
 						start,
-						IdentLike,
+						KnownType,
 						(*IdentifierMemberExpression)(nil),
 					}
 
