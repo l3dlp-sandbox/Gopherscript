@@ -1365,7 +1365,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 
 		for _, idents := range c.PropertyNames {
 			methodName = idents.Name
-			v, optReceiverType, err = memb(v, idents.Name)
+			v, optReceiverType, err = Memb(v, idents.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -1383,7 +1383,7 @@ func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (
 		}
 
 		methodName = c.PropertyName.Name
-		callee, optReceiverType, err = memb(left, c.PropertyName.Name)
+		callee, optReceiverType, err = Memb(left, c.PropertyName.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -6863,7 +6863,7 @@ func (state *State) PopScope() {
 	state.ScopeStack = state.ScopeStack[:len(state.ScopeStack)-1]
 }
 
-func memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
+func Memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
 	switch v := value.(type) {
 	case Object:
 		return v[name], nil, nil
@@ -9231,7 +9231,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		res, _, err := memb(left, n.PropertyName.Name)
+		res, _, err := Memb(left, n.PropertyName.Name)
 		return res, err
 	case *ExtractionExpression:
 		left, err := Eval(n.Object, state)
@@ -9241,7 +9241,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		result := Object{}
 
 		for _, key := range n.Keys.Keys {
-			prop, _, err := memb(left, key.Name)
+			prop, _, err := Memb(left, key.Name)
 			if err != nil {
 				return nil, err
 			}
