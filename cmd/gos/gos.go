@@ -383,14 +383,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				break
 			}
 
-			mod, err := gopherscript.ParseModule(string(input), "")
-			parsingErr, isParsingErr := err.(gopherscript.ParsingError)
-			if err != nil && !isParsingErr {
-				break
-			}
+			mod, _ := gopherscript.ParseModule(string(input), "")
 
 			cursorIndex := len(input) - backspaceCount
-			suggestions := findSuggestions(ctx, mod, parsingErr, cursorIndex)
+			suggestions := findSuggestions(state, ctx, mod, cursorIndex)
 
 			switch len(suggestions) {
 			case 0:
@@ -590,14 +586,9 @@ func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
 	return suggestions
 }
 
-func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsingErr gopherscript.ParsingError, cursorIndex int) []suggestion {
+func findSuggestions(state *gopherscript.State, ctx *gopherscript.Context, mod *gopherscript.Module, cursorIndex int) []suggestion {
 
 	var suggestions []suggestion
-
-	if parsingErr.Message != "" {
-		//not supported yet
-		return nil
-	}
 
 	var nodeAtCursor gopherscript.Node
 
@@ -610,6 +601,11 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 
 		if nodeAtCursor == nil || node.Base().IncludedIn(nodeAtCursor) {
 			nodeAtCursor = node
+
+			if _, isIdentMemberExpr := parent.(*gopherscript.IdentifierMemberExpression); isIdentMemberExpr {
+				nodeAtCursor = parent
+			}
+
 		}
 
 		return nil
@@ -619,7 +615,76 @@ func findSuggestions(ctx *gopherscript.Context, mod *gopherscript.Module, parsin
 		return nil
 	}
 
+switch_:
 	switch n := nodeAtCursor.(type) {
+	case *gopherscript.IdentifierLiteral:
+		for name, _ := range state.GlobalScope() {
+			if strings.HasPrefix(name, n.Name) {
+				suggestions = append(suggestions, suggestion{
+					shownString: name,
+					value:       name,
+				})
+			}
+		}
+	case *gopherscript.IdentifierMemberExpression:
+		val, ok := state.GlobalScope()[n.Left.Name]
+		if !ok {
+			break
+		}
+
+		curr := val
+
+		buff := bytes.NewBufferString(n.Left.Name)
+
+		for i, propName := range n.PropertyNames {
+			next, _, _ := gopherscript.Memb(curr, propName.Name)
+
+			if next == nil { // if the member does not exist
+
+				if obj, ok := curr.(gopherscript.Object); ok && i == len(n.PropertyNames)-1 {
+
+					s := buff.String()
+
+					for actualPropName, _ := range obj {
+
+						if !strings.HasPrefix(actualPropName, propName.Name) {
+							continue
+						}
+
+						suggestions = append(suggestions, suggestion{
+							shownString: s + "." + actualPropName,
+							value:       s + "." + actualPropName,
+						})
+					}
+					break switch_
+				}
+			} else { //if the member exist
+				buff.WriteRune('.')
+				buff.WriteString(propName.Name)
+				curr = next
+			}
+		}
+
+		s := buff.String()
+
+		if n.Err != nil && strings.Contains(n.Err.Message, "unterminated") {
+
+			if obj, ok := curr.(gopherscript.Object); ok {
+
+				for actualPropName, _ := range obj {
+					suggestions = append(suggestions, suggestion{
+						shownString: s + "." + actualPropName,
+						value:       s + "." + actualPropName,
+					})
+				}
+			}
+		}
+
+		suggestions = append(suggestions, suggestion{
+			shownString: s,
+			value:       s,
+		})
+
 	case *gopherscript.RelativePathLiteral:
 		suggestions = findPathSuggestions(ctx, n.Value)
 	case *gopherscript.AbsolutePathLiteral:
