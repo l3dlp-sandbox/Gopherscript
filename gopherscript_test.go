@@ -20,6 +20,35 @@ func parseEval(t *testing.T, s string) interface{} {
 	return res
 }
 
+func TestWalk(t *testing.T) {
+
+	t.Run("prune", func(t *testing.T) {
+		mod := MustParseModule("1")
+		Walk(mod, func(node, parent, scopeNode Node, n4 []Node) (error, TraversalAction) {
+			switch node.(type) {
+			case *Module:
+				return nil, Prune
+			default:
+				t.Fatal("the traversal should get pruned on the Module")
+			}
+			return nil, Continue
+		})
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		mod := MustParseModule("1 2")
+		Walk(mod, func(node, parent, scopeNode Node, n4 []Node) (error, TraversalAction) {
+			switch n := node.(type) {
+			case *IntLiteral:
+				if n.Value == 2 {
+					t.Fatal("the traversal should have stopped")
+				}
+				return nil, StopTraversal
+			}
+			return nil, Continue
+		})
+	})
+}
 func TestMustParseModule(t *testing.T) {
 
 	t.Run("empty module", func(t *testing.T) {
