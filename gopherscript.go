@@ -719,7 +719,7 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 		}
 
 		for _, n := range nodes {
-			if !isSimpleValueLiteral(n) {
+			if !IsSimpleValueLiteral(n) {
 				if _, ok := n.(*GlobalVariable); !ok {
 					log.Panicf("invalid requirements, cannot infer permission, node is a(n) %T \n", n)
 				}
@@ -1090,7 +1090,7 @@ type PatternUnion struct {
 	Cases []Node
 }
 
-func isSimpleValueLiteral(node Node) bool {
+func IsSimpleValueLiteral(node Node) bool {
 	switch node.(type) {
 	case *StringLiteral, *IdentifierLiteral, *IntLiteral, *FloatLiteral, *AbsolutePathLiteral, *AbsolutePathPatternLiteral, *RelativePathLiteral,
 		*RelativePathPatternLiteral, *NamedSegmentPathPatternLiteral, *RegularExpressionLiteral, *BooleanLiteral, *NilLiteral, *HTTPHostLiteral, *HTTPHostPatternLiteral, *URLLiteral, *URLPatternLiteral:
@@ -3275,7 +3275,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						switch v.(type) {
 						case *Variable, *GlobalVariable:
 						default:
-							if !isSimpleValueLiteral(v) {
+							if !IsSimpleValueLiteral(v) {
 								objectPropertyErr = &ParsingError{
 									"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 									i,
@@ -4063,7 +4063,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						switch v.(type) {
 						case *Variable, *GlobalVariable:
 						default:
-							if !isSimpleValueLiteral(v) {
+							if !IsSimpleValueLiteral(v) {
 								elementParsingErr = &ParsingError{
 									"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 									i,
@@ -5230,7 +5230,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 				} else {
 					rhs = parseExpression()
-					if !isSimpleValueLiteral(rhs) {
+					if !IsSimpleValueLiteral(rhs) {
 						declParsingErr = &ParsingError{
 							fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
 							i,
@@ -5859,7 +5859,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 						valueNode := parseExpression()
 
-						if !isSimpleValueLiteral(valueNode) {
+						if !IsSimpleValueLiteral(valueNode) {
 							if ev.Name == "switch" {
 								caseParsingErr = &ParsingError{
 									"invalid switch case : only simple value literals are supported (1, 1.0, /home, ..)",
