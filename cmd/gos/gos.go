@@ -80,7 +80,8 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 }
 
 func writePrompt() {
-	fmt.Print("> ")
+	s := termenv.String("> ")
+	fmt.Print(s.String())
 }
 
 func replaceNewLinesRawMode(s string) string {
@@ -184,6 +185,11 @@ type CommandHistory struct {
 	Commands []string `json:"commands"`
 }
 
+type ColorizationInfo struct {
+	span  gopherscript.NodeSpan
+	color termenv.Color
+}
+
 func debug(args ...interface{}) {
 	f, err := os.OpenFile(".debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
@@ -216,6 +222,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	history := CommandHistory{Commands: []string{""}}
 	commandIndex := 0
+	defaultFgColor := termenv.ForegroundColor()
 
 	input := make([]rune, 0)
 	var runeSeq []rune
@@ -235,6 +242,75 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	moveCursorLineStart := func() {
 		termenv.CursorBack(len(input) + PROMPT_LEN)
+	}
+
+	printPromptAndInput := func() {
+		writePrompt()
+		var colorizations []ColorizationInfo
+
+		mod, _ := gopherscript.ParseModule(string(input), "")
+
+		gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) (error, gopherscript.TraversalAction) {
+			switch n := node.(type) {
+			case *gopherscript.IdentifierLiteral, *gopherscript.Variable, *gopherscript.GlobalVariable:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBrightCyan,
+				})
+
+			case *gopherscript.PatternIdentifierLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBrightGreen,
+				})
+			case *gopherscript.StringLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSI256Color(209),
+				})
+			case *gopherscript.AbsolutePathPatternLiteral, *gopherscript.RelativePathPatternLiteral, *gopherscript.URLPatternLiteral, *gopherscript.HTTPHostPatternLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIRed,
+				})
+			case *gopherscript.URLLiteral, *gopherscript.HTTPHostLiteral, *gopherscript.AbsolutePathLiteral, *gopherscript.RelativePathLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSI256Color(209),
+				})
+			case *gopherscript.IntLiteral, *gopherscript.FloatLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBrightGreen,
+				})
+			case *gopherscript.BooleanLiteral:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBlue,
+				})
+			}
+
+			return nil, gopherscript.Continue
+		})
+
+		prev := int(0)
+
+		for _, colorization := range colorizations {
+			before := termenv.String(string(input[prev:colorization.span.Start]))
+			before = before.Foreground(defaultFgColor)
+
+			fmt.Print(before.String())
+
+			s := termenv.String(string(input[colorization.span.Start:colorization.span.End]))
+			s = s.Foreground(colorization.color)
+			fmt.Print(s.String())
+
+			prev = colorization.span.End
+		}
+
+		if prev < len(input) {
+			fmt.Print(string(input[prev:]))
+		}
 	}
 
 	for {
@@ -301,8 +377,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			termenv.ClearLine()
 			termenv.CursorBack(len(input) + PROMPT_LEN)
 
-			writePrompt()
-			fmt.Printf("%s", string(input))
+			printPromptAndInput()
 			continue
 		case Escape:
 			continue
@@ -406,8 +481,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 				termenv.ClearLine()
 				moveCursorLineStart()
-				writePrompt()
-				fmt.Print(string(input))
+				printPromptAndInput()
 
 				termenv.RestoreCursorPosition()
 				termenv.CursorForward(newCharCount)
@@ -484,8 +558,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			input = append(left, r)
 			input = append(input, right...)
 
-			writePrompt()
-			fmt.Print(string(input))
+			printPromptAndInput()
 
 			if backspaceCount > 0 {
 				termenv.CursorBack(backspaceCount)
@@ -592,11 +665,11 @@ func findSuggestions(state *gopherscript.State, ctx *gopherscript.Context, mod *
 
 	var nodeAtCursor gopherscript.Node
 
-	gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) error {
+	gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) (error, gopherscript.TraversalAction) {
 		span := node.Base().Span
 
 		if span.Start > cursorIndex || span.End < cursorIndex {
-			return nil
+			return nil, gopherscript.Prune
 		}
 
 		if nodeAtCursor == nil || node.Base().IncludedIn(nodeAtCursor) {
@@ -608,7 +681,7 @@ func findSuggestions(state *gopherscript.State, ctx *gopherscript.Context, mod *
 
 		}
 
-		return nil
+		return nil, gopherscript.Continue
 	})
 
 	if nodeAtCursor == nil {
@@ -2204,6 +2277,7 @@ func toPrettyJSON(ctx *gopherscript.Context, v interface{}) string {
 }
 
 func toJSONVal(ctx *gopherscript.Context, v interface{}) interface{} {
+
 	s := toJSON(ctx, v)
 	var jsonVal interface{}
 	err := json.Unmarshal([]byte(s), &jsonVal)
