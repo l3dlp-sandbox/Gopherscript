@@ -54,18 +54,21 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("empty module", func(t *testing.T) {
 		n := MustParseModule("")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 0}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 0}, nil, nil},
 		}, n)
 	})
 
 	t.Run("empty module with empty requirements", func(t *testing.T) {
 		n := MustParseModule("require {}")
 		assert.EqualValues(t, &Module{
-			NodeBase:   NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase:   NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: nil,
 			Requirements: &Requirements{
+				ValuelessTokens: []ValuelessToken{
+					{REQUIRE_KEYWORD, NodeSpan{0, 7}},
+				},
 				Object: &ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{8, 10}, nil},
+					NodeBase:   NodeBase{NodeSpan{8, 10}, nil, nil},
 					Properties: nil,
 				},
 			},
@@ -75,11 +78,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("empty const declarations", func(t *testing.T) {
 		n := MustParseModule("const ()")
 		assert.EqualValues(t, &Module{
-			NodeBase:     NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase:     NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements:   nil,
 			Requirements: nil,
 			GlobalConstantDeclarations: &GlobalConstantDeclarations{
-				NodeBase:     NodeBase{NodeSpan{0, 8}, nil},
+				NodeBase: NodeBase{
+					NodeSpan{0, 8},
+					nil,
+					[]ValuelessToken{{CONST_KEYWORD, NodeSpan{0, 5}}},
+				},
 				Declarations: nil,
 			},
 		}, n)
@@ -88,20 +95,26 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("const declarations : (single) valid lhs & rhs", func(t *testing.T) {
 		n := MustParseModule("const ( a = 1 )")
 		assert.EqualValues(t, &Module{
-			NodeBase:     NodeBase{NodeSpan{0, 15}, nil},
+			NodeBase:     NodeBase{NodeSpan{0, 15}, nil, nil},
 			Statements:   nil,
 			Requirements: nil,
 			GlobalConstantDeclarations: &GlobalConstantDeclarations{
-				NodeBase: NodeBase{NodeSpan{0, 15}, nil},
+				NodeBase: NodeBase{
+					NodeSpan{0, 15},
+					nil,
+					[]ValuelessToken{{CONST_KEYWORD, NodeSpan{0, 5}}},
+				},
 				Declarations: []*GlobalConstantDeclaration{
 					{
 						NodeBase: NodeBase{
 							NodeSpan{8, 13},
 							nil,
+							nil,
 						},
 						Left: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{8, 9},
+								nil,
 								nil,
 							},
 							Name: "a",
@@ -109,6 +122,7 @@ func TestMustParseModule(t *testing.T) {
 						Right: &IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{12, 13},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -123,10 +137,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("variable", func(t *testing.T) {
 		n := MustParseModule("$a")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&Variable{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Name:     "a",
 				},
 			},
@@ -137,14 +151,14 @@ func TestMustParseModule(t *testing.T) {
 		n := MustParseModule("$a;$b")
 		assert.EqualValues(t, &Module{
 
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&Variable{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Name:     "a",
 				},
 				&Variable{
-					NodeBase: NodeBase{NodeSpan{3, 5}, nil},
+					NodeBase: NodeBase{NodeSpan{3, 5}, nil, nil},
 					Name:     "b",
 				},
 			}}, n)
@@ -153,10 +167,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("identifier", func(t *testing.T) {
 		n := MustParseModule("a")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 			Statements: []Node{
 				&IdentifierLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 					Name:     "a",
 				},
 			},
@@ -166,10 +180,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("boolean literal : true", func(t *testing.T) {
 		n := MustParseModule("true")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&BooleanLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Value:    true,
 				},
 			},
@@ -179,10 +193,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("boolean literal : false", func(t *testing.T) {
 		n := MustParseModule("false")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&BooleanLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 					Value:    false,
 				},
 			},
@@ -192,10 +206,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path literal : /", func(t *testing.T) {
 		n := MustParseModule("/")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 					Value:    "/",
 				},
 			},
@@ -205,10 +219,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path literal : /a", func(t *testing.T) {
 		n := MustParseModule("/a")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Value:    "/a",
 				},
 			},
@@ -218,10 +232,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("relative path literal : ./", func(t *testing.T) {
 		n := MustParseModule("./")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&RelativePathLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Value:    "./",
 				},
 			},
@@ -231,10 +245,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("relative path literal : ./a", func(t *testing.T) {
 		n := MustParseModule("./a")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&RelativePathLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Value:    "./a",
 				},
 			},
@@ -244,13 +258,13 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("relative path literal in list : [./]", func(t *testing.T) {
 		n := MustParseModule("[./]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&ListLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Elements: []Node{
 						&RelativePathLiteral{
-							NodeBase: NodeBase{NodeSpan{1, 3}, nil},
+							NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
 							Value:    "./",
 						},
 					},
@@ -262,10 +276,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path pattern literal : /a*", func(t *testing.T) {
 		n := MustParseModule("/a*")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Value:    "/a*",
 				},
 			},
@@ -275,10 +289,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path pattern literal ending with /... ", func(t *testing.T) {
 		n := MustParseModule("/a/...")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Value:    "/a/...",
 				},
 			},
@@ -288,10 +302,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path pattern literal : /... ", func(t *testing.T) {
 		n := MustParseModule("/...")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Value:    "/...",
 				},
 			},
@@ -301,14 +315,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("named-segment path pattern literal  ", func(t *testing.T) {
 		n := MustParseModule("%/home/$username$")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&NamedSegmentPathPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 					Slices: []Node{
 						&PathSlice{
 							NodeBase: NodeBase{
 								NodeSpan{1, 7},
+								nil,
 								nil,
 							},
 							Value: "/home/",
@@ -316,6 +331,7 @@ func TestMustParseModule(t *testing.T) {
 						&Variable{
 							NodeBase: NodeBase{
 								NodeSpan{7, 17},
+								nil,
 								nil,
 							},
 							Name: "username",
@@ -347,14 +363,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path expression : single trailing interpolation", func(t *testing.T) {
 		n := MustParseModule("/home/$username$")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathExpression{
-					NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 					Slices: []Node{
 						&PathSlice{
 							NodeBase: NodeBase{
 								NodeSpan{0, 6},
+								nil,
 								nil,
 							},
 							Value: "/home/",
@@ -362,6 +379,7 @@ func TestMustParseModule(t *testing.T) {
 						&Variable{
 							NodeBase: NodeBase{
 								NodeSpan{6, 16},
+								nil,
 								nil,
 							},
 							Name: "username",
@@ -375,14 +393,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("absolute path expression : single embedded interpolation", func(t *testing.T) {
 		n := MustParseModule("/home/$username$/projects")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 25}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 25}, nil, nil},
 			Statements: []Node{
 				&AbsolutePathExpression{
-					NodeBase: NodeBase{NodeSpan{0, 25}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 25}, nil, nil},
 					Slices: []Node{
 						&PathSlice{
 							NodeBase: NodeBase{
 								NodeSpan{0, 6},
+								nil,
 								nil,
 							},
 							Value: "/home/",
@@ -391,12 +410,14 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{6, 16},
 								nil,
+								nil,
 							},
 							Name: "username",
 						},
 						&PathSlice{
 							NodeBase: NodeBase{
 								NodeSpan{16, 25},
+								nil,
 								nil,
 							},
 							Value: "/projects",
@@ -410,10 +431,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("regex literal : empty", func(t *testing.T) {
 		n := MustParseModule(`%""`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&RegularExpressionLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Raw:      `""`,
 					Value:    "",
 				},
@@ -424,10 +445,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("regex literal : not empty", func(t *testing.T) {
 		n := MustParseModule(`%"a+"`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&RegularExpressionLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 					Raw:      `"a+"`,
 					Value:    "a+",
 				},
@@ -438,10 +459,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("nil literal", func(t *testing.T) {
 		n := MustParseModule("nil")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&NilLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 				},
 			},
 		}, n)
@@ -450,16 +471,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("member expression : variable '.' <single letter propname> ", func(t *testing.T) {
 		n := MustParseModule("$a.b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&MemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					PropertyName: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 						Name:     "b",
 					},
 				},
@@ -470,16 +491,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("member expression : variable '.' <two-letter propname> ", func(t *testing.T) {
 		n := MustParseModule("$a.bc")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&MemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					PropertyName: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{3, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{3, 5}, nil, nil},
 						Name:     "bc",
 					},
 				},
@@ -490,23 +511,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("member expression : variable '.' <propname> '.' <single-letter propname> ", func(t *testing.T) {
 		n := MustParseModule("$a.b.c")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&MemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Left: &MemberExpression{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Left: &Variable{
-							NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+							NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 							Name:     "a",
 						},
 						PropertyName: &IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+							NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 							Name:     "b",
 						},
 					},
 					PropertyName: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 6}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 6}, nil, nil},
 						Name:     "c",
 					},
 				},
@@ -517,23 +538,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("member expression : variable '.' <propname> '.' <two-letter propname> ", func(t *testing.T) {
 		n := MustParseModule("$a.b.cd")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&MemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Left: &MemberExpression{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Left: &Variable{
-							NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+							NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 							Name:     "a",
 						},
 						PropertyName: &IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+							NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 							Name:     "b",
 						},
 					},
 					PropertyName: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 7}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 7}, nil, nil},
 						Name:     "cd",
 					},
 				},
@@ -544,19 +565,19 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("extraction expression : object is a variable", func(t *testing.T) {
 		n := MustParseModule("$a.{name}")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&ExtractionExpression{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Object: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					Keys: &KeyListExpression{
-						NodeBase: NodeBase{NodeSpan{2, 9}, nil},
+						NodeBase: NodeBase{NodeSpan{2, 9}, nil, nil},
 						Keys: []*IdentifierLiteral{
 							{
-								NodeBase: NodeBase{NodeSpan{4, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{4, 8}, nil, nil},
 								Name:     "name",
 							},
 						},
@@ -569,10 +590,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("parenthesized expression", func(t *testing.T) {
 		n := MustParseModule("($a)")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&Variable{
-					NodeBase: NodeBase{NodeSpan{1, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
 					Name:     "a",
 				},
 			},
@@ -582,16 +603,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("member of a parenthesized expression", func(t *testing.T) {
 		n := MustParseModule("($a).name")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&MemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{1, 3}, nil},
+						NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
 						Name:     "a",
 					},
 					PropertyName: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 9}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 9}, nil, nil},
 						Name:     "name",
 					},
 				},
@@ -602,16 +623,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("index expression : variable '[' <integer literal> '] ", func(t *testing.T) {
 		n := MustParseModule("$a[0]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&IndexExpression{
-					NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 					Indexed: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					Index: &IntLiteral{
-						NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 						Raw:      "0",
 						Value:    0,
 					},
@@ -623,23 +644,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("index expression : <member expression> '[' <integer literal> '] ", func(t *testing.T) {
 		n := MustParseModule("$a.b[0]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&IndexExpression{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Indexed: &MemberExpression{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Left: &Variable{
-							NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+							NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 							Name:     "a",
 						},
 						PropertyName: &IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+							NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 							Name:     "b",
 						},
 					},
 					Index: &IntLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 6}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 6}, nil, nil},
 						Raw:      "0",
 						Value:    0,
 					},
@@ -651,16 +672,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("slice expression : variable '[' <integer literal> ':' ] ", func(t *testing.T) {
 		n := MustParseModule("$a[0:]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&SliceExpression{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Indexed: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					StartIndex: &IntLiteral{
-						NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 						Raw:      "0",
 						Value:    0,
 					},
@@ -672,16 +693,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("slice expression : variable '['  ':' <integer literal> ] ", func(t *testing.T) {
 		n := MustParseModule("$a[:1]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&SliceExpression{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Indexed: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					EndIndex: &IntLiteral{
-						NodeBase: NodeBase{NodeSpan{4, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{4, 5}, nil, nil},
 						Raw:      "1",
 						Value:    1,
 					},
@@ -705,10 +726,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("key list expression : empty", func(t *testing.T) {
 		n := MustParseModule(".{}")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&KeyListExpression{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Keys:     nil,
 				},
 			},
@@ -718,14 +739,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("key list expression : one key", func(t *testing.T) {
 		n := MustParseModule(".{name}")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&KeyListExpression{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Keys: []*IdentifierLiteral{
 						{
 							NodeBase: NodeBase{
 								NodeSpan{2, 6},
+								nil,
 								nil,
 							},
 							Name: "name",
@@ -739,14 +761,15 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("key list expression : two keys separated by space", func(t *testing.T) {
 		n := MustParseModule(".{name age}")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&KeyListExpression{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Keys: []*IdentifierLiteral{
 						{
 							NodeBase: NodeBase{
 								NodeSpan{2, 6},
+								nil,
 								nil,
 							},
 							Name: "name",
@@ -754,6 +777,7 @@ func TestMustParseModule(t *testing.T) {
 						{
 							NodeBase: NodeBase{
 								NodeSpan{7, 10},
+								nil,
 								nil,
 							},
 							Name: "age",
@@ -767,10 +791,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL literal : root", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 20}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 20}, nil, nil},
 			Statements: []Node{
 				&URLLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 20}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 20}, nil, nil},
 					Value:    "https://example.com/",
 				},
 			},
@@ -792,10 +816,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL literal : empty query", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/?`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 21}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 21}, nil, nil},
 			Statements: []Node{
 				&URLLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 21}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 21}, nil, nil},
 					Value:    "https://example.com/?",
 				},
 			},
@@ -805,10 +829,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL literal : not empty query", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/?a=1`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 24}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 24}, nil, nil},
 			Statements: []Node{
 				&URLLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 24}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 24}, nil, nil},
 					Value:    "https://example.com/?a=1",
 				},
 			},
@@ -818,10 +842,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL pattern literal : prefix pattern, root", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/...`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 			Statements: []Node{
 				&URLPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 					Value:    "https://example.com/...",
 				},
 			},
@@ -837,10 +861,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("HTTP host", func(t *testing.T) {
 		n := MustParseModule(`https://example.com`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 			Statements: []Node{
 				&HTTPHostLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 					Value:    "https://example.com",
 				},
 			},
@@ -856,10 +880,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("HTTP host pattern : https://*", func(t *testing.T) {
 		n := MustParseModule(`https://*`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&HTTPHostPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Value:    "https://*",
 				},
 			},
@@ -869,10 +893,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("HTTP host pattern : https://*:443", func(t *testing.T) {
 		n := MustParseModule(`https://*:443`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 13}, nil, nil},
 			Statements: []Node{
 				&HTTPHostPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 13}, nil, nil},
 					Value:    "https://*:443",
 				},
 			},
@@ -882,10 +906,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("HTTP host pattern : https://*.<tld>", func(t *testing.T) {
 		n := MustParseModule(`https://*.com`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 13}, nil, nil},
 			Statements: []Node{
 				&HTTPHostPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 13}, nil, nil},
 					Value:    "https://*.com",
 				},
 			},
@@ -901,21 +925,22 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL expression : no query, single trailing path interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/$path$`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 26}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 26}, nil, nil},
 			Statements: []Node{
 				&URLExpression{
-					NodeBase: NodeBase{NodeSpan{0, 26}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 26}, nil, nil},
 					Raw:      "https://example.com/$path$",
 					HostPart: &HTTPHostLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 						Value:    "https://example.com",
 					},
 					Path: &AbsolutePathExpression{
-						NodeBase: NodeBase{NodeSpan{19, 26}, nil},
+						NodeBase: NodeBase{NodeSpan{19, 26}, nil, nil},
 						Slices: []Node{
 							&PathSlice{
 								NodeBase: NodeBase{
 									NodeSpan{19, 20},
+									nil,
 									nil,
 								},
 								Value: "/",
@@ -923,6 +948,7 @@ func TestMustParseModule(t *testing.T) {
 							&Variable{
 								NodeBase: NodeBase{
 									NodeSpan{20, 26},
+									nil,
 									nil,
 								},
 								Name: "path",
@@ -938,21 +964,22 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL expression : no path interpolation, single trailing query interpolation", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/?v=$x$`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 26}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 26}, nil, nil},
 			Statements: []Node{
 				&URLExpression{
-					NodeBase: NodeBase{NodeSpan{0, 26}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 26}, nil, nil},
 					Raw:      "https://example.com/?v=$x$",
 					HostPart: &HTTPHostLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 						Value:    "https://example.com",
 					},
 					Path: &AbsolutePathExpression{
-						NodeBase: NodeBase{NodeSpan{19, 20}, nil},
+						NodeBase: NodeBase{NodeSpan{19, 20}, nil, nil},
 						Slices: []Node{
 							&PathSlice{
 								NodeBase: NodeBase{
 									NodeSpan{19, 20},
+									nil,
 									nil,
 								},
 								Value: "/",
@@ -964,6 +991,7 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{21, 26},
 								nil,
+								nil,
 							},
 							Name: "v",
 							Value: []Node{
@@ -971,12 +999,14 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{23, 23},
 										nil,
+										nil,
 									},
 									Value: "",
 								},
 								&Variable{
 									NodeBase: NodeBase{
 										NodeSpan{23, 26},
+										nil,
 										nil,
 									},
 									Name: "x",
@@ -992,21 +1022,22 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("URL expression : no path interpolation, two query interpolations", func(t *testing.T) {
 		n := MustParseModule(`https://example.com/?v=$x$&w=$y$`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 32}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 32}, nil, nil},
 			Statements: []Node{
 				&URLExpression{
-					NodeBase: NodeBase{NodeSpan{0, 32}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 32}, nil, nil},
 					Raw:      "https://example.com/?v=$x$&w=$y$",
 					HostPart: &HTTPHostLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 						Value:    "https://example.com",
 					},
 					Path: &AbsolutePathExpression{
-						NodeBase: NodeBase{NodeSpan{19, 20}, nil},
+						NodeBase: NodeBase{NodeSpan{19, 20}, nil, nil},
 						Slices: []Node{
 							&PathSlice{
 								NodeBase: NodeBase{
 									NodeSpan{19, 20},
+									nil,
 									nil,
 								},
 								Value: "/",
@@ -1018,6 +1049,7 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{21, 26},
 								nil,
+								nil,
 							},
 							Name: "v",
 							Value: []Node{
@@ -1025,12 +1057,14 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{23, 23},
 										nil,
+										nil,
 									},
 									Value: "",
 								},
 								&Variable{
 									NodeBase: NodeBase{
 										NodeSpan{23, 26},
+										nil,
 										nil,
 									},
 									Name: "x",
@@ -1041,6 +1075,7 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{27, 32},
 								nil,
+								nil,
 							},
 							Name: "w",
 							Value: []Node{
@@ -1048,12 +1083,14 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{29, 29},
 										nil,
+										nil,
 									},
 									Value: "",
 								},
 								&Variable{
 									NodeBase: NodeBase{
 										NodeSpan{29, 32},
+										nil,
 										nil,
 									},
 									Name: "y",
@@ -1069,10 +1106,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("integer literal", func(t *testing.T) {
 		n := MustParseModule("12")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&IntLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Raw:      "12",
 					Value:    12,
 				},
@@ -1083,10 +1120,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("float literal", func(t *testing.T) {
 		n := MustParseModule("12.0")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&FloatLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Raw:      "12.0",
 					Value:    12.0,
 				},
@@ -1097,10 +1134,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("quantity literal : integer", func(t *testing.T) {
 		n := MustParseModule("1s")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&QuantityLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Raw:      "1s",
 					Unit:     "s",
 					Value:    1.0,
@@ -1112,10 +1149,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("quantity literal : float", func(t *testing.T) {
 		n := MustParseModule("1.5s")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&QuantityLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Raw:      "1.5s",
 					Unit:     "s",
 					Value:    1.5,
@@ -1127,15 +1164,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("rate literal", func(t *testing.T) {
 		n := MustParseModule("1kB/s")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&RateLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 5},
 						nil,
+						nil,
 					},
 					Quantity: &QuantityLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 						Raw:      "1kB",
 						Unit:     "kB",
 						Value:    1.0,
@@ -1143,6 +1181,7 @@ func TestMustParseModule(t *testing.T) {
 					Unit: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{4, 5},
+							nil,
 							nil,
 						},
 						Name: "s",
@@ -1161,10 +1200,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("empty string literal", func(t *testing.T) {
 		n := MustParseModule(`""`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&StringLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Raw:      `""`,
 					Value:    ``,
 				},
@@ -1175,10 +1214,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("string literal : single space", func(t *testing.T) {
 		n := MustParseModule(`" "`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&StringLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Raw:      `" "`,
 					Value:    ` `,
 				},
@@ -1189,10 +1228,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("string literal : single, non ASCII character", func(t *testing.T) {
 		n := MustParseModule(`"é"`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&StringLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Raw:      `"é"`,
 					Value:    `é`,
 				},
@@ -1203,10 +1242,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("string literal : one escaped backslashe", func(t *testing.T) {
 		n := MustParseModule(`"\\"`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&StringLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Raw:      `"\\"`,
 					Value:    `\`,
 				},
@@ -1217,10 +1256,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("string literal : two escaped backslashes", func(t *testing.T) {
 		n := MustParseModule(`"\\\\"`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&StringLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Raw:      `"\\\\"`,
 					Value:    `\\`,
 				},
@@ -1231,10 +1270,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("rune literal : simple character", func(t *testing.T) {
 		n := MustParseModule(`'a'`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&RuneLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 					Value:    'a',
 				},
 			},
@@ -1244,10 +1283,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("rune literal : valid escaped character", func(t *testing.T) {
 		n := MustParseModule(`'\n'`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&RuneLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Value:    '\n',
 				},
 			},
@@ -1269,10 +1308,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("identifier literal : single letter", func(t *testing.T) {
 		n := MustParseModule(`e`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 			Statements: []Node{
 				&IdentifierLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 1}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
 					Name:     "e",
 				},
 			},
@@ -1282,10 +1321,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("identifier literal : letter followed by a digit", func(t *testing.T) {
 		n := MustParseModule(`e2`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&IdentifierLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 					Name:     "e2",
 				},
 			},
@@ -1295,16 +1334,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("assignment var = <value>", func(t *testing.T) {
 		n := MustParseModule("$a = $b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&Assignment{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{5, 7}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 7}, nil, nil},
 						Name:     "b",
 					},
 				},
@@ -1315,15 +1354,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("assignment <index expr> = <value>", func(t *testing.T) {
 		n := MustParseModule("$a[0] = $b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&Assignment{
-					NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 					Left: &IndexExpression{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Indexed: &Variable{
 							NodeBase: NodeBase{
 								NodeSpan{0, 2},
+								nil,
 								nil,
 							},
 							Name: "a",
@@ -1332,13 +1372,14 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{3, 4},
 								nil,
+								nil,
 							},
 							Raw:   "0",
 							Value: 0,
 						},
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{8, 10}, nil},
+						NodeBase: NodeBase{NodeSpan{8, 10}, nil, nil},
 						Name:     "b",
 					},
 				},
@@ -1349,16 +1390,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("assignment var = | <pipeline>", func(t *testing.T) {
 		n := MustParseModule("$a = | a | b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 12}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
 			Statements: []Node{
 				&Assignment{
-					NodeBase: NodeBase{NodeSpan{0, 12}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "a",
 					},
 					Right: &PipelineExpression{
-						NodeBase: NodeBase{NodeSpan{7, 12}, nil},
+						NodeBase: NodeBase{NodeSpan{7, 12}, nil, nil},
 						Stages: []*PipelineStage{
 							{
 								Kind: NormalStage,
@@ -1366,10 +1407,12 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{7, 8},
 										nil,
+										nil,
 									},
 									Callee: &IdentifierLiteral{
 										NodeBase: NodeBase{
 											NodeSpan{7, 8},
+											nil,
 											nil,
 										},
 										Name: "a",
@@ -1383,10 +1426,12 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{11, 12},
 										nil,
+										nil,
 									},
 									Callee: &IdentifierLiteral{
 										NodeBase: NodeBase{
 											NodeSpan{11, 12},
+											nil,
 											nil,
 										},
 										Name: "b",
@@ -1404,18 +1449,24 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multi assignement statement : assign <ident> = <var>", func(t *testing.T) {
 		n := MustParseModule("assign a = $b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 13}, nil, nil},
 			Statements: []Node{
 				&MultiAssignment{
-					NodeBase: NodeBase{NodeSpan{0, 13}, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 13},
+						nil,
+						[]ValuelessToken{
+							{ASSIGN_KEYWORD, NodeSpan{0, 6}},
+						},
+					},
 					Variables: []Node{
 						&IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{7, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{7, 8}, nil, nil},
 							Name:     "a",
 						},
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{11, 13}, nil},
+						NodeBase: NodeBase{NodeSpan{11, 13}, nil, nil},
 						Name:     "b",
 					},
 				},
@@ -1426,22 +1477,28 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multi assignement statement : assign var var = var", func(t *testing.T) {
 		n := MustParseModule("assign a b = $c")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 15}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 15}, nil, nil},
 			Statements: []Node{
 				&MultiAssignment{
-					NodeBase: NodeBase{NodeSpan{0, 15}, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 15},
+						nil,
+						[]ValuelessToken{
+							{ASSIGN_KEYWORD, NodeSpan{0, 6}},
+						},
+					},
 					Variables: []Node{
 						&IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{7, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{7, 8}, nil, nil},
 							Name:     "a",
 						},
 						&IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{9, 10}, nil},
+							NodeBase: NodeBase{NodeSpan{9, 10}, nil, nil},
 							Name:     "b",
 						},
 					},
 					Right: &Variable{
-						NodeBase: NodeBase{NodeSpan{13, 15}, nil},
+						NodeBase: NodeBase{NodeSpan{13, 15}, nil, nil},
 						Name:     "c",
 					},
 				},
@@ -1452,12 +1509,12 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call with paren : no args", func(t *testing.T) {
 		n := MustParseModule("print()")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: nil,
@@ -1469,12 +1526,12 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call with paren : no args 2", func(t *testing.T) {
 		n := MustParseModule("print( )")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: nil,
@@ -1486,17 +1543,17 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call : single arg", func(t *testing.T) {
 		n := MustParseModule("print($a)")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Name:     "a",
 						},
 					},
@@ -1508,21 +1565,21 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call with paren: two args", func(t *testing.T) {
 		n := MustParseModule("print($a $b)")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 12}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 12}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Name:     "a",
 						},
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{9, 11}, nil},
+							NodeBase: NodeBase{NodeSpan{9, 11}, nil, nil},
 							Name:     "b",
 						},
 					},
@@ -1534,18 +1591,18 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call without paren: one arg", func(t *testing.T) {
 		n := MustParseModule("print $a")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&Call{
 					Must:     true,
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Name:     "a",
 						},
 					},
@@ -1557,22 +1614,22 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call without paren: two args", func(t *testing.T) {
 		n := MustParseModule("print $a $b")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&Call{
 					Must:     true,
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Name:     "a",
 						},
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{9, 11}, nil},
+							NodeBase: NodeBase{NodeSpan{9, 11}, nil, nil},
 							Name:     "b",
 						},
 					},
@@ -1584,18 +1641,18 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call without paren: one arg with a delimiter", func(t *testing.T) {
 		n := MustParseModule("print []")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&Call{
 					Must:     true,
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&ListLiteral{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Elements: nil,
 						},
 					},
@@ -1607,22 +1664,22 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call without paren: followed by a single line comment", func(t *testing.T) {
 		n := MustParseModule("print $a $b # comment")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 21}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 21}, nil, nil},
 			Statements: []Node{
 				&Call{
 					Must:     true,
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 							Name:     "a",
 						},
 						&Variable{
-							NodeBase: NodeBase{NodeSpan{9, 11}, nil},
+							NodeBase: NodeBase{NodeSpan{9, 11}, nil, nil},
 							Name:     "b",
 						},
 					},
@@ -1646,23 +1703,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: second stage is a call with no arguments", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+										NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 										Name:     "a",
 									},
 								},
@@ -1672,9 +1729,9 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+								NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+									NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: nil,
@@ -1689,23 +1746,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: second stage is a call with no arguments, followed by a ';'", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something;")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 24}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 24}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+										NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 										Name:     "a",
 									},
 								},
@@ -1715,9 +1772,9 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+								NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+									NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: nil,
@@ -1732,23 +1789,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: second stage is a call with no arguments, followed by another statement on the following line", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something\n1")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 25}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 25}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 23}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 23}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+										NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 										Name:     "a",
 									},
 								},
@@ -1758,9 +1815,9 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+								NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+									NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: nil,
@@ -1771,6 +1828,7 @@ func TestMustParseModule(t *testing.T) {
 				&IntLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{24, 25},
+						nil,
 						nil,
 					},
 					Raw:   "1",
@@ -1783,18 +1841,18 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: first and second stages are calls with no arguments", func(t *testing.T) {
 		n := MustParseModule("print | do-something")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 20}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 20}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 20}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 20}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 							},
@@ -1803,9 +1861,9 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{8, 20}, nil},
+								NodeBase: NodeBase{NodeSpan{8, 20}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{8, 20}, nil},
+									NodeBase: NodeBase{NodeSpan{8, 20}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: nil,
@@ -1820,23 +1878,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: second stage is a call with a single argument", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something $")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 25}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 25}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 25}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 25}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+										NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 										Name:     "a",
 									},
 								},
@@ -1846,14 +1904,14 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{11, 25}, nil},
+								NodeBase: NodeBase{NodeSpan{11, 25}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+									NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{24, 25}, nil},
+										NodeBase: NodeBase{NodeSpan{24, 25}, nil, nil},
 										Name:     "",
 									},
 								},
@@ -1868,23 +1926,23 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pipeline statement: third stage is a call with no arguments", func(t *testing.T) {
 		n := MustParseModule("print $a | do-something $ | do-something-else")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 45}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 45}, nil, nil},
 			Statements: []Node{
 				&PipelineStatement{
-					NodeBase: NodeBase{NodeSpan{0, 45}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 45}, nil, nil},
 					Stages: []*PipelineStage{
 						{
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+									NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 									Name:     "print",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{6, 8}, nil},
+										NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
 										Name:     "a",
 									},
 								},
@@ -1894,14 +1952,14 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{11, 25}, nil},
+								NodeBase: NodeBase{NodeSpan{11, 25}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{11, 23}, nil},
+									NodeBase: NodeBase{NodeSpan{11, 23}, nil, nil},
 									Name:     "do-something",
 								},
 								Arguments: []Node{
 									&Variable{
-										NodeBase: NodeBase{NodeSpan{24, 25}, nil},
+										NodeBase: NodeBase{NodeSpan{24, 25}, nil, nil},
 										Name:     "",
 									},
 								},
@@ -1911,9 +1969,9 @@ func TestMustParseModule(t *testing.T) {
 							Kind: NormalStage,
 							Expr: &Call{
 								Must:     true,
-								NodeBase: NodeBase{NodeSpan{28, 45}, nil},
+								NodeBase: NodeBase{NodeSpan{28, 45}, nil, nil},
 								Callee: &IdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{28, 45}, nil},
+									NodeBase: NodeBase{NodeSpan{28, 45}, nil, nil},
 									Name:     "do-something-else",
 								},
 								Arguments: nil,
@@ -1928,17 +1986,17 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("identifier member expression", func(t *testing.T) {
 		n := MustParseModule("http.get")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&IdentifierMemberExpression{
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Left: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Name:     "http",
 					},
 					PropertyNames: []*IdentifierLiteral{
 						{
-							NodeBase: NodeBase{NodeSpan{5, 8}, nil},
+							NodeBase: NodeBase{NodeSpan{5, 8}, nil, nil},
 							Name:     "get",
 						},
 					},
@@ -1952,7 +2010,7 @@ func TestMustParseModule(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
 				&IdentifierMemberExpression{
 					NodeBase: NodeBase{
@@ -1964,9 +2022,10 @@ func TestMustParseModule(t *testing.T) {
 							NodeCategory:   KnownType,
 							NodeType:       (*IdentifierMemberExpression)(nil),
 						},
+						nil,
 					},
 					Left: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Name:     "http",
 					},
 					PropertyNames: nil,
@@ -1978,18 +2037,18 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call <string> shorthand", func(t *testing.T) {
 		n := MustParseModule(`mime"json"`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 					Must:     true,
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 						Name:     "mime",
 					},
 					Arguments: []Node{
 						&StringLiteral{
-							NodeBase: NodeBase{NodeSpan{4, 10}, nil},
+							NodeBase: NodeBase{NodeSpan{4, 10}, nil, nil},
 							Raw:      `"json"`,
 							Value:    "json",
 						},
@@ -2002,19 +2061,19 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call with paren : identifier member expression", func(t *testing.T) {
 		n := MustParseModule("http.get()")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 					Callee: &IdentifierMemberExpression{
-						NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 						Left: &IdentifierLiteral{
-							NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+							NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 							Name:     "http",
 						},
 						PropertyNames: []*IdentifierLiteral{
 							{
-								NodeBase: NodeBase{NodeSpan{5, 8}, nil},
+								NodeBase: NodeBase{NodeSpan{5, 8}, nil, nil},
 								Name:     "get",
 							},
 						},
@@ -2031,6 +2090,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 7},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&Call{
@@ -2038,15 +2098,18 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
+						nil,
 					},
 					Callee: &IdentifierMemberExpression{
 						NodeBase: NodeBase{
 							NodeSpan{0, 3},
 							nil,
+							nil,
 						},
 						Left: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{0, 1},
+								nil,
 								nil,
 							},
 							Name: "a",
@@ -2055,6 +2118,7 @@ func TestMustParseModule(t *testing.T) {
 							{
 								NodeBase: NodeBase{
 									NodeSpan{2, 3},
+									nil,
 									nil,
 								},
 								Name: "b",
@@ -2065,6 +2129,7 @@ func TestMustParseModule(t *testing.T) {
 						&StringLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{4, 7},
+								nil,
 								nil,
 							},
 							Raw:   `"a"`,
@@ -2082,21 +2147,25 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 9},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&Call{
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
+						nil,
 					},
 					Callee: &MemberExpression{
 						NodeBase: NodeBase{
 							NodeSpan{0, 4},
 							nil,
+							nil,
 						},
 						Left: &Variable{
 							NodeBase: NodeBase{
 								NodeSpan{0, 2},
+								nil,
 								nil,
 							},
 							Name: "a",
@@ -2104,6 +2173,7 @@ func TestMustParseModule(t *testing.T) {
 						PropertyName: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{3, 4},
+								nil,
 								nil,
 							},
 							Name: "b",
@@ -2113,6 +2183,7 @@ func TestMustParseModule(t *testing.T) {
 						&StringLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{5, 8},
+								nil,
 								nil,
 							},
 							Raw:   `"a"`,
@@ -2133,19 +2204,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call expression with no paren : single argument", func(t *testing.T) {
 		n := MustParseModule("print$ 1")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Must:     true,
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{7, 8},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2160,19 +2232,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call expression with no paren : single argument that starts with a delimiter", func(t *testing.T) {
 		n := MustParseModule("print$ (1)")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Must:     true,
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{8, 9},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2187,19 +2260,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("call expression with no paren : two arguments (literals)", func(t *testing.T) {
 		n := MustParseModule("print$ 1 2")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&Call{
-					NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 					Must:     true,
 					Callee: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 5}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 						Name:     "print",
 					},
 					Arguments: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{7, 8},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2208,6 +2282,7 @@ func TestMustParseModule(t *testing.T) {
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{9, 10},
+								nil,
 								nil,
 							},
 							Raw:   "2",
@@ -2222,10 +2297,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("empty single linge object literal 1", func(t *testing.T) {
 		n := MustParseModule("{}")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 2}, nil},
+					NodeBase:   NodeBase{NodeSpan{0, 2}, nil, nil},
 					Properties: nil,
 				},
 			},
@@ -2235,10 +2310,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("empty single linge object literal 2", func(t *testing.T) {
 		n := MustParseModule("{ }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 3}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 3}, nil},
+					NodeBase:   NodeBase{NodeSpan{0, 3}, nil, nil},
 					Properties: nil,
 				},
 			},
@@ -2248,19 +2323,19 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident: integer} ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 7}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{6, 7}, nil},
+								NodeBase: NodeBase{NodeSpan{6, 7}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -2293,16 +2368,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { : integer} ", func(t *testing.T) {
 		n := MustParseModule("{ : 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 5}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 5}, nil, nil},
 							Key:      nil,
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{4, 5}, nil},
+								NodeBase: NodeBase{NodeSpan{4, 5}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -2316,31 +2391,31 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident : integer ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1  b : 2 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 7}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{6, 7}, nil},
+								NodeBase: NodeBase{NodeSpan{6, 7}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
 						},
 						{
-							NodeBase: NodeBase{NodeSpan{9, 14}, nil},
+							NodeBase: NodeBase{NodeSpan{9, 14}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{9, 10}, nil},
+								NodeBase: NodeBase{NodeSpan{9, 10}, nil, nil},
 								Name:     "b",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{13, 14}, nil},
+								NodeBase: NodeBase{NodeSpan{13, 14}, nil, nil},
 								Raw:      "2",
 								Value:    2,
 							},
@@ -2354,31 +2429,31 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident : integer , ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1 , b : 2 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 7}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{6, 7}, nil},
+								NodeBase: NodeBase{NodeSpan{6, 7}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
 						},
 						{
-							NodeBase: NodeBase{NodeSpan{10, 15}, nil},
+							NodeBase: NodeBase{NodeSpan{10, 15}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{10, 11}, nil},
+								NodeBase: NodeBase{NodeSpan{10, 11}, nil, nil},
 								Name:     "b",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{14, 15}, nil},
+								NodeBase: NodeBase{NodeSpan{14, 15}, nil, nil},
 								Raw:      "2",
 								Value:    2,
 							},
@@ -2392,31 +2467,31 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident, ident: integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a, b: 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 9}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 9}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{8, 9}, nil},
+								NodeBase: NodeBase{NodeSpan{8, 9}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
 						},
 						{
-							NodeBase: NodeBase{NodeSpan{2, 9}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 9}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{5, 6}, nil},
+								NodeBase: NodeBase{NodeSpan{5, 6}, nil, nil},
 								Name:     "b",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{8, 9}, nil},
+								NodeBase: NodeBase{NodeSpan{8, 9}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -2430,19 +2505,19 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multiline object literal { ident : integer <newline> } ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1 \n }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 7}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{6, 7}, nil},
+								NodeBase: NodeBase{NodeSpan{6, 7}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -2456,19 +2531,19 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multiline object literal { <newline> ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ \n a : 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{4, 9}, nil},
+							NodeBase: NodeBase{NodeSpan{4, 9}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{4, 5}, nil},
+								NodeBase: NodeBase{NodeSpan{4, 5}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{8, 9}, nil},
+								NodeBase: NodeBase{NodeSpan{8, 9}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -2482,31 +2557,31 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multiline object literal { ident : integer <newline> ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1 \n b : 2 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{2, 7}, nil},
+							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+								NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 								Name:     "a",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{6, 7}, nil},
+								NodeBase: NodeBase{NodeSpan{6, 7}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
 						},
 						{
-							NodeBase: NodeBase{NodeSpan{10, 15}, nil},
+							NodeBase: NodeBase{NodeSpan{10, 15}, nil, nil},
 							Key: &IdentifierLiteral{
-								NodeBase: NodeBase{NodeSpan{10, 11}, nil},
+								NodeBase: NodeBase{NodeSpan{10, 11}, nil, nil},
 								Name:     "b",
 							},
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{14, 15}, nil},
+								NodeBase: NodeBase{NodeSpan{14, 15}, nil, nil},
 								Raw:      "2",
 								Value:    2,
 							},
@@ -2520,25 +2595,28 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal : spread element ", func(t *testing.T) {
 		n := MustParseModule("{ ... $e.{name} }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 17}, nil},
+					NodeBase:   NodeBase{NodeSpan{0, 17}, nil, nil},
 					Properties: nil,
 					SpreadElements: []*PropertySpreadElement{
 						{
 							NodeBase: NodeBase{
 								NodeSpan{2, 15},
 								nil,
+								nil,
 							},
 							Extraction: &ExtractionExpression{
 								NodeBase: NodeBase{
 									NodeSpan{6, 15},
 									nil,
+									nil,
 								},
 								Object: &Variable{
 									NodeBase: NodeBase{
 										NodeSpan{6, 8},
+										nil,
 										nil,
 									},
 									Name: "e",
@@ -2547,11 +2625,13 @@ func TestMustParseModule(t *testing.T) {
 									NodeBase: NodeBase{
 										NodeSpan{8, 15},
 										nil,
+										nil,
 									},
 									Keys: []*IdentifierLiteral{
 										{
 											NodeBase: NodeBase{
 												NodeSpan{10, 14},
+												nil,
 												nil,
 											},
 											Name: "name",
@@ -2572,11 +2652,13 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 2},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 2},
+						nil,
 						nil,
 					},
 					Elements: nil,
@@ -2591,11 +2673,13 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 3},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 3},
+						nil,
 						nil,
 					},
 					Elements: nil,
@@ -2610,17 +2694,20 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 5},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 5},
 						nil,
+						nil,
 					},
 					Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{2, 3},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2638,16 +2725,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 7},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
+						nil,
 					}, Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{2, 3},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2656,6 +2746,7 @@ func TestMustParseModule(t *testing.T) {
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{4, 5},
+								nil,
 								nil,
 							},
 							Raw:   "2",
@@ -2673,17 +2764,20 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 9},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
+						nil,
 					},
 					Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{2, 3},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2692,6 +2786,7 @@ func TestMustParseModule(t *testing.T) {
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{6, 7},
+								nil,
 								nil,
 							},
 							Raw:   "2",
@@ -2709,17 +2804,20 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 9},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ListLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
+						nil,
 					},
 					Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{2, 3},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -2728,6 +2826,7 @@ func TestMustParseModule(t *testing.T) {
 						&IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{6, 7},
+								nil,
 								nil,
 							},
 							Raw:   "2",
@@ -2746,15 +2845,20 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 11},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IfStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 11},
 						nil,
+						[]ValuelessToken{
+							{IF_KEYWORD, NodeSpan{0, 2}},
+						},
 					}, Test: &BooleanLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 7},
+							nil,
 							nil,
 						},
 						Value: true,
@@ -2763,6 +2867,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 11},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
+							},
 						},
 						Statements: nil,
 					},
@@ -2778,15 +2886,20 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 13},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IfStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
+						[]ValuelessToken{
+							{IF_KEYWORD, NodeSpan{0, 2}},
+						},
 					}, Test: &BooleanLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 7},
+							nil,
 							nil,
 						},
 						Value: true,
@@ -2795,11 +2908,16 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 13},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{12, 13}},
+							},
 						},
 						Statements: []Node{
 							&IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{10, 11},
+									nil,
 									nil,
 								},
 								Raw:   "1",
@@ -2819,16 +2937,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 15},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IfStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 15},
 						nil,
+						[]ValuelessToken{
+							{IF_KEYWORD, NodeSpan{0, 2}},
+						},
 					},
 					Test: &BooleanLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 7},
+							nil,
 							nil,
 						},
 						Value: true,
@@ -2837,6 +2960,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 15},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{14, 15}},
+							},
 						},
 						Statements: []Node{
 							&Call{
@@ -2844,10 +2971,12 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{10, 13},
 									nil,
+									nil,
 								},
 								Callee: &IdentifierLiteral{
 									NodeBase: NodeBase{
 										NodeSpan{10, 11},
+										nil,
 										nil,
 									},
 									Name: "a",
@@ -2856,6 +2985,7 @@ func TestMustParseModule(t *testing.T) {
 									&IntLiteral{
 										NodeBase: NodeBase{
 											NodeSpan{12, 13},
+											nil,
 											nil,
 										},
 										Raw:   `1`,
@@ -2876,16 +3006,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 13},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IfStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
+						[]ValuelessToken{
+							{IF_KEYWORD, NodeSpan{0, 2}},
+						},
 					},
 					Test: &BooleanLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 7},
+							nil,
 							nil,
 						},
 						Value: true,
@@ -2894,6 +3029,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 13},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{12, 13}},
+							},
 						},
 						Statements: nil,
 					},
@@ -2908,15 +3047,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 19},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IfStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 19},
 						nil,
+						[]ValuelessToken{
+							{IF_KEYWORD, NodeSpan{0, 2}},
+							{ELSE_KEYWORD, NodeSpan{12, 16}},
+						},
 					}, Test: &BooleanLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 7},
+							nil,
 							nil,
 						},
 						Value: true,
@@ -2925,6 +3070,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 11},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
+							},
 						},
 						Statements: nil,
 					},
@@ -2932,6 +3081,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{17, 19},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{17, 18}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
+							},
 						},
 						Statements: nil,
 					},
@@ -2946,16 +3099,23 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 22},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ForStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 22},
 						nil,
+						[]ValuelessToken{
+							{FOR_KEYWORD, NodeSpan{0, 3}},
+							{COMMA, NodeSpan{5, 6}},
+							{IN_KEYWORD, NodeSpan{9, 11}},
+						},
 					},
 					KeyIndexIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{4, 5},
+							nil,
 							nil,
 						},
 						Name: "i",
@@ -2964,12 +3124,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
 							nil,
+							nil,
 						},
 						Name: "u",
 					},
 					IteratedValue: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{12, 18},
+							nil,
 							nil,
 						},
 						Name: "users",
@@ -2978,6 +3140,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 22},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{21, 22}},
+							},
 						},
 						Statements: nil,
 					},
@@ -2992,16 +3158,23 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 28},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ForStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 28},
 						nil,
+						[]ValuelessToken{
+							{FOR_KEYWORD, NodeSpan{0, 3}},
+							{COMMA, NodeSpan{5, 6}},
+							{IN_KEYWORD, NodeSpan{9, 11}},
+						},
 					},
 					KeyIndexIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{4, 5},
+							nil,
 							nil,
 						},
 						Name: "i",
@@ -3010,12 +3183,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
 							nil,
+							nil,
 						},
 						Name: "u",
 					},
 					IteratedValue: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{12, 18},
+							nil,
 							nil,
 						},
 						Name: "users",
@@ -3024,12 +3199,17 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 28},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{27, 28}},
+							},
 						},
 						Statements: []Node{
 							&BreakStatement{
 								NodeBase: NodeBase{
 									NodeSpan{21, 26},
 									nil,
+									[]ValuelessToken{{BREAK_KEYWORD, NodeSpan{21, 26}}},
 								},
 								Label: nil,
 							},
@@ -3046,16 +3226,23 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 31},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ForStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 31},
 						nil,
+						[]ValuelessToken{
+							{FOR_KEYWORD, NodeSpan{0, 3}},
+							{COMMA, NodeSpan{5, 6}},
+							{IN_KEYWORD, NodeSpan{9, 11}},
+						},
 					},
 					KeyIndexIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{4, 5},
+							nil,
 							nil,
 						},
 						Name: "i",
@@ -3064,12 +3251,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
 							nil,
+							nil,
 						},
 						Name: "u",
 					},
 					IteratedValue: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{12, 18},
+							nil,
 							nil,
 						},
 						Name: "users",
@@ -3078,12 +3267,17 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 31},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{30, 31}},
+							},
 						},
 						Statements: []Node{
 							&ContinueStatement{
 								NodeBase: NodeBase{
 									NodeSpan{21, 29},
 									nil,
+									[]ValuelessToken{{CONTINUE_KEYWORD, NodeSpan{21, 29}}},
 								},
 								Label: nil,
 							},
@@ -3100,12 +3294,16 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 16},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ForStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
+						[]ValuelessToken{
+							{FOR_KEYWORD, NodeSpan{0, 3}},
+						},
 					},
 					KeyIndexIdent:  nil,
 					ValueElemIdent: nil,
@@ -3113,11 +3311,13 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{4, 12},
 							nil,
+							nil,
 						},
 						Operator: Range,
 						Left: &IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{5, 6},
+								nil,
 								nil,
 							},
 							Raw:   "1",
@@ -3126,6 +3326,7 @@ func TestMustParseModule(t *testing.T) {
 						Right: &IntLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{10, 11},
+								nil,
 								nil,
 							},
 							Raw:   "2",
@@ -3136,6 +3337,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{13, 16},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
+							},
 						},
 						Statements: nil,
 					},
@@ -3150,11 +3355,13 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 9},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&BinaryExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
+						nil,
 						nil,
 					},
 					Operator: Add,
@@ -3162,12 +3369,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{1, 3},
 							nil,
+							nil,
 						},
 						Name: "a",
 					},
 					Right: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{6, 8},
+							nil,
 							nil,
 						},
 						Name: "b",
@@ -3183,11 +3392,13 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 10},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&BinaryExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 10},
+						nil,
 						nil,
 					},
 					Operator: Range,
@@ -3195,12 +3406,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{1, 3},
 							nil,
+							nil,
 						},
 						Name: "a",
 					},
 					Right: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{7, 9},
+							nil,
 							nil,
 						},
 						Name: "b",
@@ -3216,11 +3429,13 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 11},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&BinaryExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 11},
+						nil,
 						nil,
 					},
 					Operator: ExclEndRange,
@@ -3228,12 +3443,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{1, 3},
 							nil,
+							nil,
 						},
 						Name: "a",
 					},
 					Right: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{8, 10},
+							nil,
 							nil,
 						},
 						Name: "b",
@@ -3249,16 +3466,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 4},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&UpperBoundRangeExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 4},
 						nil,
+						nil,
 					},
 					UpperBound: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{2, 4},
+							nil,
 							nil,
 						},
 						Raw:   "10",
@@ -3275,16 +3495,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 4},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&IntegerRangeLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{0, 4},
 						nil,
+						nil,
 					},
 					LowerBound: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{0, 1},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3293,6 +3516,7 @@ func TestMustParseModule(t *testing.T) {
 					UpperBound: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 4},
+							nil,
 							nil,
 						},
 						Raw:   "2",
@@ -3309,16 +3533,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 8},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&RuneRangeExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 8},
 						nil,
+						nil,
 					},
 					Lower: &RuneLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{0, 3},
+							nil,
 							nil,
 						},
 						Value: 'a',
@@ -3326,6 +3553,7 @@ func TestMustParseModule(t *testing.T) {
 					Upper: &RuneLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{5, 8},
+							nil,
 							nil,
 						},
 						Value: 'z',
@@ -3352,18 +3580,24 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 6},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
+						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: nil,
 					Body: &Block{
 						NodeBase: NodeBase{
 							NodeSpan{4, 6},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{4, 5}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{5, 6}},
+							},
 						},
 						Statements: nil,
 					},
@@ -3378,25 +3612,35 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 18},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
+						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: nil,
 					Body: &Block{
 						NodeBase: NodeBase{
 							NodeSpan{16, 18},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{17, 18}},
+							},
 						},
 						Statements: nil,
 					},
 					Requirements: &Requirements{
+						ValuelessTokens: []ValuelessToken{
+							{REQUIRE_KEYWORD, NodeSpan{5, 12}},
+						},
 						Object: &ObjectLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{13, 15},
+								nil,
 								nil,
 							},
 							Properties: nil,
@@ -3413,22 +3657,26 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 7},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
+						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: []*FunctionParameter{
 						{
 							NodeBase: NodeBase{
 								NodeSpan{3, 4},
 								nil,
+								nil,
 							},
 							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{3, 4},
+									nil,
 									nil,
 								},
 								Name: "x",
@@ -3439,6 +3687,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{5, 7},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{5, 6}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{6, 7}},
+							},
 						},
 						Statements: nil,
 					},
@@ -3453,22 +3705,28 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 9},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&FunctionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
+						[]ValuelessToken{
+							{FN_KEYWORD, NodeSpan{0, 2}},
+						},
 					},
 					Parameters: []*FunctionParameter{
 						{
 							NodeBase: NodeBase{
 								NodeSpan{3, 4},
 								nil,
+								nil,
 							},
 							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{3, 4},
+									nil,
 									nil,
 								},
 								Name: "x",
@@ -3478,10 +3736,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{5, 6},
 								nil,
+								nil,
 							},
 							Var: &IdentifierLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{5, 6},
+									nil,
 									nil,
 								},
 								Name: "n",
@@ -3492,6 +3752,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 9},
 							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{7, 8}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{8, 9}},
+							},
 						},
 						Statements: nil,
 					},
@@ -3505,16 +3769,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 4},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&LazyExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 4},
 						nil,
+						nil,
 					},
 					Expression: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{2, 3},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3531,16 +3798,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 6},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&LazyExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 4},
 						nil,
+						nil,
 					},
 					Expression: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{2, 3},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3550,6 +3820,7 @@ func TestMustParseModule(t *testing.T) {
 				&IntLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{5, 6},
+						nil,
 						nil,
 					},
 					Raw:   "2",
@@ -3565,16 +3836,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 18},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SwitchStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
+						[]ValuelessToken{
+							{SWITCH_KEYWORD, NodeSpan{0, 6}},
+						},
 					},
 					Discriminant: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3585,10 +3861,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{11, 16},
 								nil,
+								nil,
 							},
 							Value: &IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{11, 12},
+									nil,
 									nil,
 								},
 								Raw:   "1",
@@ -3598,6 +3876,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{13, 16},
 									nil,
+									[]ValuelessToken{
+										{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
+									},
 								},
 								Statements: nil,
 							},
@@ -3614,16 +3896,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 24},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SwitchStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 24},
 						nil,
+						[]ValuelessToken{
+							{SWITCH_KEYWORD, NodeSpan{0, 6}},
+						},
 					},
 					Discriminant: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3634,10 +3921,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{11, 16},
 								nil,
+								nil,
 							},
 							Value: &IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{11, 12},
+									nil,
 									nil,
 								},
 								Raw:   "1",
@@ -3647,6 +3936,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{13, 16},
 									nil,
+									[]ValuelessToken{
+										{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
+									},
 								},
 								Statements: nil,
 							},
@@ -3655,10 +3948,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{17, 22},
 								nil,
+								nil,
 							},
 							Value: &IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{17, 18},
+									nil,
 									nil,
 								},
 								Raw:   "2",
@@ -3668,6 +3963,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{19, 22},
 									nil,
+									[]ValuelessToken{
+										{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{21, 22}},
+									},
 								},
 								Statements: nil,
 							},
@@ -3684,16 +3983,21 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 21},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SwitchStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 21},
 						nil,
+						[]ValuelessToken{
+							{SWITCH_KEYWORD, NodeSpan{0, 6}},
+						},
 					},
 					Discriminant: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -3704,10 +4008,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{11, 19},
 								nil,
+								nil,
 							},
 							Value: &IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{11, 12},
+									nil,
 									nil,
 								},
 								Raw:   "1",
@@ -3717,6 +4023,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{16, 19},
 									nil,
+									[]ValuelessToken{
+										{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
+									},
 								},
 								Statements: nil,
 							},
@@ -3725,10 +4035,12 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{14, 19},
 								nil,
+								nil,
 							},
 							Value: &IntLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{14, 15},
+									nil,
 									nil,
 								},
 								Raw:   "2",
@@ -3738,6 +4050,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{16, 19},
 									nil,
+									[]ValuelessToken{
+										{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
+									},
 								},
 								Statements: nil,
 							},
@@ -3766,6 +4082,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 2},
 				nil,
+				nil,
 			},
 			Statements: nil,
 		}, n)
@@ -3776,6 +4093,7 @@ func TestMustParseModule(t *testing.T) {
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
 				NodeSpan{0, 11},
+				nil,
 				nil,
 			},
 			Statements: nil,
@@ -3788,16 +4106,22 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 94},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ImportStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 94},
 						nil,
+						[]ValuelessToken{
+							{IMPORT_KEYWORD, NodeSpan{0, 6}},
+							{ALLOW_KEYWORD, NodeSpan{86, 91}},
+						},
 					},
 					Identifier: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
+							nil,
 							nil,
 						},
 						Name: "a",
@@ -3805,6 +4129,7 @@ func TestMustParseModule(t *testing.T) {
 					ValidationString: &StringLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{35, 82},
+							nil,
 							nil,
 						},
 						Raw:   `"sS1pD9weZBuJdFmowNwbpi7BJ8TNftyUImj/0WQi72jY="`,
@@ -3814,6 +4139,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{9, 34},
 							nil,
+							nil,
 						},
 						Value: "https://example.com/a.gos",
 					},
@@ -3821,12 +4147,14 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{83, 85},
 							nil,
+							nil,
 						},
 						Properties: nil,
 					},
 					GrantedPermissions: &ObjectLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{92, 94},
+							nil,
 							nil,
 						},
 						Properties: nil,
@@ -3842,16 +4170,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 10},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SpawnExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 10},
 						nil,
+						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Globals: &NilLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 6},
+							nil,
 							nil,
 						},
 					},
@@ -3859,10 +4190,12 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 10},
 							nil,
+							nil,
 						},
 						Callee: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{7, 8},
+								nil,
 								nil,
 							},
 							Name: "f",
@@ -3879,16 +4212,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 21},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SpawnExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 21},
 						nil,
+						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Globals: &NilLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 6},
+							nil,
 							nil,
 						},
 					},
@@ -3896,11 +4232,16 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 21},
 							nil,
+							nil,
 						},
 						Requirements: &Requirements{
+							[]ValuelessToken{
+								{REQUIRE_KEYWORD, NodeSpan{9, 16}},
+							},
 							&ObjectLiteral{
 								NodeBase: NodeBase{
 									NodeSpan{17, 19},
+									nil,
 									nil,
 								},
 								Properties: nil,
@@ -3918,16 +4259,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 16},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&SpawnExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
+						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					GroupIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{3, 8},
+							nil,
 							nil,
 						},
 						Name: "group",
@@ -3936,16 +4280,19 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{9, 12},
 							nil,
+							nil,
 						},
 					},
 					ExprOrVar: &Call{
 						NodeBase: NodeBase{
 							NodeSpan{13, 16},
 							nil,
+							nil,
 						},
 						Callee: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{13, 14},
+								nil,
 								nil,
 							},
 							Name: "f",
@@ -3964,16 +4311,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 13},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&PermissionDroppingStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
+						[]ValuelessToken{{DROP_PERMS_KEYWORD, NodeSpan{0, 10}}},
 					},
 					Object: &ObjectLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{11, 13},
+							nil,
 							nil,
 						},
 					},
@@ -4001,16 +4351,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 8},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ReturnStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 8},
 						nil,
+						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 					Expr: &IntLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{7, 8},
+							nil,
 							nil,
 						},
 						Raw:   "1",
@@ -4028,12 +4381,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 6},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ReturnStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
+						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 				},
 			},
@@ -4047,12 +4402,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 7},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&ReturnStatement{
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
+						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 				},
 			},
@@ -4066,16 +4423,19 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{
 				NodeSpan{0, 5},
 				nil,
+				nil,
 			},
 			Statements: []Node{
 				&BooleanConversionExpression{
 					NodeBase: NodeBase{
 						NodeSpan{0, 5},
 						nil,
+						nil,
 					},
 					Expr: &Variable{
 						NodeBase: NodeBase{
 							NodeSpan{0, 4},
+							nil,
 							nil,
 						},
 						Name: "err",
@@ -4088,10 +4448,10 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern identifier literal", func(t *testing.T) {
 		n := MustParseModule("%int")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&PatternIdentifierLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 					Name:     "int",
 				},
 			},
@@ -4101,16 +4461,16 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object pattern literal { : integer} ", func(t *testing.T) {
 		n := MustParseModule("%{ : 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
 				&ObjectPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 8}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 					Properties: []ObjectProperty{
 						{
-							NodeBase: NodeBase{NodeSpan{3, 6}, nil},
+							NodeBase: NodeBase{NodeSpan{3, 6}, nil, nil},
 							Key:      nil,
 							Value: &IntLiteral{
-								NodeBase: NodeBase{NodeSpan{5, 6}, nil},
+								NodeBase: NodeBase{NodeSpan{5, 6}, nil, nil},
 								Raw:      "1",
 								Value:    1,
 							},
@@ -4124,13 +4484,13 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object pattern literal [ integer ] ", func(t *testing.T) {
 		n := MustParseModule("%[ 1 ]")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&ListPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil},
+					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 					Elements: []Node{
 						&IntLiteral{
-							NodeBase: NodeBase{NodeSpan{3, 4}, nil},
+							NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},
 							Raw:      "1",
 							Value:    1,
 						},
@@ -4143,19 +4503,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a pattern identifier literal ", func(t *testing.T) {
 		n := MustParseModule("%i = %int;")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 10}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 10},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "i",
 					},
 					Right: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 9}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 9}, nil, nil},
 						Name:     "int",
 					},
 				},
@@ -4166,25 +4527,26 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is an object pattern literal ", func(t *testing.T) {
 		n := MustParseModule("%i = %{ : 1 };")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 14}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 14}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 14},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "i",
 					},
 					Right: &ObjectPatternLiteral{
-						NodeBase: NodeBase{NodeSpan{5, 13}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 13}, nil, nil},
 						Properties: []ObjectProperty{
 							{
-								NodeBase: NodeBase{NodeSpan{8, 11}, nil},
+								NodeBase: NodeBase{NodeSpan{8, 11}, nil, nil},
 								Key:      nil,
 								Value: &IntLiteral{
-									NodeBase: NodeBase{NodeSpan{10, 11}, nil},
+									NodeBase: NodeBase{NodeSpan{10, 11}, nil, nil},
 									Raw:      "1",
 									Value:    1,
 								},
@@ -4199,28 +4561,30 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a string literal", func(t *testing.T) {
 		n := MustParseModule("%l = string \"a\";")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 15}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 15}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
 								NodeBase: NodeBase{
 									NodeSpan{12, 15},
 									nil,
+									nil,
 								},
 								Expr: &StringLiteral{
-									NodeBase: NodeBase{NodeSpan{12, 15}, nil},
+									NodeBase: NodeBase{NodeSpan{12, 15}, nil, nil},
 									Raw:      "\"a\"",
 									Value:    "a",
 								},
@@ -4235,28 +4599,30 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a rune literal", func(t *testing.T) {
 		n := MustParseModule("%l = string 'a';")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 16}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 15}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 15}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
 								NodeBase: NodeBase{
 									NodeSpan{12, 15},
 									nil,
+									nil,
 								},
 								Expr: &RuneLiteral{
-									NodeBase: NodeBase{NodeSpan{12, 15}, nil},
+									NodeBase: NodeBase{NodeSpan{12, 15}, nil, nil},
 									Value:    'a',
 								},
 							},
@@ -4270,28 +4636,30 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal", func(t *testing.T) {
 		n := MustParseModule("%l = string (\"a\");")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 18}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 18}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 17}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 17}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
 								NodeBase: NodeBase{
 									NodeSpan{12, 17},
 									nil,
+									nil,
 								},
 								Expr: &StringLiteral{
-									NodeBase: NodeBase{NodeSpan{13, 16}, nil},
+									NodeBase: NodeBase{NodeSpan{13, 16}, nil, nil},
 									Raw:      "\"a\"",
 									Value:    "a",
 								},
@@ -4306,19 +4674,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal with '*' as ocurrence", func(t *testing.T) {
 		n := MustParseModule("%l = string (\"a\")*;")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 19}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 19}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 19},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 18}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 18}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
@@ -4326,9 +4695,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{12, 18},
 									nil,
+									nil,
 								},
 								Expr: &StringLiteral{
-									NodeBase: NodeBase{NodeSpan{13, 16}, nil},
+									NodeBase: NodeBase{NodeSpan{13, 16}, nil, nil},
 									Raw:      "\"a\"",
 									Value:    "a",
 								},
@@ -4343,19 +4713,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a parenthesised string literal with '=2' as ocurrence", func(t *testing.T) {
 		n := MustParseModule("%l = string (\"a\")=2;")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 20}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 20}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 20},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 19}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 19}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
@@ -4364,9 +4735,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{12, 19},
 									nil,
+									nil,
 								},
 								Expr: &StringLiteral{
-									NodeBase: NodeBase{NodeSpan{13, 16}, nil},
+									NodeBase: NodeBase{NodeSpan{13, 16}, nil, nil},
 									Raw:      "\"a\"",
 									Value:    "a",
 								},
@@ -4381,19 +4753,20 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a single element pattern of kind string : element is a pattern identifier literal with '=2' as ocurrence", func(t *testing.T) {
 		n := MustParseModule("%l = string %s=2;")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 17},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "l",
 					},
 					Right: &PatternPiece{
-						NodeBase: NodeBase{NodeSpan{5, 16}, nil},
+						NodeBase: NodeBase{NodeSpan{5, 16}, nil, nil},
 						Kind:     StringPattern,
 						Elements: []*PatternPieceElement{
 							{
@@ -4402,9 +4775,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{12, 16},
 									nil,
+									nil,
 								},
 								Expr: &PatternIdentifierLiteral{
-									NodeBase: NodeBase{NodeSpan{12, 14}, nil},
+									NodeBase: NodeBase{NodeSpan{12, 14}, nil, nil},
 									Name:     "s",
 								},
 							},
@@ -4418,30 +4792,32 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("pattern definition : RHS is a two-case union with one element each", func(t *testing.T) {
 		n := MustParseModule(`%i = | "a" | "b";`)
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&PatternDefinition{
 					NodeBase: NodeBase{
 						NodeSpan{0, 17},
 						nil,
+						nil,
 					},
 					Left: &PatternIdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 2}, nil},
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 						Name:     "i",
 					},
 					Right: &PatternUnion{
 						NodeBase: NodeBase{
 							NodeSpan{5, 16},
 							nil,
+							nil,
 						},
 						Cases: []Node{
 							&StringLiteral{
-								NodeBase: NodeBase{NodeSpan{7, 10}, nil},
+								NodeBase: NodeBase{NodeSpan{7, 10}, nil, nil},
 								Raw:      `"a"`,
 								Value:    "a",
 							},
 							&StringLiteral{
-								NodeBase: NodeBase{NodeSpan{13, 16}, nil},
+								NodeBase: NodeBase{NodeSpan{13, 16}, nil, nil},
 								Raw:      `"b"`,
 								Value:    "b",
 							},
@@ -5758,9 +6134,9 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, &LazyExpression{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil},
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Expression: &IntLiteral{
-				NodeBase: NodeBase{NodeSpan{2, 3}, nil},
+				NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
 				Raw:      "1",
 				Value:    1,
 			},

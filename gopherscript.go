@@ -48,6 +48,8 @@ var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_P
 var LOOSE_URL_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_URL_EXPR_PATTERN)
 var isSpace = regexp.MustCompile(`^\s+`).MatchString
 var KEYWORDS = []string{"if", "else", "require", "drop-perms", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
+var REQUIRE_KEYWORD_STR = "require"
+var CONST_KEYWORD_STR = "const"
 var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "use", "consume", "provide"}
 
 var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
@@ -146,9 +148,46 @@ type NodeSpan struct {
 	End   int
 }
 
-type NodeBase struct {
+type ValuelessTokenType int
+
+const (
+	IF_KEYWORD ValuelessTokenType = iota
+	ELSE_KEYWORD
+	REQUIRE_KEYWORD
+	DROP_PERMS_KEYWORD
+	ASSIGN_KEYWORD
+	CONST_KEYWORD
+	FOR_KEYWORD
+	IN_KEYWORD
+	SPAWN_KEYWORD
+	ALLOW_KEYWORD
+	IMPORT_KEYWORD
+	FN_KEYWORD
+	SWITCH_KEYWORD
+	MATCH_KEYWORD
+	RETURN_KEYWORD
+	BREAK_KEYWORD
+	CONTINUE_KEYWORD
+	OPENING_BRACKET
+	CLOSING_BRACKET
+	OPENING_CURLY_BRACKET
+	CLOSING_CURLY_BRACKET
+	OPENING_PARENTHESIS
+	CLOSING_PARENTHESIS
+	COMMA
+	COLON
+	SEMICOLON
+)
+
+type ValuelessToken struct {
+	Type ValuelessTokenType
 	Span NodeSpan
-	Err  *ParsingError
+}
+
+type NodeBase struct {
+	Span            NodeSpan
+	Err             *ParsingError
+	ValuelessTokens []ValuelessToken
 }
 
 func (base NodeBase) Base() NodeBase {
@@ -995,7 +1034,8 @@ type FunctionParameter struct {
 }
 
 type Requirements struct {
-	Object *ObjectLiteral
+	ValuelessTokens []ValuelessToken
+	Object          *ObjectLiteral
 }
 
 type PermissionDroppingStatement struct {
@@ -1984,6 +2024,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				(*Block)(nil),
 			})
 		}
+		closingBraceIndex := i
 		i++
 
 		end := i
@@ -1993,6 +2034,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			NodeBase: NodeBase{
 				Span: NodeSpan{openingBraceIndex, end},
 				Err:  parsingErr,
+				ValuelessTokens: []ValuelessToken{
+					{OPENING_CURLY_BRACKET, NodeSpan{openingBraceIndex, openingBraceIndex + 1}},
+					{CLOSING_CURLY_BRACKET, NodeSpan{closingBraceIndex, closingBraceIndex + 1}},
+				},
 			},
 			Statements: stmts,
 		}
@@ -2028,6 +2073,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{sliceStart, index + 1},
 							nil,
+							nil,
 						},
 						Name: name,
 					})
@@ -2044,6 +2090,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								UnspecifiedCategory,
 								nil,
 							},
+							nil,
 						},
 						Value: string(s[sliceStart:exclEnd]),
 					})
@@ -2057,6 +2104,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				slices = append(slices, &PathSlice{
 					NodeBase: NodeBase{
 						NodeSpan{sliceStart, index},
+						nil,
 						nil,
 					},
 					Value: slice,
@@ -2083,6 +2131,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					NodeSpan{sliceStart, index},
 					nil,
+					nil,
 				},
 				Value: string(s[sliceStart:index]),
 			})
@@ -2106,6 +2155,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{sliceStart, index + 1},
 							nil,
+							nil,
 						},
 						Name: name,
 					})
@@ -2123,6 +2173,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								UnspecifiedCategory,
 								nil,
 							},
+							nil,
 						},
 						Value: string(s[sliceStart:exclEnd]),
 					})
@@ -2136,6 +2187,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				slices = append(slices, &URLQueryParameterSlice{
 					NodeBase: NodeBase{
 						NodeSpan{sliceStart, index},
+						nil,
 						nil,
 					},
 					Value: slice,
@@ -2161,6 +2213,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			slices = append(slices, &PathSlice{
 				NodeBase: NodeBase{
 					NodeSpan{sliceStart, index},
+					nil,
 					nil,
 				},
 				Value: string(s[sliceStart:index]),
@@ -2529,6 +2582,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							NodeBase: NodeBase{
 								NodeSpan{keyStart, j},
 								nil,
+								nil,
 							},
 							Name:  key,
 							Value: slices,
@@ -2548,6 +2602,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				hostPartBase := NodeBase{
 					NodeSpan{span.Start, pathStart},
 					nil,
+					nil,
 				}
 
 				if strings.Contains(hostPartString, "://") {
@@ -2563,12 +2618,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				return &URLExpression{
-					NodeBase: NodeBase{span, parsingErr},
+					NodeBase: NodeBase{span, parsingErr, nil},
 					Raw:      _url,
 					HostPart: hostPart,
 					Path: &AbsolutePathExpression{
 						NodeBase: NodeBase{
 							NodeSpan{pathStart, pathExclEnd},
+							nil,
 							nil,
 						},
 						Slices: slices,
@@ -2726,6 +2782,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
 						nil,
+						nil,
 					},
 					Name: propName,
 				})
@@ -2832,6 +2889,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			NodeBase: NodeBase{
 				NodeSpan{start, i},
 				parsingErr,
+				nil,
 			},
 			Keys: idents,
 		}
@@ -2986,6 +3044,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					NodeSpan{elementStart, elementEnd},
 					elemParsingErr,
+					nil,
 				},
 				Ocurrence:           ocurrenceModifier,
 				ExactOcurrenceCount: int(count),
@@ -2997,6 +3056,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			NodeBase: NodeBase{
 				NodeSpan{start, i},
 				parsingErr,
+				nil,
 			},
 			Kind:     patternKind,
 			Elements: elements,
@@ -3037,6 +3097,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									UnspecifiedCategory,
 									nil,
 								},
+								nil,
 							},
 							Cases: cases,
 						}
@@ -3052,6 +3113,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &PatternUnion{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						nil,
 						nil,
 					},
 					Cases: cases,
@@ -3072,6 +3134,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							UnspecifiedCategory,
 							nil,
 						},
+						nil,
 					},
 				}
 			}
@@ -3086,6 +3149,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				left := &PatternIdentifierLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
+						nil,
 						nil,
 					},
 					Name: string(s[start+1 : i]),
@@ -3122,6 +3186,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
 						parsingErr,
+						nil,
 					},
 					Left:  left,
 					Right: right,
@@ -3368,6 +3433,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, str.Base().Span.End},
 						str.Err,
+						nil,
 					},
 					Raw:   str.Raw,
 					Value: str.Value,
@@ -3383,6 +3449,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							UnspecifiedCategory,
 							nil,
 						},
+						nil,
 					},
 				}
 			}
@@ -3401,6 +3468,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					UnspecifiedCategory,
 					nil,
 				},
+				nil,
 			},
 		}
 	}
@@ -3450,6 +3518,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{__start, i},
 						nil,
+						nil,
 					},
 					Expr: lhs,
 				}
@@ -3460,6 +3529,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
 			identLike := parseIdentLike()
 			spawnExprStart := identLike.Base().Span.Start
+			tokens := make([]ValuelessToken, 0)
 			var name string
 
 			switch v := identLike.(type) {
@@ -3472,6 +3542,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			if name == "sr" {
+				tokens = append(tokens, ValuelessToken{SPAWN_KEYWORD, identLike.Base().Span})
 				eatSpace()
 				if i >= len(s) {
 					panic(ParsingError{
@@ -3512,6 +3583,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*SpawnExpression)(nil),
 							},
+							tokens,
 						},
 						GroupIdent: routineGroupIdent,
 						Globals:    globals,
@@ -3556,6 +3628,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					emod.NodeBase = NodeBase{
 						NodeSpan{start, i},
 						embeddedModuleErr,
+						nil,
 					}
 					expr = emod
 				} else {
@@ -3577,8 +3650,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*SpawnExpression)(nil),
 						}
-					} else {
-						//if ok
+					} else { //if ok
+						tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
+
 						eatSpace()
 
 						grantedPerms := parseExpression()
@@ -3601,6 +3675,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{identLike.Base().Span.Start, i},
 						parsingErr,
+						tokens,
 					},
 					GroupIdent:         routineGroupIdent,
 					Globals:            globals,
@@ -3639,6 +3714,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				call := &Call{
 					NodeBase: NodeBase{
 						NodeSpan{identLike.Base().Span.Start, 0},
+						nil,
 						nil,
 					},
 					Callee:    identLike,
@@ -3730,6 +3806,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, end},
 						parsingErr,
+						nil,
 					},
 					Raw:   raw,
 					Value: int(integer),
@@ -3759,6 +3836,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									KnownType,
 									(*IntLiteral)(nil),
 								},
+								nil,
 							},
 							LowerBound: nil,
 							UpperBound: nil,
@@ -3777,6 +3855,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return &IntegerRangeLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{lowerIntLiteral.Base().Span.Start, upperIntLiteral.Base().Span.End},
+							nil,
 							nil,
 						},
 						LowerBound: lowerIntLiteral,
@@ -3811,6 +3890,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
 						parsingErr,
+						nil,
 					},
 					Raw:   raw,
 					Value: float,
@@ -3866,6 +3946,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							NodeBase: NodeBase{
 								NodeSpan{literal.Base().Span.Start, ident.Base().Span.End},
 								parsingErr,
+								nil,
 							},
 							Quantity: literal.(*QuantityLiteral),
 							Unit:     ident,
@@ -3916,6 +3997,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 										KnownType,
 										(*ObjectLiteral)(nil),
 									},
+									nil,
 								},
 							})
 
@@ -3944,6 +4026,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{spreadStart, extractionExpr.Span.End},
 							elementParsingErr,
+							nil,
 						},
 						Extraction: extractionExpr,
 					})
@@ -4168,6 +4251,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*RuneLiteral)(nil),
 							},
+							nil,
 						},
 						Value: 0,
 					}
@@ -4186,6 +4270,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*RuneLiteral)(nil),
 							},
+							nil,
 						},
 						Value: 0,
 					}
@@ -4224,6 +4309,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									KnownType,
 									(*RuneLiteral)(nil),
 								},
+								nil,
 							},
 							Value: 0,
 						}
@@ -4249,6 +4335,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{start, i},
 						parsingErr,
+						nil,
 					},
 					Value: value,
 				}
@@ -4273,6 +4360,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*RuneRangeExpression)(nil),
 						},
+						nil,
 					},
 					Lower: lower,
 					Upper: nil,
@@ -4291,6 +4379,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*RuneRangeExpression)(nil),
 						},
+						nil,
 					},
 					Lower: lower,
 					Upper: nil,
@@ -4302,6 +4391,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			return &RuneRangeExpression{
 				NodeBase: NodeBase{
 					NodeSpan{start, upper.Base().Span.End},
+					nil,
 					nil,
 				},
 				Lower: lower,
@@ -4368,6 +4458,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{start, i},
 							nil,
+							nil,
 						},
 						UpperBound: upperBound,
 					}
@@ -4429,6 +4520,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								UnspecifiedCategory,
 								nil,
 							},
+							nil,
 						},
 					}
 				}
@@ -4439,6 +4531,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					left := &AtHostLiteral{
 						NodeBase: NodeBase{
 							NodeSpan{start, aliasEndIndex},
+							nil,
 							nil,
 						},
 						Value: string(s[start:aliasEndIndex]),
@@ -4465,6 +4558,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{start, right.Base().Span.End},
 							parsingErr,
+							nil,
 						},
 						Left:  left,
 						Right: right,
@@ -4837,6 +4931,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								UnspecifiedCategory,
 								nil,
 							},
+							nil,
 						},
 						Left: lhs,
 					}
@@ -4878,6 +4973,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									UnspecifiedCategory,
 									nil,
 								},
+								nil,
 							},
 							Left: lhs,
 						}
@@ -4895,6 +4991,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 										UnspecifiedCategory,
 										nil,
 									},
+									nil,
 								},
 								Indexed:    lhs,
 								StartIndex: startIndex,
@@ -4918,6 +5015,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									UnspecifiedCategory,
 									nil,
 								},
+								nil,
 							},
 							Indexed:    lhs,
 							StartIndex: startIndex,
@@ -4942,6 +5040,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									UnspecifiedCategory,
 									nil,
 								},
+								nil,
 							},
 							Left: lhs,
 						}
@@ -4959,6 +5058,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							NodeBase: NodeBase{
 								NodeSpan{spanStart, i},
 								nil,
+								nil,
 							},
 							Indexed:    lhs,
 							StartIndex: startIndex,
@@ -4969,6 +5069,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					lhs = &IndexExpression{
 						NodeBase: NodeBase{
 							NodeSpan{spanStart, i},
+							nil,
 							nil,
 						},
 						Indexed: lhs,
@@ -4981,6 +5082,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return &ExtractionExpression{
 						NodeBase: NodeBase{
 							NodeSpan{lhs.Base().Span.Start, keyList.Span.End},
+							nil,
 							nil,
 						},
 						Object: lhs,
@@ -4998,6 +5100,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									KnownType,
 									(*MemberExpression)(nil),
 								},
+								nil,
 							},
 							Left:         lhs,
 							PropertyName: nil,
@@ -5018,11 +5121,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{spanStart, i},
 							nil,
+							nil,
 						},
 						Left: lhs,
 						PropertyName: &IdentifierLiteral{
 							NodeBase: NodeBase{
 								NodeSpan{start, i},
+								nil,
 								nil,
 							},
 							Name: propName,
@@ -5049,6 +5154,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			call := &Call{
 				NodeBase: NodeBase{
 					NodeSpan{spanStart, 0},
+					nil,
 					nil,
 				},
 				Callee:    lhs,
@@ -5110,13 +5216,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	parseRequirements = func() *Requirements {
 		var requirements *Requirements
-		if i < len(s) && strings.HasPrefix(string(s[i:]), "require") {
-			i += len("require")
+		if i < len(s) && strings.HasPrefix(string(s[i:]), REQUIRE_KEYWORD_STR) {
+			tokens := []ValuelessToken{{REQUIRE_KEYWORD, NodeSpan{i, i + len(REQUIRE_KEYWORD_STR)}}}
+			i += len(REQUIRE_KEYWORD_STR)
 
 			eatSpace()
 			requirementObject := parseExpression()
 			requirements = &Requirements{
-				Object: requirementObject.(*ObjectLiteral),
+				ValuelessTokens: tokens,
+				Object:          requirementObject.(*ObjectLiteral),
 			}
 
 		}
@@ -5125,9 +5233,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	parseGlobalConstantDeclarations = func() *GlobalConstantDeclarations {
 		start := i
+		constKeywordSpan := NodeSpan{i, i + len(CONST_KEYWORD_STR)}
 
-		if i < len(s) && strings.HasPrefix(string(s[i:]), "const") {
-			i += len("const")
+		if i < len(s) && strings.HasPrefix(string(s[i:]), CONST_KEYWORD_STR) {
+			i += len(CONST_KEYWORD_STR)
 
 			eatSpace()
 			var declarations []*GlobalConstantDeclaration
@@ -5144,6 +5253,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*GlobalConstantDeclarations)(nil),
 						},
+						[]ValuelessToken{{CONST_KEYWORD, constKeywordSpan}},
 					},
 				}
 			}
@@ -5209,6 +5319,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{lhs.Base().Span.Start, i},
 							declParsingErr,
+							nil,
 						},
 						Left: lhs.(*IdentifierLiteral),
 					})
@@ -5245,6 +5356,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{lhs.Base().Span.Start, rhs.Base().Span.End},
 						declParsingErr,
+						nil,
 					},
 					Left:  lhs.(*IdentifierLiteral),
 					Right: rhs,
@@ -5259,6 +5371,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					NodeSpan{start, i},
 					parsingErr,
+					[]ValuelessToken{{CONST_KEYWORD, constKeywordSpan}},
 				},
 				Declarations: declarations,
 			}
@@ -5285,6 +5398,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	}
 
 	parseFunction = func(start int) Node {
+		tokens := []ValuelessToken{{FN_KEYWORD, NodeSpan{i - 2, i}}}
 		eatSpace()
 
 		var ident *IdentifierLiteral
@@ -5304,6 +5418,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*FunctionDeclaration)(nil),
 						},
+						ValuelessTokens: tokens,
 					},
 					Function: nil,
 					Name:     nil,
@@ -5329,8 +5444,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			if ident != nil {
 				return &FunctionDeclaration{
 					NodeBase: NodeBase{
-						Span: fn.Span,
-						Err:  parsingErr,
+						Span:            fn.Span,
+						Err:             parsingErr,
+						ValuelessTokens: tokens,
 					},
 					Function: &fn,
 					Name:     ident,
@@ -5362,6 +5478,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							UnspecifiedCategory,
 							nil,
 						},
+						nil,
 					},
 					Var: nil,
 				})
@@ -5369,6 +5486,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				parameters = append(parameters, &FunctionParameter{
 					NodeBase: NodeBase{
 						varNode.Base().Span,
+						nil,
 						nil,
 					},
 					Var: varNode.(*IdentifierLiteral),
@@ -5420,8 +5538,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		fn := FunctionExpression{
 			NodeBase: NodeBase{
-				Span: NodeSpan{start, blk.Span.End},
-				Err:  parsingErr,
+				Span:            NodeSpan{start, blk.Span.End},
+				Err:             parsingErr,
+				ValuelessTokens: tokens,
 			},
 			Parameters:   parameters,
 			Body:         blk,
@@ -5432,8 +5551,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			fn.Err = nil
 			return &FunctionDeclaration{
 				NodeBase: NodeBase{
-					Span: fn.Span,
-					Err:  parsingErr,
+					Span:            fn.Span,
+					Err:             parsingErr,
+					ValuelessTokens: tokens,
 				},
 				Function: &fn,
 				Name:     ident,
@@ -5470,6 +5590,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				var end int
 				var parsingErr *ParsingError
 
+				tokens := []ValuelessToken{
+					{Type: IF_KEYWORD, Span: ev.Span},
+				}
+
 				eatSpace()
 				test := parseExpression()
 				eatSpace()
@@ -5496,6 +5620,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i < len(s)-4 && string(s[i:i+4]) == "else" {
+						tokens = append(tokens, ValuelessToken{
+							Type: ELSE_KEYWORD,
+							Span: NodeSpan{i, i + 4},
+						})
 						i += 4
 						eatSpace()
 
@@ -5524,8 +5652,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				return &IfStatement{
 					NodeBase: NodeBase{
-						Span: NodeSpan{ev.Span.Start, end},
-						Err:  parsingErr,
+						Span:            NodeSpan{ev.Span.Start, end},
+						Err:             parsingErr,
+						ValuelessTokens: tokens,
 					},
 					Test:       test,
 					Consequent: blk,
@@ -5536,6 +5665,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				forStart := expr.Base().Span.Start
 				eatSpace()
 				keyIndexIdent := parseExpression()
+
+				tokens := []ValuelessToken{{FOR_KEYWORD, ev.Span}}
 
 				switch v := keyIndexIdent.(type) {
 				case *IdentifierLiteral:
@@ -5565,6 +5696,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							(*ForStatement)(nil),
 						}
 					}
+
+					tokens = append(tokens, ValuelessToken{COMMA, NodeSpan{i, i + 1}})
 
 					i++
 					eatSpace()
@@ -5630,6 +5763,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					}
 
+					tokens = append(tokens, ValuelessToken{IN_KEYWORD, NodeSpan{i, i + 2}})
 					i += 2
 
 					if i < len(s) && s[i] != ' ' {
@@ -5685,8 +5819,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					return &ForStatement{
 						NodeBase: NodeBase{
-							Span: NodeSpan{ev.Span.Start, blk.Span.End},
-							Err:  parsingErr,
+							Span:            NodeSpan{ev.Span.Start, blk.Span.End},
+							Err:             parsingErr,
+							ValuelessTokens: tokens,
 						},
 						KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
 						ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
@@ -5715,8 +5850,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						return &ForStatement{
 							NodeBase: NodeBase{
-								Span: NodeSpan{ev.Span.Start, blk.Span.End},
-								Err:  parsingErr,
+								Span:            NodeSpan{ev.Span.Start, blk.Span.End},
+								Err:             parsingErr,
+								ValuelessTokens: tokens,
 							},
 							KeyIndexIdent:  nil,
 							ValueElemIdent: nil,
@@ -5754,6 +5890,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			case "switch", "match":
 				switchMatchStart := expr.Base().Span.Start
+				var tokens []ValuelessToken
+				if ev.Name[0] == 's' {
+					tokens = append(tokens, ValuelessToken{SWITCH_KEYWORD, expr.Base().Span})
+				} else {
+					tokens = append(tokens, ValuelessToken{MATCH_KEYWORD, expr.Base().Span})
+				}
 
 				eatSpace()
 
@@ -5795,6 +5937,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									KnownType,
 									(*SwitchStatement)(nil),
 								},
+								ValuelessTokens: tokens,
 							},
 							Discriminant: discriminant,
 						}
@@ -5810,6 +5953,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*SwitchStatement)(nil),
 							},
+							ValuelessTokens: tokens,
 						},
 						Discriminant: discriminant,
 					}
@@ -5837,6 +5981,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 											KnownType,
 											(*SwitchStatement)(nil),
 										},
+										ValuelessTokens: tokens,
 									},
 									Discriminant: discriminant,
 								}
@@ -5852,6 +5997,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 										KnownType,
 										(*SwitchStatement)(nil),
 									},
+									ValuelessTokens: tokens,
 								},
 								Discriminant: discriminant,
 							}
@@ -5919,6 +6065,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							NodeBase: NodeBase{
 								NodeSpan{valNode.Base().Span.Start, blk.Span.End},
 								caseParsingErr,
+								nil,
 							},
 							Value: valNode,
 							Block: blk,
@@ -5961,6 +6108,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						NodeBase: NodeBase{
 							NodeSpan{ev.Span.Start, i},
 							parsingErr,
+							tokens,
 						},
 						Discriminant: discriminant,
 						Cases:        switchCases,
@@ -5971,6 +6119,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{ev.Span.Start, i},
 						parsingErr,
+						tokens,
 					},
 					Discriminant: discriminant,
 					Cases:        switchCases,
@@ -5999,12 +6148,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{expr.Base().Span.Start, objLit.Span.End},
 						parsingErr,
+						[]ValuelessToken{{DROP_PERMS_KEYWORD, ev.Span}},
 					},
 					Object: objLit,
 				}
 
 			case "import":
 				importStart := expr.Base().Span.Start
+				tokens := []ValuelessToken{
+					{IMPORT_KEYWORD, ev.Span},
+				}
 
 				eatSpace()
 
@@ -6020,6 +6173,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							tokens,
 						},
 					}
 
@@ -6040,6 +6194,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							nil,
 						},
 					}
 				}
@@ -6058,6 +6213,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							nil,
 						},
 						URL: url_.(*URLLiteral),
 					}
@@ -6077,6 +6233,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							nil,
 						},
 						URL: url_.(*URLLiteral),
 					}
@@ -6095,11 +6252,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							tokens,
 						},
 						URL:            url_.(*URLLiteral),
 						ArgumentObject: argumentObject.(*ObjectLiteral),
 					}
 				}
+				tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
 
 				eatSpace()
 				grantedPerms := parseExpression()
@@ -6115,6 +6274,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								KnownType,
 								(*ImportStatement)(nil),
 							},
+							tokens,
 						},
 						URL:            url_.(*URLLiteral),
 						ArgumentObject: argumentObject.(*ObjectLiteral),
@@ -6125,6 +6285,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{ev.Span.Start, i},
 						nil,
+						tokens,
 					},
 					Identifier:         identifier.(*IdentifierLiteral),
 					URL:                url_.(*URLLiteral),
@@ -6146,21 +6307,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				return &ReturnStatement{
 					NodeBase: NodeBase{
-						Span: NodeSpan{ev.Span.Start, end},
+						Span:            NodeSpan{ev.Span.Start, end},
+						ValuelessTokens: []ValuelessToken{{RETURN_KEYWORD, ev.Span}},
 					},
 					Expr: returnValue,
 				}
 			case "break":
 				return &BreakStatement{
 					NodeBase: NodeBase{
-						Span: ev.Span,
+						Span:            ev.Span,
+						ValuelessTokens: []ValuelessToken{{BREAK_KEYWORD, ev.Span}},
 					},
 					Label: nil,
 				}
 			case "continue":
 				return &ContinueStatement{
 					NodeBase: NodeBase{
-						Span: ev.Span,
+						Span:            ev.Span,
+						ValuelessTokens: []ValuelessToken{{CONTINUE_KEYWORD, ev.Span}},
 					},
 					Label: nil,
 				}
@@ -6211,6 +6375,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						Span: NodeSpan{ev.Span.Start, right.Base().Span.End},
 						Err:  parsingErr,
+						ValuelessTokens: []ValuelessToken{
+							{ASSIGN_KEYWORD, ev.Span},
+						},
 					},
 					Variables: vars,
 					Right:     right,
@@ -6315,6 +6482,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				stmt := &PipelineStatement{
 					NodeBase: NodeBase{
 						NodeSpan{call.Span.Start, 0},
+						nil,
 						nil,
 					},
 					Stages: []*PipelineStage{
