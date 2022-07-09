@@ -5902,22 +5902,34 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				if i >= len(s) {
 
 					if ev.Name == "switch" {
-						panic(ParsingError{
-							"unterminated switch statement: missing value",
-							i,
-							switchMatchStart,
-							KnownType,
-							(*SwitchStatement)(nil),
-						})
+						return &SwitchStatement{
+							NodeBase: NodeBase{
+								Span: NodeSpan{ev.Span.Start, i},
+								Err: &ParsingError{
+									"unterminated switch statement : missing value",
+									i,
+									switchMatchStart,
+									KnownType,
+									(*SwitchStatement)(nil),
+								},
+								ValuelessTokens: tokens,
+							},
+						}
 					}
 
-					panic(ParsingError{
-						"unterminated match statement: missing value",
-						i,
-						switchMatchStart,
-						KnownType,
-						(*MatchStatement)(nil),
-					})
+					return &SwitchStatement{
+						NodeBase: NodeBase{
+							Span: NodeSpan{ev.Span.Start, i},
+							Err: &ParsingError{
+								"unterminated match statement : missing value",
+								i,
+								switchMatchStart,
+								KnownType,
+								(*SwitchStatement)(nil),
+							},
+							ValuelessTokens: tokens,
+						},
+					}
 				}
 
 				discriminant := parseExpression()
@@ -5963,6 +5975,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				for i < len(s) && s[i] != '}' {
 					eatSpaceNewLineSemiColonComment()
+
+					if i < len(s) && s[i] == '}' {
+						break
+					}
 
 					var valueNodes []Node
 					var caseParsingErr *ParsingError

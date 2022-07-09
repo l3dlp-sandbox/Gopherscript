@@ -3830,6 +3830,38 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("switch statement : empty", func(t *testing.T) {
+		n := MustParseModule("switch 1 { }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 12},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&SwitchStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 12},
+						nil,
+						[]ValuelessToken{
+							{SWITCH_KEYWORD, NodeSpan{0, 6}},
+						},
+					},
+					Discriminant: &IntLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{7, 8},
+							nil,
+							nil,
+						},
+						Raw:   "1",
+						Value: 1,
+					},
+					Cases: nil,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("switch statement : single case", func(t *testing.T) {
 		n := MustParseModule("switch 1 { 1 { } }")
 		assert.EqualValues(t, &Module{
