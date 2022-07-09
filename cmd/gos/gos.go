@@ -74,6 +74,9 @@ const HTTP_REQUEST_RATE_LIMIT_NAME = "http/request"
 const FS_WRITE_MIN_CHUNK_SIZE = 100_000
 const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 
+const CONTROL_KEYWORD_COLOR = termenv.ANSIBrightMagenta
+const OTHER_KEYWORD_COLOR = termenv.ANSIBlue
+
 var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
 	InsecureSkipVerify: true,
@@ -252,6 +255,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 		gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) (error, gopherscript.TraversalAction) {
 			switch n := node.(type) {
+			//literals
 			case *gopherscript.IdentifierLiteral, *gopherscript.Variable, *gopherscript.GlobalVariable:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
@@ -283,20 +287,42 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  n.Base().Span,
 					color: termenv.ANSIBrightGreen,
 				})
-			case *gopherscript.BooleanLiteral:
+			case *gopherscript.BooleanLiteral, *gopherscript.NilLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSIBlue,
 				})
+				// other nodes
+			case *gopherscript.IfStatement, *gopherscript.SwitchStatement, *gopherscript.MatchStatement,
+				*gopherscript.ReturnStatement, *gopherscript.BreakStatement, *gopherscript.ContinueStatement, *gopherscript.SpawnExpression:
+				for _, tok := range n.Base().ValuelessTokens {
+					colorizations = append(colorizations, ColorizationInfo{
+						span:  tok.Span,
+						color: CONTROL_KEYWORD_COLOR,
+					})
+				}
+			case *gopherscript.MultiAssignment, *gopherscript.GlobalConstantDeclarations, *gopherscript.ImportStatement,
+				*gopherscript.PermissionDroppingStatement:
+				for _, tok := range n.Base().ValuelessTokens {
+					colorizations = append(colorizations, ColorizationInfo{
+						span:  tok.Span,
+						color: OTHER_KEYWORD_COLOR,
+					})
+				}
 			}
 
 			return nil, gopherscript.Continue
+		})
+
+		sort.Slice(colorizations, func(i, j int) bool {
+			return colorizations[i].span.Start < colorizations[j].span.Start
 		})
 
 		prev := int(0)
 
 		for _, colorization := range colorizations {
 			before := termenv.String(string(input[prev:colorization.span.Start]))
+
 			before = before.Foreground(defaultFgColor)
 
 			fmt.Print(before.String())
