@@ -4993,7 +4993,6 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Right:    right,
 			}
 			parsingErr = nil
-			log.Printf("ok\n")
 		}
 
 		first = lhs
@@ -5026,13 +5025,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i >= len(s) {
-						panic(ParsingError{
-							"unterminated index expression",
-							i,
-							first.Base().Span.Start,
-							KnownType,
-							nil,
-						})
+						return &InvalidMemberLike{
+							NodeBase: NodeBase{
+								NodeSpan{first.Base().Span.Start, i},
+								&ParsingError{
+									"unterminated member/index expression",
+									i,
+									first.Base().Span.Start,
+									UnspecifiedCategory,
+									nil,
+								},
+								nil,
+							},
+							Left: lhs,
+						}, false
 					}
 
 					var startIndex Node
@@ -5614,13 +5620,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			eatSpace()
 			if i >= len(s) || s[i] != '{' {
-				panic(ParsingError{
-					"function : parameter list should be followed by a block, not " + string(s[i]),
-					i,
-					start,
-					UnspecifiedCategory,
-					nil,
-				})
+				return &FunctionExpression{
+					NodeBase: NodeBase{
+						Span: NodeSpan{start, i},
+						Err: &ParsingError{
+							"function : parameter list should be followed by a block, not " + string(s[i]),
+							i,
+							start,
+							UnspecifiedCategory,
+							nil,
+						},
+						ValuelessTokens: tokens,
+					},
+					Parameters:   parameters,
+					Body:         blk,
+					Requirements: requirements,
+				}
+
 			}
 
 			blk = parseBlock()

@@ -669,6 +669,37 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("index expression : unterminated : variable '[' ", func(t *testing.T) {
+		n, err := ParseModule("$a[", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 3},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&InvalidMemberLike{
+					NodeBase: NodeBase{
+						NodeSpan{0, 3},
+						&ParsingError{
+							"unterminated member/index expression",
+							3,
+							0,
+							UnspecifiedCategory,
+							nil,
+						},
+						nil,
+					},
+					Left: &Variable{
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+						Name:     "a",
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("slice expression : variable '[' <integer literal> ':' ] ", func(t *testing.T) {
 		n := MustParseModule("$a[0:]")
 		assert.EqualValues(t, &Module{
@@ -3843,6 +3874,45 @@ func TestMustParseModule(t *testing.T) {
 			},
 		}, n)
 	})
+
+	t.Run("function expression : parameter list not followed by a block ", func(t *testing.T) {
+		n, err := ParseModule("fn()1", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 5},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&FunctionExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 4},
+						&ParsingError{
+							"function : parameter list should be followed by a block, not 1",
+							4,
+							0,
+							UnspecifiedCategory,
+							nil,
+						},
+						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
+					},
+					Parameters: nil,
+					Body:       nil,
+				},
+				&IntLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{4, 5},
+						nil,
+						nil,
+					},
+					Raw:   "1",
+					Value: 1,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("lazy expression : '@' '(' integer ')' ", func(t *testing.T) {
 		n := MustParseModule("@(1)")
 		assert.EqualValues(t, &Module{
