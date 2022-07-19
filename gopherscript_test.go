@@ -2838,6 +2838,37 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("single line list literal [ integer <no space> <comma> ] ", func(t *testing.T) {
+		n := MustParseModule("[ 1, ]")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 6},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&ListLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{2, 3},
+								nil,
+								nil,
+							},
+							Raw:   "1",
+							Value: 1,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	//also used for checking block parsing
 	t.Run("single line empty if statement", func(t *testing.T) {
 		n := MustParseModule("if true { }")
@@ -3454,6 +3485,55 @@ func TestMustParseModule(t *testing.T) {
 							nil,
 						},
 						Name: "b",
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("binary expression : missing right operand", func(t *testing.T) {
+		n, err := ParseModule("($a +)", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 6},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&BinaryExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						&ParsingError{
+							"invalid binary expression: missing right operand",
+							5,
+							0,
+							KnownType,
+							(*BinaryExpression)(nil),
+						},
+						nil,
+					},
+					Operator: Add,
+					Left: &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{1, 3},
+							nil,
+							nil,
+						},
+						Name: "a",
+					},
+					Right: &MissingExpression{
+						NodeBase: NodeBase{
+							NodeSpan{4, 5},
+							&ParsingError{
+								"an expression was expected: ...($a +<<here>>)...",
+								5,
+								4,
+								UnspecifiedCategory,
+								nil,
+							},
+							nil,
+						},
 					},
 				},
 			},

@@ -227,6 +227,10 @@ type InvalidMemberLike struct {
 	Right Node //can be nil
 }
 
+type MissingExpression struct {
+	NodeBase
+}
+
 type UnknownNode struct {
 	NodeBase
 }
@@ -1980,7 +1984,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	// }
 
 	var parseBlock func() *Block
-	var parseExpression func() Node
+	var parseExpression func() (Node, bool)
 	var parseStatement func() Statement
 	var parseGlobalConstantDeclarations func() *GlobalConstantDeclarations
 	var parseRequirements func() *Requirements
@@ -2857,7 +2861,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				break
 			}
 
-			if ident, ok := parseExpression().(*IdentifierLiteral); ok {
+			e, missingExpr := parseExpression()
+			if missingExpr {
+				continue
+			}
+
+			if ident, ok := e.(*IdentifierLiteral); ok {
 				idents = append(idents, ident)
 			} else {
 				panic(ParsingError{
@@ -3071,7 +3080,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case isAlpha(s[i]) || s[i] == '(':
 				return parsePatternPiece()
 			case s[i] == '"' || s[i] == '\'':
-				return parseExpression()
+				e, _ := parseExpression()
+				return e
 			case s[i] == '|':
 				var cases []Node
 
@@ -3208,7 +3218,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						break
 					}
 
-					var keys []Node
+					var keys []Node //example of multiple keys: {a,b: 1}
 					var lastKey Node = nil
 					lastKeyName := ""
 					var propSpanStart int
@@ -3230,7 +3240,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					} else {
 						for {
-							lastKey = parseExpression()
+							lastKey, _ = parseExpression()
+
 							keys = append(keys, lastKey)
 
 							switch k := lastKey.(type) {
@@ -3334,13 +3345,32 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						continue top_object_pattern_loop
 					}
-					v := parseExpression()
+
+					value, _ := parseExpression()
+
+					if i >= len(s) {
+						return &ObjectPatternLiteral{
+							NodeBase: NodeBase{
+								Span: NodeSpan{openingBraceIndex - 1, i},
+								Err: &ParsingError{
+									"unterminated object pattern literal, missing closing brace '}'",
+									i,
+									openingBraceIndex,
+									KnownType,
+									(*ObjectPatternLiteral)(nil),
+								},
+							},
+							Properties: properties,
+						}
+
+						continue top_object_pattern_loop
+					}
 
 					if len(keys) > 1 {
-						switch v.(type) {
+						switch value.(type) {
 						case *Variable, *GlobalVariable:
 						default:
-							if !IsSimpleValueLiteral(v) {
+							if !IsSimpleValueLiteral(value) {
 								objectPropertyErr = &ParsingError{
 									"invalid object pattern literal, the value of a multi-key property definition should be a simple literal or a variable, last key is '" + lastKeyName + "'",
 									i,
@@ -3360,7 +3390,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								Err:  objectPropertyErr,
 							},
 							Key:   key,
-							Value: v,
+							Value: value,
 						})
 					}
 
@@ -3400,8 +3430,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						break
 					}
 
-					e := parseExpression()
-					elements = append(elements, e)
+					e, isMissingExpr := parseExpression()
+					if i >= len(s) || (isMissingExpr && s[i] != ',') {
+						break
+					} else if !isMissingExpr {
+						elements = append(elements, e)
+					}
 
 					eatSpaceNewlineComma()
 				}
@@ -3428,7 +3462,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Elements: elements,
 				}
 			case s[i] == '"':
-				str := parseExpression().(*StringLiteral)
+				e, _ := parseExpression()
+				str := e.(*StringLiteral)
 				return &RegularExpressionLiteral{
 					NodeBase: NodeBase{
 						NodeSpan{start, str.Base().Span.End},
@@ -3473,7 +3508,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
-	parseExpression = func() Node {
+	parseExpression = func() (Node, bool) {
 		__start := i
 		//these variables are only used for expressions that can be on the left of a member/slice/index/call expression
 		//other expressions are directly returned
@@ -3538,7 +3573,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case *IdentifierMemberExpression:
 				name = v.Left.Name
 			default:
-				return v
+				return v, false
 			}
 
 			if name == "sr" {
@@ -3556,23 +3591,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				var routineGroupIdent *IdentifierLiteral
 				var globals Node
-				e := parseExpression()
+				e, missingExpr := parseExpression()
 
 				switch ev := e.(type) {
-				case *IdentifierLiteral:
+				case *IdentifierLiteral: //if there is a group name the globals' object is the next expression
 					routineGroupIdent = ev
+					eatSpace()
+
+					globals, missingExpr = parseExpression()
+					eatSpace()
+				case *MissingExpression:
 				default:
 					globals = e
 				}
 
 				eatSpace()
 
-				if globals == nil {
-					globals = parseExpression()
-					eatSpace()
-				}
-
-				if i >= len(s) {
+				if i >= len(s) || missingExpr {
 					return &SpawnExpression{
 						NodeBase: NodeBase{
 							NodeSpan{identLike.Base().Span.Start, i},
@@ -3587,12 +3622,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						},
 						GroupIdent: routineGroupIdent,
 						Globals:    globals,
-					}
+					}, false
 				}
 
 				var expr Node
+				var parsingErr *ParsingError
 
-				if s[i] == '{' {
+				if s[i] == '{' { //embedded module: sr ... { <embedded module> }
 					start := i
 					i++
 					emod := &EmbeddedModule{}
@@ -3605,7 +3641,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpaceNewLineSemiColonComment()
 
 					for i < len(s) && s[i] != '}' {
-						stmts = append(stmts, parseStatement())
+						stmt := parseStatement()
+						stmts = append(stmts, stmt)
 						eatSpaceNewLineSemiColonComment()
 					}
 
@@ -3632,15 +3669,23 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 					expr = emod
 				} else {
-					expr = parseExpression()
+					expr, missingExpr = parseExpression()
+					if missingExpr {
+						parsingErr = &ParsingError{
+							"invalid spawn expression: ",
+							i,
+							spawnExprStart,
+							KnownType,
+							(*EmbeddedModule)(nil),
+						}
+					}
 				}
 
 				eatSpace()
 				var grantedPermsLit *ObjectLiteral
-				var parsingErr *ParsingError
 
 				if i < len(s) && s[i] == 'a' {
-					allowIdent := parseExpression()
+					allowIdent, _ := parseExpression()
 					if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
 
 						parsingErr = &ParsingError{
@@ -3655,7 +3700,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						eatSpace()
 
-						grantedPerms := parseExpression()
+						grantedPerms, _ := parseExpression()
 						var ok bool
 						grantedPermsLit, ok = grantedPerms.(*ObjectLiteral)
 						if !ok {
@@ -3681,15 +3726,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Globals:            globals,
 					ExprOrVar:          expr,
 					GrantedPermissions: grantedPermsLit,
-				}
+				}, false
 			}
 
 			if name == "fn" {
-				return parseFunction(identLike.Base().Span.Start)
+				return parseFunction(identLike.Base().Span.Start), false
 			}
 
 			if i >= len(s) {
-				return identLike
+				return identLike, false
 			}
 
 			switch {
@@ -3703,10 +3748,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Must:      true,
 				}
 
-				str := parseExpression()
+				str, _ := parseExpression()
 				call.Arguments = append(call.Arguments, str)
 				call.NodeBase.Span.End = str.Base().Span.End
-				return call
+				return call, false
 			case s[i] == '(' && !isKeyword(name): //func_name(...
 				i++
 				eatSpace()
@@ -3723,7 +3768,17 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				for i < len(s) && s[i] != ')' {
 					eatSpaceNewlineComma()
-					arg := parseExpression()
+					arg, _ := parseExpression()
+
+					if i >= len(s) {
+						call.Err = &ParsingError{
+							"untermianted call: 'allow' keyword should be followed by an object literal (permissions)",
+							i,
+							spawnExprStart,
+							KnownType,
+							(*SpawnExpression)(nil),
+						}
+					}
 
 					call.Arguments = append(call.Arguments, arg)
 					eatSpaceNewlineComma()
@@ -3740,7 +3795,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				call.NodeBase.Span.End = i
 
-				return call
+				return call, false
 			case s[i] == '$': //funcname$ ...
 				i++
 
@@ -3761,7 +3816,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						KnownType,
 						(*Call)(nil),
 					}
-					return call
+					return call, false
 				}
 
 				for i < len(s) && s[i] != '\n' && !isNotPairedOrIsClosingDelim(s[i]) {
@@ -3771,7 +3826,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						break
 					}
 
-					arg := parseExpression()
+					arg, _ := parseExpression()
 
 					call.Arguments = append(call.Arguments, arg)
 					eatSpaceAndComments()
@@ -3782,10 +3837,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				call.NodeBase.Span.End = call.Arguments[len(call.Arguments)-1].Base().Span.End
-				return call
+				return call, false
 			}
 
-			return identLike
+			return identLike, false
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': //integers and floating point numbers
 			start := i
 			var parsingErr *ParsingError
@@ -3840,7 +3895,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							},
 							LowerBound: nil,
 							UpperBound: nil,
-						}
+						}, false
 					}
 
 					upperStart := i
@@ -3860,7 +3915,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						},
 						LowerBound: lowerIntLiteral,
 						UpperBound: upperIntLiteral,
-					}
+					}, false
 				}
 
 				for i < len(s) && (isDigit(s[i]) || s[i] == '-') {
@@ -3928,7 +3983,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					switch s[i] {
 					case '/':
 						i++
-						unit := parseExpression()
+						var ident *IdentifierLiteral
+						unit, isMissingExpr := parseExpression()
+
+						if isMissingExpr {
+							parsingErr = &ParsingError{
+								"invalid rate literal",
+								i,
+								start,
+								KnownType,
+								(*IntLiteral)(nil),
+							}
+						}
+
 						ident, ok := unit.(*IdentifierLiteral)
 						raw := string(s[start:i])
 
@@ -3950,12 +4017,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							},
 							Quantity: literal.(*QuantityLiteral),
 							Unit:     ident,
-						}
+						}, false
 					}
 				}
 			}
 
-			return literal
+			return literal, false
 
 		case '{': //object
 			openingBraceIndex := i
@@ -3976,7 +4043,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					break
 				}
 
-				var keys []Node
+				var keys []Node //example of multiple keys: {a,b: 1}
 				var lastKey Node = nil
 				lastKeyName := ""
 				var propSpanStart int
@@ -4009,7 +4076,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i += 3
 					eatSpace()
 
-					expr := parseExpression()
+					expr, _ := parseExpression()
 
 					extractionExpr, ok := expr.(*ExtractionExpression)
 					if !ok {
@@ -4052,7 +4119,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						//shared value properties
 						for {
-							lastKey = parseExpression()
+							lastKey, _ = parseExpression()
 							keys = append(keys, lastKey)
 
 							switch k := lastKey.(type) {
@@ -4140,7 +4207,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 						continue object_literal_top_loop
 					}
-					v := parseExpression()
+					v, _ := parseExpression()
 
 					if len(keys) > 1 {
 						switch v.(type) {
@@ -4193,7 +4260,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Properties:     properties,
 				SpreadElements: spreadElements,
-			}
+			}, false
 		case '[': //list
 			openingBracketIndex := i
 			i++
@@ -4206,8 +4273,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					break
 				}
 
-				e := parseExpression()
-				elements = append(elements, e)
+				e, isMissingExpr := parseExpression()
+				if i >= len(s) || (isMissingExpr && s[i] != ',') {
+					break
+				} else if !isMissingExpr {
+					elements = append(elements, e)
+				}
 
 				eatSpaceNewlineComma()
 			}
@@ -4232,7 +4303,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Err:  parsingErr,
 				},
 				Elements: elements,
-			}
+			}, false
 		case '\'': //rune | rune range literal
 			start := i
 
@@ -4345,7 +4416,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			lower := parseRuneLiteral()
 
 			if i >= len(s) || s[i] != '.' {
-				return lower
+				return lower, false
 			}
 
 			i++
@@ -4364,7 +4435,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Lower: lower,
 					Upper: nil,
-				}
+				}, false
 			}
 			i++
 
@@ -4383,7 +4454,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Lower: lower,
 					Upper: nil,
-				}
+				}, false
 			}
 
 			upper := parseRuneLiteral()
@@ -4396,7 +4467,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Lower: lower,
 				Upper: upper,
-			}
+			}, false
 		case '"': //string
 			//strings are JSON strings
 			start := i
@@ -4438,22 +4509,22 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				},
 				Raw:   raw,
 				Value: value,
-			}
+			}, false
 		case '/':
-			return parsePathLikeExpression(false)
+			return parsePathLikeExpression(false), false
 		case '.':
 			if i < len(s)-1 {
 				if s[i+1] == '/' || i < len(s)-2 && s[i+1] == '.' && s[i+2] == '/' {
-					return parsePathLikeExpression(false)
+					return parsePathLikeExpression(false), false
 				}
 				switch s[i+1] {
 				case '{':
-					return parseKeyList()
+					return parseKeyList(), false
 				case '.':
 					start := i
 					i += 2
 
-					upperBound := parseExpression()
+					upperBound, _ := parseExpression()
 					expr := &UpperBoundRangeExpression{
 						NodeBase: NodeBase{
 							NodeSpan{start, i},
@@ -4463,7 +4534,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						UpperBound: upperBound,
 					}
 
-					return expr
+					return expr, false
 				}
 			}
 			//otherwise fail
@@ -4482,19 +4553,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							nil,
 						},
 					},
-				}
+				}, false
 			}
 
 			if s[i] == '(' {
 				//no increment on purpose
 
-				e := parseExpression()
+				e, _ := parseExpression()
 				return &LazyExpression{
 					NodeBase: NodeBase{
 						Span: NodeSpan{start, i},
 					},
 					Expression: e,
-				}
+				}, false
 			} else if s[i] == '/' || (s[i] >= 'a' && s[i] <= 'z') {
 				i--
 				j := i + 1
@@ -4522,7 +4593,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							},
 							nil,
 						},
-					}
+					}, false
 				}
 
 				//@alias = <host>
@@ -4551,7 +4622,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							(*HostAliasDefinition)(nil),
 						}
 					} else {
-						right = parseExpression()
+						right, _ = parseExpression()
 					}
 
 					return &HostAliasDefinition{
@@ -4562,10 +4633,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						},
 						Left:  left,
 						Right: right,
-					}
+					}, false
 				}
 
-				return parseURLLike(start)
+				return parseURLLike(start), false
 			} else {
 
 				return &UnknownNode{
@@ -4579,20 +4650,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							nil,
 						},
 					},
-				}
+				}, false
 
 			}
 		case '%':
 			if i < len(s)-1 && (s[i+1] == '.' || s[i+1] == '/') {
 				i++
-				return parsePathLikeExpression(true)
+				return parsePathLikeExpression(true), false
 			} else {
-				return parseComplexPatternStuff(false)
+				return parseComplexPatternStuff(false), false
 			}
 		case '(': //parenthesized expression and binary expressions
 			openingParenIndex := i
 			i++
-			left := parseExpression()
+			left, _ := parseExpression()
 
 			eatSpace()
 
@@ -4604,6 +4675,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			UNTERMINATED_BIN_EXPR := "unterminated binary expression:"
+			INVALID_BIN_EXPR := "invalid binary expression:"
 			NON_EXISTING_OPERATOR := "invalid binary expression, non existing operator"
 
 			if i >= len(s) {
@@ -4620,7 +4692,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Operator: -1,
 					Left:     left,
-				}
+				}, false
 			}
 
 			makeInvalidOperatorMissingRightOperand := func(operator BinaryOperator) Node {
@@ -4675,7 +4747,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case '!':
 				i++
 				if i >= len(s) {
-					return makeInvalidOperatorMissingRightOperand(-1)
+					return makeInvalidOperatorMissingRightOperand(-1), false
 				}
 				if s[i] == '=' {
 					operator = NotEqual
@@ -4694,7 +4766,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case '=':
 				i++
 				if i >= len(s) {
-					return makeInvalidOperatorMissingRightOperand(-1)
+					return makeInvalidOperatorMissingRightOperand(-1), false
 				}
 				if s[i] == '=' {
 					operator = Equal
@@ -4731,7 +4803,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case 'i':
 				i++
 				if i >= len(s) {
-					return makeInvalidOperatorMissingRightOperand(-1)
+					return makeInvalidOperatorMissingRightOperand(-1), false
 				}
 				if s[i] == 'n' {
 					operator = In
@@ -4875,10 +4947,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 			}
 
-			right := parseExpression()
+			right, isMissingExpr := parseExpression()
 
 			eatSpace()
-			if i >= len(s) {
+			if isMissingExpr {
+				parsingErr = &ParsingError{
+					INVALID_BIN_EXPR + " missing right operand",
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
+				}
+
+			} else if i >= len(s) {
 				parsingErr = &ParsingError{
 					UNTERMINATED_BIN_EXPR + " missing closing parenthesis",
 					i,
@@ -4888,17 +4969,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 			}
 
-			if s[i] != ')' {
-				parsingErr = &ParsingError{
-					"invalid binary expression",
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
+			if i < len(s) {
+				if s[i] != ')' {
+					parsingErr = &ParsingError{
+						UNTERMINATED_BIN_EXPR + " missing closing parenthesis",
+						i,
+						openingParenIndex,
+						KnownType,
+						(*BinaryExpression)(nil),
+					}
+				} else {
+					i++
 				}
 			}
-
-			i++
 
 			lhs = &BinaryExpression{
 				NodeBase: NodeBase{
@@ -4909,6 +4992,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Left:     left,
 				Right:    right,
 			}
+			parsingErr = nil
+			log.Printf("ok\n")
 		}
 
 		first = lhs
@@ -4934,7 +5019,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							nil,
 						},
 						Left: lhs,
-					}
+					}, false
 				}
 
 				if s[i-1] == '[' { //index/slice expression
@@ -4957,7 +5042,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					if isSliceExpr {
 						i++
 					} else {
-						startIndex = parseExpression()
+						startIndex, _ = parseExpression()
 					}
 
 					eatSpace()
@@ -4976,7 +5061,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								nil,
 							},
 							Left: lhs,
-						}
+						}, false
 					}
 
 					if s[i] == ':' {
@@ -4996,7 +5081,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								Indexed:    lhs,
 								StartIndex: startIndex,
 								EndIndex:   endIndex,
-							}
+							}, false
 						}
 						isSliceExpr = true
 						i++
@@ -5020,11 +5105,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							Indexed:    lhs,
 							StartIndex: startIndex,
 							EndIndex:   endIndex,
-						}
+						}, false
 					}
 
 					if i < len(s) && s[i] != ']' && isSliceExpr {
-						endIndex = parseExpression()
+						endIndex, _ = parseExpression()
 					}
 
 					eatSpace()
@@ -5043,7 +5128,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 								nil,
 							},
 							Left: lhs,
-						}
+						}, false
 					}
 
 					i++
@@ -5063,7 +5148,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							Indexed:    lhs,
 							StartIndex: startIndex,
 							EndIndex:   endIndex,
-						}
+						}, false
 					}
 
 					lhs = &IndexExpression{
@@ -5087,7 +5172,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						},
 						Object: lhs,
 						Keys:   keyList,
-					}
+					}, false
 				} else { //member expression
 					if !isAlpha(s[i]) && s[i] != '_' {
 						return &MemberExpression{
@@ -5104,7 +5189,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							},
 							Left:         lhs,
 							PropertyName: nil,
-						}
+						}, false
 					}
 
 					for i < len(s) && isIdentChar(s[i]) {
@@ -5168,7 +5253,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					break
 				}
 
-				arg := parseExpression()
+				arg, _ := parseExpression()
 
 				call.Arguments = append(call.Arguments, arg)
 				eatSpaceNewlineComma()
@@ -5195,23 +5280,28 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			call.NodeBase.Span.End = i
 			call.Err = parsingErr
-			return call
+			return call, false
 		}
 
 		if lhs != nil {
-			return lhs
+			return lhs, false
 		}
 
 		left := string(s[max(0, i-5):i])
 		right := string(s[i:min(len(s), i+5)])
 
-		panic(ParsingError{
-			fmt.Sprintf("an expression was expected: ...%s<<here>>%s...", left, right),
-			i,
-			__start,
-			UnspecifiedCategory,
-			nil,
-		})
+		return &MissingExpression{
+			NodeBase: NodeBase{
+				Span: NodeSpan{i - 1, i},
+				Err: &ParsingError{
+					fmt.Sprintf("an expression was expected: ...%s<<here>>%s...", left, right),
+					i,
+					i - 1,
+					UnspecifiedCategory,
+					nil,
+				},
+			},
+		}, true
 	}
 
 	parseRequirements = func() *Requirements {
@@ -5221,7 +5311,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			i += len(REQUIRE_KEYWORD_STR)
 
 			eatSpace()
-			requirementObject := parseExpression()
+			requirementObject, _ := parseExpression()
 			requirements = &Requirements{
 				ValuelessTokens: tokens,
 				Object:          requirementObject.(*ObjectLiteral),
@@ -5289,7 +5379,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					break
 				}
 
-				lhs := parseExpression()
+				lhs, _ := parseExpression()
 				globvar, ok := lhs.(*IdentifierLiteral)
 				if !ok {
 					declParsingErr = &ParsingError{
@@ -5340,7 +5430,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						(*GlobalConstantDeclarations)(nil),
 					}
 				} else {
-					rhs = parseExpression()
+					rhs, _ = parseExpression()
 					if !IsSimpleValueLiteral(rhs) {
 						declParsingErr = &ParsingError{
 							fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
@@ -5390,7 +5480,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				break
 			}
 
-			arg := parseExpression()
+			arg, _ := parseExpression()
 
 			call.Arguments = append(call.Arguments, arg)
 			eatSpaceAndComments()
@@ -5465,7 +5555,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				break
 			}
 
-			varNode := parseExpression()
+			varNode, _ := parseExpression()
 
 			if _, ok := varNode.(*IdentifierLiteral); !ok {
 				parameters = append(parameters, &FunctionParameter{
@@ -5564,7 +5654,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	}
 
 	parseStatement = func() Statement {
-		expr := parseExpression()
+		expr, _ := parseExpression()
 
 		var b rune
 		followedBySpace := false
@@ -5595,7 +5685,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				eatSpace()
-				test := parseExpression()
+				test, _ := parseExpression()
 				eatSpace()
 
 				if i >= len(s) {
@@ -5664,7 +5754,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				var parsingErr *ParsingError
 				forStart := expr.Base().Span.Start
 				eatSpace()
-				keyIndexIdent := parseExpression()
+				keyIndexIdent, _ := parseExpression()
 
 				tokens := []ValuelessToken{{FOR_KEYWORD, ev.Span}}
 
@@ -5717,7 +5807,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					}
 
-					valueElemIdent := parseExpression()
+					valueElemIdent, _ := parseExpression()
 
 					if _, isVar := valueElemIdent.(*IdentifierLiteral); !isVar {
 						parsingErr = &ParsingError{
@@ -5801,7 +5891,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					}
 
-					iteratedValue := parseExpression()
+					iteratedValue, _ := parseExpression()
 					eatSpace()
 					var blk *Block
 
@@ -5932,7 +6022,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 				}
 
-				discriminant := parseExpression()
+				discriminant, _ := parseExpression()
 				var switchCases []*Case
 
 				eatSpace()
@@ -6019,7 +6109,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							}
 
 						}
-						valueNode := parseExpression()
+						valueNode, _ := parseExpression()
 
 						if !IsSimpleValueLiteral(valueNode) {
 							if ev.Name == "switch" {
@@ -6148,7 +6238,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case "drop-perms":
 				eatSpace()
 
-				objLit, ok := parseExpression().(*ObjectLiteral)
+				e, _ := parseExpression()
+				objLit, ok := e.(*ObjectLiteral)
+
 				var parsingErr *ParsingError
 				if !ok {
 					parsingErr = &ParsingError{
@@ -6197,7 +6289,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
-				url_ := parseExpression()
+				url_, _ := parseExpression()
 
 				if _, ok := url_.(*URLLiteral); !ok {
 					return &ImportStatement{
@@ -6217,7 +6309,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
-				checksum := parseExpression()
+				checksum, _ := parseExpression()
 				if _, ok := checksum.(*StringLiteral); !ok {
 					return &ImportStatement{
 						NodeBase: NodeBase{
@@ -6237,7 +6329,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatSpace()
 
-				argumentObject := parseExpression()
+				argumentObject, _ := parseExpression()
 				if _, ok := argumentObject.(*ObjectLiteral); !ok {
 					return &ImportStatement{
 						NodeBase: NodeBase{
@@ -6256,7 +6348,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				eatSpace()
-				allowIdent := parseExpression()
+				allowIdent, _ := parseExpression()
 				if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
 					return &ImportStatement{
 						NodeBase: NodeBase{
@@ -6277,7 +6369,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
 
 				eatSpace()
-				grantedPerms := parseExpression()
+				grantedPerms, _ := parseExpression()
 				grantedPermsLit, ok := grantedPerms.(*ObjectLiteral)
 				if !ok {
 					return &ImportStatement{
@@ -6317,7 +6409,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 
 				if i < len(s) && s[i] != ';' && s[i] != '}' && s[i] != '\n' {
-					returnValue = parseExpression()
+					returnValue, _ = parseExpression()
 					end = returnValue.Base().Span.End
 				}
 
@@ -6349,7 +6441,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				for i < len(s) && s[i] != '=' {
 					eatSpace()
-					e := parseExpression()
+					e, _ := parseExpression()
 					if _, ok := e.(*IdentifierLiteral); !ok {
 						return &MultiAssignment{
 							NodeBase: NodeBase{
@@ -6384,7 +6476,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				} else {
 					i++
 					eatSpace()
-					right = parseExpression()
+					right, _ = parseExpression()
 				}
 
 				return &MultiAssignment{
@@ -6414,13 +6506,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			eatSpace()
 
 			if i >= len(s) {
-				panic(ParsingError{
-					"unterminated assignment, missing value after '='",
-					i,
-					expr.Base().Span.Start,
-					KnownType,
-					(*Assignment)(nil),
-				})
+				return &Assignment{
+					NodeBase: NodeBase{
+						Span: NodeSpan{expr.Base().Span.Start, i},
+						Err: &ParsingError{
+							"unterminated assignment, missing value after '='",
+							i,
+							expr.Base().Span.Start,
+							KnownType,
+							(*Assignment)(nil),
+						},
+					},
+					Left: expr,
+				}
 			}
 
 			var right Node
@@ -6430,21 +6528,30 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 				right = parseStatement()
 				pipeline, ok := right.(*PipelineStatement)
+
 				if !ok {
-					panic(ParsingError{
-						"invalid assignment, a pipeline expression was expected after '|'",
-						i,
-						expr.Base().Span.Start,
-						KnownType,
-						(*Assignment)(nil),
-					})
+					return &Assignment{
+						NodeBase: NodeBase{
+							Span: NodeSpan{expr.Base().Span.Start, i},
+							Err: &ParsingError{
+								"invalid assignment, a pipeline expression was expected after '|'",
+								i,
+								expr.Base().Span.Start,
+								KnownType,
+								(*Assignment)(nil),
+							},
+						},
+						Left:  expr,
+						Right: right,
+					}
 				}
+
 				right = &PipelineExpression{
 					NodeBase: pipeline.NodeBase,
 					Stages:   pipeline.Stages,
 				}
 			} else {
-				right = parseExpression()
+				right, _ = parseExpression()
 			}
 
 			return &Assignment{
@@ -6536,7 +6643,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						return stmt
 					}
 
-					callee := parseExpression()
+					callee, _ := parseExpression()
 
 					currentCall := &Call{
 						NodeBase: NodeBase{
@@ -6620,7 +6727,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	eatSpaceNewLineSemiColonComment()
 
 	for i < len(s) {
-		stmts = append(stmts, parseStatement())
+		stmt := parseStatement()
+		if _, isMissingExpr := stmt.(*MissingExpression); isMissingExpr {
+			if isMissingExpr {
+
+				for i < len(s) && (isDelim(s[i]) || isSpace(string(s[i]))) {
+					i++
+				}
+
+				if i >= len(s) {
+					stmts = append(stmts, stmt)
+					break
+				}
+			}
+		}
+		stmts = append(stmts, stmt)
 		eatSpaceNewLineSemiColonComment()
 	}
 
@@ -7314,6 +7435,10 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		walk(n.ExprOrVar, node, ancestorChain, fn)
 		if n.GrantedPermissions != nil {
 			walk(n.GrantedPermissions, node, ancestorChain, fn)
+		}
+	case *ListLiteral:
+		for _, element := range n.Elements {
+			walk(element, node, ancestorChain, fn)
 		}
 	case *Block:
 		for _, stmt := range n.Statements {
