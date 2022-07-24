@@ -3652,6 +3652,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 					for i < len(s) && s[i] != '}' {
 						stmt := parseStatement()
+						if _, isMissingExpr := stmt.(*MissingExpression); isMissingExpr {
+							if isMissingExpr {
+								i++
+
+								if i >= len(s) {
+									stmts = append(stmts, stmt)
+									break
+								}
+							}
+						}
 						stmts = append(stmts, stmt)
 						eatSpaceNewLineSemiColonComment()
 					}
@@ -6756,10 +6766,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		stmt := parseStatement()
 		if _, isMissingExpr := stmt.(*MissingExpression); isMissingExpr {
 			if isMissingExpr {
-
-				for i < len(s) && (isDelim(s[i]) || isSpace(string(s[i]))) {
-					i++
-				}
+				i++
 
 				if i >= len(s) {
 					stmts = append(stmts, stmt)
