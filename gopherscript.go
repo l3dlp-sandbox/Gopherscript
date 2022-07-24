@@ -2008,6 +2008,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			eatSpaceNewLineSemiColonComment()
 		}
 
+		closingBraceIndex := i
+
 		if i >= len(s) {
 			parsingErr = &ParsingError{
 				"unterminated block, missing closing brace '}",
@@ -2017,19 +2019,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				(*Block)(nil),
 			}
 
+		} else {
+			i++
 		}
-
-		if s[i] != '}' {
-			panic(ParsingError{
-				"invalid block",
-				i,
-				openingBraceIndex,
-				KnownType,
-				(*Block)(nil),
-			})
-		}
-		closingBraceIndex := i
-		i++
 
 		end := i
 		mod.Statements = stmts
@@ -3525,6 +3517,21 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		var lhs Node
 		var first Node
 		var parenthesizedFirstStart int
+
+		if i >= len(s) {
+			return &MissingExpression{
+				NodeBase: NodeBase{
+					Span: NodeSpan{i - 1, i},
+					Err: &ParsingError{
+						fmt.Sprintf("an expression was expected: ...%s<<here>>", string(s[max(0, i-5):i])),
+						i,
+						i - 1,
+						UnspecifiedCategory,
+						nil,
+					},
+				},
+			}, true
+		}
 
 		switch s[i] {
 		case '$': //normal & global variables
