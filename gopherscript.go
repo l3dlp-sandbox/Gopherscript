@@ -3075,6 +3075,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parseComplexPatternStuff = func(inPattern bool) Node {
 		start := i
 
+		if i >= len(s) {
+			before := string(s[max(0, i-5):max(i, len(s))])
+
+			return &InvalidComplexPatternElement{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					&ParsingError{
+						fmt.Sprintf("a pattern was expected: ...%s<<here>>", before),
+						i,
+						start,
+						UnspecifiedCategory,
+						nil,
+					},
+					nil,
+				},
+			}
+		}
+
 		if inPattern {
 			switch {
 			case isAlpha(s[i]) || s[i] == '(':
@@ -3180,15 +3198,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				var parsingErr *ParsingError
 
-				if i >= len(s) || s[i] != ';' {
-					parsingErr = &ParsingError{
-						"unterminated pattern definition: must end with ';'",
-						i,
-						start,
-						KnownType,
-						(*PatternDefinition)(nil),
-					}
-				} else {
+				if i < len(s) && s[i] == ';' {
 					i++
 				}
 

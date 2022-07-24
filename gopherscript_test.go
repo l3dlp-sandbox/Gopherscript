@@ -5010,6 +5010,74 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : missing RHS (the semicolon is present)", func(t *testing.T) {
+		n, err := ParseModule("%i =;", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+						Name:     "i",
+					},
+					Right: &InvalidComplexPatternElement{
+						NodeBase: NodeBase{
+							NodeSpan{4, 4},
+							&ParsingError{
+								"a pattern was expected: ...%i =<<here>>;...",
+								4,
+								4,
+								UnspecifiedCategory,
+								nil,
+							},
+							nil,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("pattern definition : missing RHS (no semicolon)", func(t *testing.T) {
+		n, err := ParseModule("%i =", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 4},
+						nil,
+						nil,
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+						Name:     "i",
+					},
+					Right: &InvalidComplexPatternElement{
+						NodeBase: NodeBase{
+							NodeSpan{4, 4},
+							&ParsingError{
+								"a pattern was expected: ...%i =<<here>>",
+								4,
+								4,
+								UnspecifiedCategory,
+								nil,
+							},
+							nil,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 }
 
 type User struct {
