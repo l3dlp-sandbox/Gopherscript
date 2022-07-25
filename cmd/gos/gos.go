@@ -277,7 +277,8 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  n.Base().Span,
 					color: termenv.ANSIRed,
 				})
-			case *gopherscript.URLLiteral, *gopherscript.HTTPHostLiteral, *gopherscript.AbsolutePathLiteral, *gopherscript.RelativePathLiteral:
+			case *gopherscript.URLLiteral, *gopherscript.HTTPHostLiteral, *gopherscript.AbsolutePathLiteral, *gopherscript.RelativePathLiteral,
+				*gopherscript.PathSlice, *gopherscript.URLQueryParameterSlice:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSI256Color(209),
