@@ -7635,7 +7635,15 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 			walk(e, node, ancestorChain, fn)
 		}
 	case *URLExpression:
+		walk(n.HostPart, node, ancestorChain, fn)
 		walk(n.Path, node, ancestorChain, fn)
+		for _, param := range n.QueryParams {
+			walk(param, node, ancestorChain, fn)
+		}
+	case *URLQueryParameter:
+		for _, val := range n.Value {
+			walk(val, node, ancestorChain, fn)
+		}
 	case *RateLiteral:
 		walk(n.Quantity, node, ancestorChain, fn)
 		walk(n.Unit, node, ancestorChain, fn)
