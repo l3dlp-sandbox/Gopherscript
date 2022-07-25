@@ -256,7 +256,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		gopherscript.Walk(mod, func(node, parent, scopeNode gopherscript.Node, ancestorChain []gopherscript.Node) (error, gopherscript.TraversalAction) {
 			switch n := node.(type) {
 			//literals
-			case *gopherscript.IdentifierLiteral, *gopherscript.Variable, *gopherscript.GlobalVariable:
+			case *gopherscript.IdentifierLiteral, *gopherscript.Variable, *gopherscript.GlobalVariable, *gopherscript.AtHostLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSIBrightCyan,
@@ -291,6 +291,11 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSIBlue,
+				})
+			case *gopherscript.InvalidURLPattern, *gopherscript.InvalidURL, *gopherscript.InvalidAliasRelatedNode, *gopherscript.InvalidComplexPatternElement:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBrightRed,
 				})
 				// other nodes
 			case *gopherscript.IfStatement, *gopherscript.SwitchStatement, *gopherscript.MatchStatement,
