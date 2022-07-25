@@ -332,7 +332,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 			fmt.Print(before.String())
 
-			s := termenv.String(string(input[colorization.span.Start:colorization.span.End]))
+			s := termenv.String(string(input[colorization.span.Start:min(len(input), colorization.span.End)]))
 			s = s.Foreground(colorization.color)
 			fmt.Print(s.String())
 
