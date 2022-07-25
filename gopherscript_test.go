@@ -1134,6 +1134,29 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("invalid host alias stuff", func(t *testing.T) {
+		n, err := ParseModule(`@a`, "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+			Statements: []Node{
+				&InvalidAliasRelatedNode{
+					NodeBase: NodeBase{
+						NodeSpan{0, 2},
+						&ParsingError{
+							"unterminated AtHostLiteral | URLExpression | HostAliasDefinition",
+							2,
+							0,
+							UnspecifiedCategory,
+							nil,
+						},
+						nil,
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("integer literal", func(t *testing.T) {
 		n := MustParseModule("12")
 		assert.EqualValues(t, &Module{

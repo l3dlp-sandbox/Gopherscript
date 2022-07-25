@@ -4594,8 +4594,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Expression: e,
 				}, false
 			} else if s[i] == '/' || (s[i] >= 'a' && s[i] <= 'z') {
+				j := i
 				i--
-				j := i + 1
 
 				for j < len(s) && isIdentChar(s[j]) {
 					j++
@@ -4608,6 +4608,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				if j >= len(s) {
+					i = j
 					return &InvalidAliasRelatedNode{
 						NodeBase: NodeBase{
 							NodeSpan{start, j},
