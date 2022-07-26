@@ -227,6 +227,10 @@ type InvalidMemberLike struct {
 	Right Node //can be nil
 }
 
+type InvalidPathSlice struct {
+	NodeBase
+}
+
 type MissingExpression struct {
 	NodeBase
 }
@@ -2113,16 +2117,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 
 		if inInterpolation {
-			panic(ParsingError{
-				"unterminated path interpolation",
-				i,
-				-1,
-				UnspecifiedCategory,
-				nil,
+			slices = append(slices, &InvalidPathSlice{
+				NodeBase: NodeBase{
+					NodeSpan{sliceStart, index},
+					&ParsingError{
+						"unterminated path interpolation",
+						index,
+						sliceStart,
+						Pathlike,
+						(*InvalidPathSlice)(nil),
+					},
+					nil,
+				},
 			})
-		}
-
-		if sliceStart != index {
+		} else if sliceStart != index {
 			slices = append(slices, &PathSlice{
 				NodeBase: NodeBase{
 					NodeSpan{sliceStart, index},
