@@ -1321,6 +1321,31 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("string literal : unterminated", func(t *testing.T) {
+		n, err := ParseModule(`"ab`, "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
+			Statements: []Node{
+				&StringLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 3},
+						&ParsingError{
+							`unterminated string literal '"ab'`,
+							3,
+							0,
+							KnownType,
+							(*StringLiteral)(nil),
+						},
+						nil,
+					},
+					Raw:   `"ab`,
+					Value: ``,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("rune literal : simple character", func(t *testing.T) {
 		n := MustParseModule(`'a'`)
 		assert.EqualValues(t, &Module{

@@ -4498,6 +4498,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		case '"': //string
 			//strings are JSON strings
 			start := i
+			var parsingErr *ParsingError
+			var value string
+			var raw string
+
 			i++
 
 			for i < len(s) && (s[i] != '"' || countPrevBackslashes()%2 == 1) {
@@ -4505,34 +4509,35 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			if i >= len(s) && s[i-1] != '"' {
-				panic(ParsingError{
+				raw = string(s[start:])
+				parsingErr = &ParsingError{
 					"unterminated string literal '" + string(s[start:]) + "'",
 					i,
 					start,
 					KnownType,
 					(*StringLiteral)(nil),
-				})
-			}
-			i++
-			raw := string(s[start:i])
+				}
+			} else {
+				i++
 
-			var value string
+				raw = string(s[start:i])
+				err := json.Unmarshal([]byte(raw), &value)
 
-			err := json.Unmarshal([]byte(raw), &value)
-
-			if err != nil {
-				panic(ParsingError{
-					"invalid string literal '" + raw + "': " + err.Error(),
-					i,
-					start,
-					KnownType,
-					(*StringLiteral)(nil),
-				})
+				if err != nil {
+					parsingErr = &ParsingError{
+						"invalid string literal '" + raw + "': " + err.Error(),
+						i,
+						start,
+						KnownType,
+						(*StringLiteral)(nil),
+					}
+				}
 			}
 
 			return &StringLiteral{
 				NodeBase: NodeBase{
 					Span: NodeSpan{start, i},
+					Err:  parsingErr,
 				},
 				Raw:   raw,
 				Value: value,
