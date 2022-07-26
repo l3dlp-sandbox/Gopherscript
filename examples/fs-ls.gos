@@ -5,7 +5,8 @@ require {
     }
 }
 
-$entries = toval(fs.ls(./*.go)!)
-$names = map(@{Name: $.Name, Size: $.Size} $entries)!
+
+
+names = | fs.ls ./*.go | map @({name: $.Name}) $ 
 
 log topjson($names)

@@ -670,8 +670,9 @@ func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
 	}
 
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name, base) {
-			pth := path.Join(dir, e.Name)
+		name := e.(gopherscript.Object)["name"].(string)
+		if strings.HasPrefix(name, base) {
+			pth := path.Join(dir, name)
 
 			if !gopherscript.HasPathLikeStart(pth) {
 				pth = "./" + pth
@@ -683,7 +684,7 @@ func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
 			}
 
 			suggestions = append(suggestions, suggestion{
-				shownString: e.Name,
+				shownString: name,
 				value:       pth,
 			})
 		}
@@ -1018,14 +1019,6 @@ func main() {
 			panic(fmt.Sprint("unknown subcommand", os.Args[1]))
 		}
 	}
-}
-
-type FileInfo struct {
-	Name    string      // base name of the file
-	Size    int64       // length in bytes for regular files; system-dependent for others
-	Mode    os.FileMode // file mode bits
-	ModTime time.Time   // modification time
-	IsDir   bool        // abbreviation for Mode().IsDir()
 }
 
 type CommandResult struct {
@@ -1630,7 +1623,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 	return state
 }
 
-func fsLs(ctx *gopherscript.Context, args ...interface{}) ([]FileInfo, error) {
+func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, error) {
 	var pth gopherscript.Path
 	var patt gopherscript.PathPattern
 	ERR := "only a single path (or path pattern) argument is expected"
@@ -1660,7 +1653,7 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) ([]FileInfo, error) {
 	}
 
 	fileInfo := make([]fs.FileInfo, 0)
-	resultFileInfo := make([]FileInfo, 0)
+	resultFileInfo := make(gopherscript.List, 0)
 
 	if pth != "" {
 
@@ -1713,12 +1706,12 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) ([]FileInfo, error) {
 	}
 
 	for _, info := range fileInfo {
-		resultFileInfo = append(resultFileInfo, FileInfo{
-			Name:    info.Name(),
-			Size:    info.Size(),
-			Mode:    info.Mode(),
-			ModTime: info.ModTime(),
-			IsDir:   info.IsDir(),
+		resultFileInfo = append(resultFileInfo, gopherscript.Object{
+			"name":    info.Name(),
+			"size":    info.Size(),
+			"mode":    info.Mode(),
+			"modTime": info.ModTime(),
+			"isDir":   info.IsDir(),
 		})
 	}
 
