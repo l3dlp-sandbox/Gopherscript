@@ -293,7 +293,8 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  n.Base().Span,
 					color: termenv.ANSIBlue,
 				})
-			case *gopherscript.InvalidURLPattern, *gopherscript.InvalidURL, *gopherscript.InvalidAliasRelatedNode, *gopherscript.InvalidComplexPatternElement:
+			case *gopherscript.InvalidURLPattern, *gopherscript.InvalidURL, *gopherscript.InvalidAliasRelatedNode, *gopherscript.InvalidComplexPatternElement,
+				*gopherscript.InvalidPathSlice, *gopherscript.UnknownNode:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSIBrightRed,
