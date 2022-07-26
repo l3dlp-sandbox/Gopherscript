@@ -58,6 +58,31 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("module : comment start with missing space", func(t *testing.T) {
+		n, err := ParseModule("#", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 1},
+				nil, nil,
+			},
+			Statements: []Node{
+				&UnknownNode{
+					NodeBase: NodeBase{
+						Span: NodeSpan{0, 1},
+						Err: &ParsingError{
+							"",
+							1,
+							0,
+							UnspecifiedCategory,
+							nil,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	t.Run("empty module with empty requirements", func(t *testing.T) {
 		n := MustParseModule("require {}")
 		assert.EqualValues(t, &Module{

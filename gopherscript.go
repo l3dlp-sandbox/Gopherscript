@@ -1902,12 +1902,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	//start of closures
 
-	eatComment := func() {
+	eatComment := func() bool {
 		if i < len(s)-1 && (s[i+1] == ' ' || s[i+1] == '\t') {
 			i += 2
 			for i < len(s) && s[i] != '\n' {
 				i++
 			}
+			return true
+		} else {
+			return false
 		}
 	}
 
@@ -1923,7 +1926,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case ' ', '\t':
 				i++
 			case '#':
-				eatComment()
+				if !eatComment() {
+					return
+				}
 			default:
 				return
 			}
@@ -1936,7 +1941,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case ' ', '\t', '\n':
 				i++
 			case '#':
-				eatComment()
+				if !eatComment() {
+					return
+				}
 			default:
 				return
 			}
@@ -1949,7 +1956,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case ' ', '\t', '\n', ',':
 				i++
 			case '#':
-				eatComment()
+				if !eatComment() {
+					return
+				}
 			default:
 				return
 			}
@@ -1962,7 +1971,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			case ' ', '\t', '\n', ';':
 				i++
 			case '#':
-				eatComment()
+				if !eatComment() {
+					return
+				}
 			default:
 				return
 			}
@@ -4590,6 +4601,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 				},
 			}, false
+		case '#':
+			i++
+			return &UnknownNode{
+				NodeBase: NodeBase{
+					Span: NodeSpan{i - 1, i},
+					Err: &ParsingError{
+						"",
+						i,
+						i - 1,
+						UnspecifiedCategory,
+						nil,
+					},
+				},
+			}, false
 		case '@': //lazy expressions & host related stuff
 			start := i
 			i++
@@ -5288,7 +5313,6 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		//call: <lhs> '(' ...
 		if lhs != nil && i < len(s) && s[i] == '(' {
-			log.Println("!!")
 
 			i++
 			spanStart := lhs.Base().Span.Start
