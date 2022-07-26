@@ -4569,7 +4569,19 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return expr, false
 				}
 			}
-			//otherwise fail
+			i++
+			return &UnknownNode{
+				NodeBase: NodeBase{
+					Span: NodeSpan{i - 1, i},
+					Err: &ParsingError{
+						"'.' should be followed by (.)?(/), or a letter",
+						i,
+						i - 1,
+						UnspecifiedCategory,
+						nil,
+					},
+				},
+			}, false
 		case '@': //lazy expressions & host related stuff
 			start := i
 			i++
@@ -5268,6 +5280,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		//call: <lhs> '(' ...
 		if lhs != nil && i < len(s) && s[i] == '(' {
+			log.Println("!!")
+
 			i++
 			spanStart := lhs.Base().Span.Start
 
@@ -5285,6 +5299,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Arguments: nil,
 			}
 
+			//parse arguments
 			for i < len(s) && s[i] != ')' {
 				eatSpaceNewlineComma()
 
@@ -6615,7 +6630,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		default:
 
 			switch expr.(type) {
-			case *IdentifierLiteral, *IdentifierMemberExpression:
+			case *IdentifierLiteral, *IdentifierMemberExpression: //funcname args...
+
 				if !followedBySpace || s[i] == '\n' || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(' && s[i] != '|') {
 					break
 				}
