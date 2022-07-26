@@ -9304,7 +9304,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			defer func() {
 				//uncomparable
 				if v := recover(); v != nil {
-					result = true
+					result = false
 					err = nil
 				} else {
 					panic(v)
