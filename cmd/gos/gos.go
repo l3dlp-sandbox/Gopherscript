@@ -91,6 +91,19 @@ func replaceNewLinesRawMode(s string) string {
 	return strings.ReplaceAll(s, "\n", "\n\x1b[1E")
 }
 
+func getClosingDelimiter(openingDelim rune) rune {
+	switch openingDelim {
+	case '[':
+		return ']'
+	case '{':
+		return '}'
+	case '(':
+		return ')'
+	default:
+		return openingDelim
+	}
+}
+
 func strSliceContains(strings []string, str string) bool {
 	for _, e := range strings {
 		if e == str {
@@ -204,6 +217,11 @@ func debug(args ...interface{}) {
 		log.Panicln(err)
 	}
 
+	_, err = f.WriteString("\n")
+	if err != nil {
+		log.Panicln(err)
+	}
+
 	f.Close()
 }
 
@@ -247,6 +265,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		termenv.CursorBack(len(input) + PROMPT_LEN)
 	}
 
+	//prints the input with colorizations, after this function has been executed the cursor is at the end of line
 	printPromptAndInput := func() {
 		writePrompt()
 		var colorizations []ColorizationInfo
@@ -589,8 +608,15 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			termenv.ClearLine()
 			moveCursorLineStart()
 			input = append(left, r)
-			input = append(input, right...)
 
+			//we append the corresponding closing delimiter if the new rune is an opening delimiter
+			switch r {
+			case '[', '{', '(':
+				input = append(input, getClosingDelimiter(r))
+				backspaceCount++
+			}
+
+			input = append(input, right...)
 			printPromptAndInput()
 
 			if backspaceCount > 0 {
