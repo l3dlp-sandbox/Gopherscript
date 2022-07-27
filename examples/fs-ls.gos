@@ -6,7 +6,6 @@ require {
 }
 
 
-
-names = | fs.ls ./*.go | map @({name: $.Name}) $ 
+names = | fs.ls ./*.go | map .{name} $
 
 log topjson($names)

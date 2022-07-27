@@ -1309,20 +1309,34 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			//return error if d negative ?
 			return time.Now().Add(-d)
 		},
-		"map": func(ctx *gopherscript.Context, node gopherscript.Node, list gopherscript.List) (gopherscript.List, error) {
+		"map": func(ctx *gopherscript.Context, filter interface{}, list gopherscript.List) (gopherscript.List, error) {
 			result := gopherscript.List{}
 
-			//should ctx allow to do that instead ?
-			state.PushScope()
-			defer state.PopScope()
+			switch fil := filter.(type) {
+			case gopherscript.Node:
 
-			for _, e := range list {
-				state.CurrentScope()[""] = e
-				res, err := gopherscript.Eval(node.(*gopherscript.LazyExpression).Expression, state)
-				if err != nil {
-					return nil, err
+				//should ctx allow to do that instead ?
+				state.PushScope()
+				defer state.PopScope()
+
+				for _, e := range list {
+					state.CurrentScope()[""] = e
+					res, err := gopherscript.Eval(fil.(*gopherscript.LazyExpression).Expression, state)
+					if err != nil {
+						return nil, err
+					}
+					result = append(result, res)
 				}
-				result = append(result, res)
+			case gopherscript.KeyList:
+				for _, e := range list {
+					res := gopherscript.Object{}
+
+					for _, name := range fil {
+						res[name] = e.(gopherscript.Object)[name]
+					}
+
+					result = append(result, res)
+				}
 			}
 
 			return result, nil
