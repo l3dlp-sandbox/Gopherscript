@@ -1,0 +1,12 @@
+require {
+    create: /home/user/...
+    use: {
+        globals: "*"
+    }
+    limits: {
+        "fs/write": 1MB/s
+    }
+}
+
+
+fs.mkfile ./hello.txt "hello !"

@@ -1098,6 +1098,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"fs": gopherscript.Object{
 			"mkfile": gopherscript.ValOf(fsMkfile),
 			"mkdir":  gopherscript.ValOf(fsMkdir),
+			"read":   gopherscript.ValOf(fsReadFile),
 			"ls":     gopherscript.ValOf(fsLs),
 			"del":    gopherscript.ValOf(fsDel),
 		},
@@ -1837,6 +1838,28 @@ func fsMkfile(ctx *gopherscript.Context, args ...interface{}) error {
 	}
 
 	return __createFile(ctx, fpath, []byte(b), DEFAULT_FILE_FMODE)
+}
+
+func fsReadFile(ctx *gopherscript.Context, args ...interface{}) (interface{}, error) {
+	var fpath gopherscript.Path
+
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case gopherscript.Path:
+			if fpath != "" {
+				return nil, errors.New(PATH_ARG_PROVIDED_TWICE)
+			}
+			fpath = v
+		default:
+			return nil, errors.New("invalid argument " + fmt.Sprintf("%#v", v))
+		}
+	}
+
+	if fpath == "" {
+		return nil, errors.New("missing path argument")
+	}
+
+	return __readEntireFile(ctx, fpath)
 }
 
 func fsAppendToFile(ctx *gopherscript.Context, args ...interface{}) error {

@@ -1,0 +1,11 @@
+require {
+    read: /home/user/...
+    use: {
+        globals: "*"
+    }
+    limits: {
+        "fs/read": 1MB/s
+    }
+}
+
+log tostr(fs.read(./examples/fs-read.gos)!)
