@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -7310,6 +7311,81 @@ func Memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
 	}
 }
 
+func AtIndex(value interface{}, index int) (interface{}, error) {
+	switch v := value.(type) {
+	case List:
+		return v[index], nil
+	case []interface{}:
+		return v[index], nil
+	case string:
+		return v[index], nil
+	case []byte:
+		return v[index], nil
+	case []rune:
+		return v[index], nil
+	default:
+		return nil, fmt.Errorf("AtIndex: first argument has invalid type: %T", value)
+	}
+}
+
+func SetAtIndex(value interface{}, index int, e interface{}) error {
+	switch v := value.(type) {
+	case List:
+		v[index] = e
+	case []interface{}:
+		v[index] = e
+	case []byte:
+		v[index] = e.(byte)
+	case []rune:
+		v[index] = e.(rune)
+	default:
+		return fmt.Errorf("SetAtIndex: first argument has invalid type: %T", value)
+	}
+	return nil
+}
+
+func GetSlice(value interface{}, start, end int) (interface{}, error) {
+	switch v := value.(type) {
+	case List:
+		end = min(end, len(v))
+		return v[start:end], nil
+	case []interface{}:
+		end = min(end, len(v))
+		return v[start:end], nil
+	case string:
+		end = min(end, len(v))
+		return v[start:end], nil
+	case []byte:
+		end = min(end, len(v))
+		return v[start:end], nil
+	case []rune:
+		end = min(end, len(v))
+		return v[start:end], nil
+	default:
+		return nil, fmt.Errorf("GetSlice: first argument has invalid type: %T", value)
+	}
+}
+
+func SetSlice(value interface{}, start, end int, slice interface{}) error {
+	if start >= end {
+		return fmt.Errorf("SetSlice: invalid arguments: start should be less than end")
+	}
+
+	switch v := value.(type) {
+	case List:
+		copy(v[start:end], slice.(List))
+	case []interface{}:
+		copy(v[start:end], slice.([]interface{}))
+	case []byte:
+		copy(v[start:end], slice.([]byte))
+	case []rune:
+		copy(v[start:end], slice.([]rune))
+	default:
+		return fmt.Errorf("SetSlice: first argument has invalid type: %T", value)
+	}
+	return nil
+}
+
 func NewState(ctx *Context, args ...map[string]interface{}) *State {
 	state := &State{
 		ScopeStack: []map[string]interface{}{
@@ -8745,7 +8821,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 			object.(Object)[lhs.PropertyName.Name] = right
 		case *IndexExpression:
-			list, err := Eval(lhs.Indexed, state)
+			slice, err := Eval(lhs.Indexed, state)
 			if err != nil {
 				return nil, err
 			}
@@ -8760,7 +8836,29 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				return nil, err
 			}
 
-			list.(List)[index.(int)] = right
+			return nil, SetAtIndex(slice, index.(int), right)
+		case *SliceExpression:
+			slice, err := Eval(lhs.Indexed, state)
+			if err != nil {
+				return nil, err
+			}
+
+			startIndex, err := Eval(lhs.StartIndex, state)
+			if err != nil {
+				return nil, err
+			}
+
+			endIndex, err := Eval(lhs.EndIndex, state)
+			if err != nil {
+				return nil, err
+			}
+
+			right, err := Eval(n.Right, state)
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, SetSlice(slice, startIndex.(int), endIndex.(int), right)
 		default:
 			return nil, fmt.Errorf("invalid assignment: left hand side is a(n) %T", n.Left)
 		}
@@ -9522,12 +9620,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		return list.(List)[index.(int)], nil
 	case *SliceExpression:
-		list, err := Eval(n.Indexed, state)
+		slice, err := Eval(n.Indexed, state)
 		if err != nil {
 			return nil, err
 		}
 
-		l := list.(List)
+		l := slice.(List)
 		var startIndex interface{} = 0
 		if n.StartIndex != nil {
 			startIndex, err = Eval(n.StartIndex, state)
@@ -9536,7 +9634,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			}
 		}
 
-		var endIndex interface{} = len(l)
+		var endIndex interface{} = math.MaxInt
 		if n.EndIndex != nil {
 			endIndex, err = Eval(n.EndIndex, state)
 			if err != nil {
@@ -9553,7 +9651,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			end = len(l)
 		}
 
-		return list.(List)[start:end], nil
+		return GetSlice(slice, start, end)
 	case *KeyListExpression:
 		list := KeyList{}
 

@@ -5701,8 +5701,24 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, nil, res)
 	})
 
+	t.Run("index expression", func(t *testing.T) {
+		n := MustParseModule(`$a = [0] return $a[0]`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, res)
+	})
+
 	t.Run("element assignment", func(t *testing.T) {
 		n := MustParseModule(`$a = [0] $a[0] = 1; return $a`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.Equal(t, List{1}, res)
+	})
+
+	t.Run("slice mutation", func(t *testing.T) {
+		n := MustParseModule(`$a = [0] $a[0:1] = [1]; return $a`)
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
