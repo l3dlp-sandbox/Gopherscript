@@ -47,7 +47,6 @@ const ENTER_CODE = 13
 const CTRL_C_CODE = 3
 const TAB_CODE = 9
 const ESCAPE_CODE = 27
-const PROMPT_LEN = 2
 
 const DEFAULT_FILE_FMODE = fs.FileMode(0o400)
 const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
@@ -82,9 +81,24 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	InsecureSkipVerify: true,
 }
 
-func writePrompt() {
-	s := termenv.String("> ")
-	fmt.Print(s.String())
+func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
+
+	for _, part := range config.prompt {
+		switch p := part.(type) {
+		case string:
+			n, _ := fmt.Printf("%s", p)
+			prompt_length += n
+		case *gopherscript.LazyExpression:
+			if !gopherscript.IsSimpleValueLiteral(p.Expression) && !gopherscript.Is(p.Expression, (*gopherscript.URLExpression)(nil)) {
+				panic(fmt.Errorf("writePrompt: only url expressions and simple-value literals can be evaluated"))
+			}
+			v, _ := gopherscript.Eval(p.Expression, state)
+			n, _ := fmt.Printf("%s", v)
+			prompt_length += n
+		default:
+		}
+	}
+	return
 }
 
 func replaceNewLinesRawMode(s string) string {
@@ -250,8 +264,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	backspaceCount := 0
 	pressedTabCount := 0
 	ignoreNextChar := false
-
-	writePrompt()
+	promptLen := writePrompt(state, config)
 
 	reset := func() {
 		input = nil
@@ -262,12 +275,12 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	}
 
 	moveCursorLineStart := func() {
-		termenv.CursorBack(len(input) + PROMPT_LEN)
+		termenv.CursorBack(len(input) + promptLen)
 	}
 
 	//prints the input with colorizations, after this function has been executed the cursor is at the end of line
 	printPromptAndInput := func() {
-		writePrompt()
+		promptLen = writePrompt(state, config)
 		var colorizations []ColorizationInfo
 
 		mod, _ := gopherscript.ParseModule(string(input), "")
@@ -410,7 +423,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			fallthrough
 		case ArrowDown:
 			termenv.ClearLine()
-			termenv.CursorBack(len(input) + PROMPT_LEN)
+			termenv.CursorBack(len(input) + promptLen)
 			reset()
 			input = []rune(history.Commands[commandIndex])
 
@@ -427,7 +440,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			}
 
 			termenv.ClearLine()
-			termenv.CursorBack(len(input) + PROMPT_LEN)
+			termenv.CursorBack(len(input) + promptLen)
 
 			printPromptAndInput()
 			continue
@@ -600,7 +613,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				termenv.CursorNextLine(1)
 			}
 
-			writePrompt()
+			promptLen = writePrompt(state, config)
 			continue
 		}
 
@@ -835,6 +848,7 @@ switch_:
 
 type REPLConfiguration struct {
 	builtinCommands []string
+	prompt          gopherscript.List
 }
 
 func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
@@ -855,6 +869,27 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 				}
 				config.builtinCommands = append(config.builtinCommands, string(ident))
 			}
+		case "prompt":
+			PROMPT_CONFIG_ERR := "invalid configuration: prompt should be a list"
+			list, isList := v.(gopherscript.List)
+			if !isList {
+				return config, errors.New(PROMPT_CONFIG_ERR)
+			}
+			for _, part := range list {
+				switch p := part.(type) {
+				case string:
+				// case gopherscript.Identifier:
+				// 	switch part {
+				// 	case "cwd":
+				// 	default:
+				// 		return config, fmt.Errorf("invalid configuration: invalid part in prompt configuration: %s is not valid identifier", p)
+				// 	}
+				case *gopherscript.LazyExpression:
+				default:
+					return config, fmt.Errorf("invalid configuration: invalid part in prompt configuration: type %T", p)
+				}
+			}
+			config.prompt = list
 		}
 	}
 

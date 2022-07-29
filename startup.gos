@@ -46,4 +46,5 @@ require {
 
 return {
     builtin-commands: [cd]
+    prompt: ["> "]
 }

@@ -1149,6 +1149,10 @@ func IsSimpleValueLiteral(node Node) bool {
 	}
 }
 
+func Is(node Node, typ interface{}) bool {
+	return reflect.TypeOf(typ) == reflect.TypeOf(node)
+}
+
 type NodeCategory int
 
 const (
