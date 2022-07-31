@@ -84,21 +84,70 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
 
 	for _, part := range config.prompt {
+
+		color := config.defaultFgColor
+
+		list, isList := part.(gopherscript.List)
+
+		if isList && len(list) == 2 {
+			part = list[0]
+			colorIdent, isIdent := list[1].(gopherscript.Identifier)
+
+			if isIdent {
+				clr, ok := COLOR_NAME_TO_COLOR[colorIdent]
+				if ok {
+					color = clr
+				}
+			}
+		}
+
+		s := ""
+
 		switch p := part.(type) {
 		case string:
-			n, _ := fmt.Printf("%s", p)
-			prompt_length += n
+			s = p
 		case *gopherscript.LazyExpression:
 			if !gopherscript.IsSimpleValueLiteral(p.Expression) && !gopherscript.Is(p.Expression, (*gopherscript.URLExpression)(nil)) {
 				panic(fmt.Errorf("writePrompt: only url expressions and simple-value literals can be evaluated"))
 			}
 			v, _ := gopherscript.Eval(p.Expression, state)
-			n, _ := fmt.Printf("%s", v)
-			prompt_length += n
+			s = fmt.Sprintf("%s", v)
 		default:
 		}
+
+		//we print the part
+		prompt_length += len([]rune(s))
+		styled := termenv.String(s)
+		styled = styled.Foreground(color)
+		fmt.Print(styled)
 	}
 	return
+}
+
+var COLOR_NAME_TO_COLOR = map[gopherscript.Identifier]termenv.Color{
+	"red":        termenv.ANSIRed,
+	"bright-red": termenv.ANSIBrightRed,
+
+	"blue":        termenv.ANSIBlue,
+	"bright-blue": termenv.ANSIBrightBlue,
+
+	"cyan":        termenv.ANSICyan,
+	"bright-cyan": termenv.ANSIBrightCyan,
+
+	"yellow":        termenv.ANSIYellow,
+	"bright-yellow": termenv.ANSIBrightYellow,
+
+	"green":        termenv.ANSIGreen,
+	"bright-green": termenv.ANSIBrightGreen,
+
+	"white":        termenv.ANSIWhite,
+	"bright-white": termenv.ANSIBrightWhite,
+
+	"black":        termenv.ANSIBlack,
+	"bright-black": termenv.ANSIBrightBlack,
+
+	"magenta":        termenv.ANSIMagenta,
+	"bright-magenta": termenv.ANSIBrightMagenta,
 }
 
 func replaceNewLinesRawMode(s string) string {
@@ -257,7 +306,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	history := CommandHistory{Commands: []string{""}}
 	commandIndex := 0
-	defaultFgColor := termenv.ForegroundColor()
 
 	input := make([]rune, 0)
 	var runeSeq []rune
@@ -362,7 +410,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		for _, colorization := range colorizations {
 			before := termenv.String(string(input[prev:colorization.span.Start]))
 
-			before = before.Foreground(defaultFgColor)
+			before = before.Foreground(config.defaultFgColor)
 
 			fmt.Print(before.String())
 
@@ -849,10 +897,13 @@ switch_:
 type REPLConfiguration struct {
 	builtinCommands []string
 	prompt          gopherscript.List
+	defaultFgColor  termenv.Color
 }
 
 func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 	var config REPLConfiguration
+
+	config.defaultFgColor = termenv.ForegroundColor()
 
 	for k, v := range obj {
 		switch k {
@@ -876,6 +927,14 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 				return config, errors.New(PROMPT_CONFIG_ERR)
 			}
 			for _, part := range list {
+
+				if list, isList := part.(gopherscript.List); isList {
+					if len(list) != 2 {
+						return config, fmt.Errorf("invalid configuration: parts of type List should be two element long: [<desc.>, <color identifier>]")
+					}
+					part = list[0]
+				}
+
 				switch p := part.(type) {
 				case string:
 				// case gopherscript.Identifier:
@@ -1067,6 +1126,9 @@ func main() {
 						}
 						return nil
 					})
+				}
+				if err != nil {
+					log.Println(replaceNewLinesRawMode(err.Error()))
 				}
 			case nil:
 			default:
