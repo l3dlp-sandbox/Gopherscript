@@ -1764,7 +1764,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, error) {
 	var pth gopherscript.Path
 	var patt gopherscript.PathPattern
-	ERR := "only a single path (or path pattern) argument is expected"
+	ERR := "a single path (or path pattern) argument is expected"
 
 	for _, arg := range args {
 		switch v := arg.(type) {
@@ -1772,10 +1772,7 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, er
 			if pth != "" {
 				return nil, errors.New(ERR)
 			}
-			pth = v.ToAbs()
-			if !v.IsDirPath() {
-				return nil, errors.New("only directory paths are supported : " + string(v))
-			}
+			pth = v
 		case gopherscript.PathPattern:
 			if patt != "" {
 				return nil, errors.New(ERR)
@@ -1783,6 +1780,17 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, er
 			patt = v
 		default:
 			return nil, errors.New("invalid argument " + fmt.Sprintf("%#v", v))
+		}
+	}
+
+	if pth == "" && patt == "" {
+		pth = "./"
+	}
+
+	if pth != "" {
+		pth = pth.ToAbs()
+		if !pth.IsDirPath() {
+			return nil, errors.New("only directory paths are supported : " + string(pth))
 		}
 	}
 
