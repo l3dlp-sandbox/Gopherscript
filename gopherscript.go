@@ -1224,6 +1224,9 @@ func (pth Path) ToAbs() Path {
 	if err != nil {
 		panic(fmt.Errorf("path resolution: %s", err))
 	}
+	if pth.IsDirPath() && s[len(s)-1] != '/' {
+		s += "/"
+	}
 	return Path(s)
 }
 
