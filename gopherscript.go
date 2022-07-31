@@ -312,6 +312,12 @@ type BooleanLiteral struct {
 	Value bool
 }
 
+type FlagLiteral struct {
+	NodeBase
+	Name       string
+	SingleDash bool
+}
+
 type IntLiteral struct {
 	NodeBase
 	Raw   string
@@ -4609,6 +4615,77 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 				},
 			}, false
+		case '-': //options / flags
+			i++
+			if i >= len(s) {
+				return &FlagLiteral{
+					NodeBase: NodeBase{
+						Span: NodeSpan{__start, i},
+						Err: &ParsingError{
+							"'-' should be followed an option name",
+							i,
+							__start,
+							KnownType,
+							(*FlagLiteral)(nil),
+						},
+					},
+					SingleDash: true,
+				}, false
+			}
+
+			singleDash := true
+
+			if s[i] == '-' {
+				singleDash = false
+				i++
+			}
+
+			nameStart := i
+
+			if i >= len(s) {
+				return &FlagLiteral{
+					NodeBase: NodeBase{
+						Span: NodeSpan{__start, i},
+						Err: &ParsingError{
+							"'--' should be followed an option name",
+							i,
+							__start,
+							KnownType,
+							(*FlagLiteral)(nil),
+						},
+					},
+					SingleDash: singleDash,
+				}, false
+			}
+
+			if !isAlpha(s[i]) && !isDigit(s[i]) {
+				return &FlagLiteral{
+					NodeBase: NodeBase{
+						Span: NodeSpan{__start, i},
+						Err: &ParsingError{
+							"the name of an option can only contain alphanumeric characters",
+							i,
+							__start,
+							KnownType,
+							(*FlagLiteral)(nil),
+						},
+					},
+					SingleDash: singleDash,
+				}, false
+			}
+
+			for i < len(s) && (isAlpha(s[i]) || isDigit(s[i])) {
+				i++
+			}
+
+			return &FlagLiteral{
+				NodeBase: NodeBase{
+					Span: NodeSpan{__start, i},
+				},
+				Name:       string(s[nameStart:i]),
+				SingleDash: singleDash,
+			}, false
+
 		case '#':
 			i++
 			return &UnknownNode{

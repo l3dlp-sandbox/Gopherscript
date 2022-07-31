@@ -215,6 +215,83 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("flag literal : single dash / single letter", func(t *testing.T) {
+		n := MustParseModule("-a")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+			Statements: []Node{
+				&FlagLiteral{
+					NodeBase:   NodeBase{NodeSpan{0, 2}, nil, nil},
+					Name:       "a",
+					SingleDash: true,
+				},
+			},
+		}, n)
+	})
+
+	t.Run("flag literal : double dash", func(t *testing.T) {
+		n := MustParseModule("--abc")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&FlagLiteral{
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+					Name:     "abc",
+				},
+			},
+		}, n)
+	})
+
+	t.Run("flag literal : single dash not followed by characters", func(t *testing.T) {
+		n, err := ParseModule("-", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
+			Statements: []Node{
+				&FlagLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 1},
+						&ParsingError{
+							"'-' should be followed an option name",
+							1,
+							0,
+							KnownType,
+							(*FlagLiteral)(nil),
+						},
+						nil,
+					},
+					Name:       "",
+					SingleDash: true,
+				},
+			},
+		}, n)
+	})
+
+	t.Run("flag literal : two dashes not followed by characters", func(t *testing.T) {
+		n, err := ParseModule("--", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+			Statements: []Node{
+				&FlagLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 2},
+						&ParsingError{
+							"'--' should be followed an option name",
+							2,
+							0,
+							KnownType,
+							(*FlagLiteral)(nil),
+						},
+						nil,
+					},
+					Name:       "",
+					SingleDash: false,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("absolute path literal : /", func(t *testing.T) {
 		n := MustParseModule("/")
 		assert.EqualValues(t, &Module{
