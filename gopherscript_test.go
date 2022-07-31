@@ -189,19 +189,6 @@ func TestMustParseModule(t *testing.T) {
 			}}, n)
 	})
 
-	t.Run("identifier", func(t *testing.T) {
-		n := MustParseModule("a")
-		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
-			Statements: []Node{
-				&IdentifierLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
-					Name:     "a",
-				},
-			},
-		}, n)
-	})
-
 	t.Run("boolean literal : true", func(t *testing.T) {
 		n := MustParseModule("true")
 		assert.EqualValues(t, &Module{
@@ -1413,10 +1400,15 @@ func TestMustParseModule(t *testing.T) {
 		n := MustParseModule(`e`)
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
+
 			Statements: []Node{
-				&IdentifierLiteral{
+				&Call{
 					NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
-					Name:     "e",
+					Callee: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
+						Name:     "e",
+					},
+					Must: true,
 				},
 			},
 		}, n)
@@ -1427,9 +1419,13 @@ func TestMustParseModule(t *testing.T) {
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
-				&IdentifierLiteral{
+				&Call{
 					NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
-					Name:     "e2",
+					Callee: &IdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+						Name:     "e2",
+					},
+					Must: true,
 				},
 			},
 		}, n)
@@ -2092,18 +2088,22 @@ func TestMustParseModule(t *testing.T) {
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
 			Statements: []Node{
-				&IdentifierMemberExpression{
+				&Call{
 					NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
-					Left: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
-						Name:     "http",
-					},
-					PropertyNames: []*IdentifierLiteral{
-						{
-							NodeBase: NodeBase{NodeSpan{5, 8}, nil, nil},
-							Name:     "get",
+					Callee: &IdentifierMemberExpression{
+						NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
+						Left: &IdentifierLiteral{
+							NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
+							Name:     "http",
+						},
+						PropertyNames: []*IdentifierLiteral{
+							{
+								NodeBase: NodeBase{NodeSpan{5, 8}, nil, nil},
+								Name:     "get",
+							},
 						},
 					},
+					Must: true,
 				},
 			},
 		}, n)
@@ -2116,23 +2116,27 @@ func TestMustParseModule(t *testing.T) {
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
 			Statements: []Node{
-				&IdentifierMemberExpression{
-					NodeBase: NodeBase{
-						NodeSpan{0, 5},
-						&ParsingError{
-							Message:        "unterminated identifier member expression",
-							Index:          5,
-							NodeStartIndex: 5,
-							NodeCategory:   KnownType,
-							NodeType:       (*IdentifierMemberExpression)(nil),
+				&Call{
+					NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+					Callee: &IdentifierMemberExpression{
+						NodeBase: NodeBase{
+							NodeSpan{0, 5},
+							&ParsingError{
+								Message:        "unterminated identifier member expression",
+								Index:          5,
+								NodeStartIndex: 5,
+								NodeCategory:   KnownType,
+								NodeType:       (*IdentifierMemberExpression)(nil),
+							},
+							nil,
 						},
-						nil,
+						Left: &IdentifierLiteral{
+							NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
+							Name:     "http",
+						},
+						PropertyNames: nil,
 					},
-					Left: &IdentifierLiteral{
-						NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
-						Name:     "http",
-					},
-					PropertyNames: nil,
+					Must: true,
 				},
 			},
 		}, n)

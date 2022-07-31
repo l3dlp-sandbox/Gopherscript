@@ -5762,10 +5762,38 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		var b rune
 		followedBySpace := false
+		isAKeyword := false
+
+		switch expr.(type) {
+		case *IdentifierLiteral, *IdentifierMemberExpression: //funcname <no args>
+
+			if idnt, isIdentLiteral := expr.(*IdentifierLiteral); isIdentLiteral && isKeyword(idnt.Name) {
+				isAKeyword = isKeyword(idnt.Name)
+				break
+			}
+
+			prevI := i
+			eatSpace()
+
+			if i >= len(s) || s[i] == '\n' || s[i] == ';' {
+				if i < len(s) {
+					i++
+				}
+				return &Call{
+					NodeBase: NodeBase{
+						Span: NodeSpan{expr.Base().Span.Start, i},
+					},
+					Callee:    expr,
+					Arguments: nil,
+					Must:      true,
+				}
+			} else {
+				i = prevI
+			}
+		}
 
 		if i >= len(s) {
-			ident, isIdent := expr.(*IdentifierLiteral)
-			if !isIdent || !isKeyword(ident.Name) {
+			if !isAKeyword {
 				return expr
 			}
 		} else {
@@ -6672,7 +6700,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			switch expr.(type) {
 			case *IdentifierLiteral, *IdentifierMemberExpression: //funcname args...
 
-				if !followedBySpace || s[i] == '\n' || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(' && s[i] != '|') {
+				if (!followedBySpace && s[i] != '\n') || (isNotPairedOrIsClosingDelim(s[i]) && s[i] != '(' && s[i] != '|' && s[i] != '\n') {
 					break
 				}
 
