@@ -46,5 +46,6 @@ require {
 
 return {
     builtin-commands: [cd]
+    aliased-commands: [echo, go]
     prompt: ["> "]
 }

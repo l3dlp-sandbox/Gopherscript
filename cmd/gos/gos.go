@@ -909,6 +909,7 @@ switch_:
 
 type REPLConfiguration struct {
 	builtinCommands []string
+	aliasedCommands []string
 	prompt          gopherscript.List
 	defaultFgColor  termenv.Color
 }
@@ -932,6 +933,19 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 					return config, errors.New(BUILTIN_COMMAND_LIST_ERR)
 				}
 				config.builtinCommands = append(config.builtinCommands, string(ident))
+			}
+		case "aliased-commands":
+			ALIASED_COMMAND_LIST_ERR := "invalid configuration: aliased-commands should be a list of identifiers"
+			list, isList := v.(gopherscript.List)
+			if !isList {
+				return config, errors.New(ALIASED_COMMAND_LIST_ERR)
+			}
+			for _, cmd := range list {
+				ident, ok := cmd.(gopherscript.Identifier)
+				if !ok {
+					return config, errors.New(ALIASED_COMMAND_LIST_ERR)
+				}
+				config.aliasedCommands = append(config.aliasedCommands, string(ident))
 			}
 		case "prompt":
 			PROMPT_CONFIG_ERR := "invalid configuration: prompt should be a list"
@@ -1143,6 +1157,20 @@ func main() {
 				if err != nil {
 					log.Println(replaceNewLinesRawMode(err.Error()))
 				}
+
+				//add aliased commands to the global scope
+
+				globalScope := state.GlobalScope()
+				for _, cmd := range config.aliasedCommands {
+					if _, alreadyPresent := globalScope[cmd]; alreadyPresent {
+						panic(errors.New("aliased commands cannot override a global variable"))
+					}
+					globalScope[cmd] = func(cmd string) interface{} {
+						return gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (string, error) {
+							return ex(ctx, gopherscript.Identifier(cmd), args...)
+						})
+					}(cmd)
+				}
 			case nil:
 			default:
 				panic(fmt.Sprintf("startup script should return an Object or nothing (nil), not a(n) %T", r))
@@ -1160,51 +1188,53 @@ func main() {
 type CommandResult struct {
 }
 
+func ex(ctx *gopherscript.Context, cmdName gopherscript.Identifier, args ...interface{}) (string, error) {
+
+	var subcommandNameChain []string
+	var cmdArgs []string
+
+	//we remove the subcommand chain from <argss>
+	for len(args) != 0 {
+		name, ok := args[0].(gopherscript.Identifier)
+		if ok {
+			subcommandNameChain = append(subcommandNameChain, string(name))
+			args = args[1:]
+		} else {
+			break
+		}
+	}
+
+	//we check that remaining args are simple values
+	for _, arg := range args {
+		if gopherscript.IsSimpleGopherVal(arg) {
+			cmdArgs = append(cmdArgs, fmt.Sprint(arg))
+		} else {
+			return "", fmt.Errorf("ex: invalid argument %v of type %T, only simple values are allowed", arg, arg)
+		}
+	}
+
+	perm := gopherscript.CommandPermission{
+		CommandName:         string(cmdName),
+		SubcommandNameChain: subcommandNameChain,
+	}
+
+	if err := ctx.CheckHasPermission(perm); err != nil {
+		return "", err
+	}
+
+	passedArgs := make([]string, 0)
+	passedArgs = append(passedArgs, subcommandNameChain...)
+	passedArgs = append(passedArgs, cmdArgs...)
+
+	b, err := exec.Command(string(cmdName), passedArgs...).Output()
+	return string(b), err
+}
+
 func NewState(ctx *gopherscript.Context) *gopherscript.State {
 
 	var state *gopherscript.State
 	state = gopherscript.NewState(ctx, map[string]interface{}{
-		"ex": func(ctx *gopherscript.Context, cmdName gopherscript.Identifier, args ...interface{}) (string, error) {
-
-			var subcommandNameChain []string
-			var cmdArgs []string
-
-			//we remove the subcommand chain from <argss>
-			for len(args) != 0 {
-				name, ok := args[0].(gopherscript.Identifier)
-				if ok {
-					subcommandNameChain = append(subcommandNameChain, string(name))
-					args = args[1:]
-				} else {
-					break
-				}
-			}
-
-			//we check that remaining args are simple values
-			for _, arg := range args {
-				if gopherscript.IsSimpleGopherVal(arg) {
-					cmdArgs = append(cmdArgs, fmt.Sprint(arg))
-				} else {
-					return "", fmt.Errorf("ex: invalid argument %v of type %T, only simple values are allowed", arg, arg)
-				}
-			}
-
-			perm := gopherscript.CommandPermission{
-				CommandName:         string(cmdName),
-				SubcommandNameChain: subcommandNameChain,
-			}
-
-			if err := ctx.CheckHasPermission(perm); err != nil {
-				return "", err
-			}
-
-			passedArgs := make([]string, 0)
-			passedArgs = append(passedArgs, subcommandNameChain...)
-			passedArgs = append(passedArgs, cmdArgs...)
-
-			b, err := exec.Command(string(cmdName), passedArgs...).Output()
-			return string(b), err
-		},
+		"ex": ex,
 		"fs": gopherscript.Object{
 			"mkfile": gopherscript.ValOf(fsMkfile),
 			"mkdir":  gopherscript.ValOf(fsMkdir),
