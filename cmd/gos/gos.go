@@ -347,7 +347,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  n.Base().Span,
 					color: termenv.ANSIBrightGreen,
 				})
-			case *gopherscript.StringLiteral:
+			case *gopherscript.StringLiteral, *gopherscript.FlagLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
 					color: termenv.ANSI256Color(209),
@@ -396,6 +396,19 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 						color: OTHER_KEYWORD_COLOR,
 					})
 				}
+			case *gopherscript.OptionExpression:
+				if n.Value == nil {
+					break
+				}
+
+				if _, isMissingExpr := n.Value.(*gopherscript.MissingExpression); isMissingExpr {
+					break
+				}
+
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  gopherscript.NodeSpan{Start: n.Span.Start, End: n.Value.Base().Span.Start - 1},
+					color: termenv.ANSI256Color(209),
+				})
 			}
 
 			return nil, gopherscript.Continue
