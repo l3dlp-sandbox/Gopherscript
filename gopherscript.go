@@ -1187,6 +1187,10 @@ type ExternalValue struct {
 	state *State
 	value interface{}
 }
+type Option struct {
+	Name  string
+	Value interface{}
+}
 
 //special string types
 type JSONstring string
@@ -7011,7 +7015,7 @@ func IsSimpleGopherVal(v interface{}) bool {
 
 func IsGopherVal(v interface{}) bool {
 	switch v.(type) {
-	case rune, string, JSONstring, bool, int, float64, Object, List, Func, ExternalValue,
+	case rune, string, JSONstring, bool, int, float64, Object, List, Func, ExternalValue, Option,
 		Identifier, Path, PathPattern, URL, HTTPHost, HTTPHostPattern, URLPattern:
 		return true
 	default:
@@ -8746,10 +8750,19 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return NamedSegmentPathPattern{n}, nil
 	case *RegularExpressionLiteral:
 		return RegexMatcher{regexp.MustCompile(n.Value)}, nil
+
 	case *PathSlice:
 		return n.Value, nil
 	case *URLQueryParameterSlice:
 		return n.Value, nil
+	case *FlagLiteral:
+		return Option{Name: n.Name, Value: true}, nil
+	case *OptionExpression:
+		value, err := Eval(n.Value, state)
+		if err != nil {
+			return nil, err
+		}
+		return Option{Name: n.Name, Value: value}, nil
 	case *AbsolutePathExpression, *RelativePathExpression:
 
 		var slices []Node
