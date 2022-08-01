@@ -314,8 +314,15 @@ type BooleanLiteral struct {
 
 type FlagLiteral struct {
 	NodeBase
-	Name       string
 	SingleDash bool
+	Name       string
+}
+
+type OptionExpression struct {
+	NodeBase
+	SingleDash bool
+	Name       string
+	Value      Node
 }
 
 type IntLiteral struct {
@@ -4678,11 +4685,44 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 			}
 
-			return &FlagLiteral{
-				NodeBase: NodeBase{
-					Span: NodeSpan{__start, i},
-				},
-				Name:       string(s[nameStart:i]),
+			name := string(s[nameStart:i])
+
+			if i >= len(s) || s[i] != '=' {
+
+				return &FlagLiteral{
+					NodeBase: NodeBase{
+						Span: NodeSpan{__start, i},
+					},
+					Name:       name,
+					SingleDash: singleDash,
+				}, false
+			}
+
+			i++
+
+			if i >= len(s) {
+				return &OptionExpression{
+					NodeBase: NodeBase{
+						Span: NodeSpan{__start, i},
+						Err: &ParsingError{
+							"unterminated option expression, '=' should be followed by an expression",
+							i,
+							__start,
+							KnownType,
+							(*OptionExpression)(nil),
+						},
+					},
+					Name:       name,
+					SingleDash: singleDash,
+				}, false
+			}
+
+			value, _ := parseExpression()
+
+			return &OptionExpression{
+				NodeBase:   NodeBase{Span: NodeSpan{__start, i}},
+				Name:       name,
+				Value:      value,
 				SingleDash: singleDash,
 			}, false
 
@@ -7701,6 +7741,8 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		for _, stmt := range n.Statements {
 			walk(stmt, node, ancestorChain, fn)
 		}
+	case *OptionExpression:
+		walk(n.Value, node, ancestorChain, fn)
 	case *PermissionDroppingStatement:
 		walk(n.Object, node, ancestorChain, fn)
 	case *ImportStatement:

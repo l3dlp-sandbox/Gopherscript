@@ -292,6 +292,50 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("option expression : ok", func(t *testing.T) {
+		n := MustParseModule(`--name="foo"`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
+			Statements: []Node{
+				&OptionExpression{
+					NodeBase: NodeBase{NodeSpan{0, 12}, nil, nil},
+					Name:     "name",
+					Value: &StringLiteral{
+						NodeBase: NodeBase{NodeSpan{7, 12}, nil, nil},
+						Raw:      `"foo"`,
+						Value:    "foo",
+					},
+					SingleDash: false,
+				},
+			},
+		}, n)
+	})
+
+	t.Run("option expression : unterminated", func(t *testing.T) {
+		n, err := ParseModule(`--name=`, "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
+			Statements: []Node{
+				&OptionExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 7},
+						&ParsingError{
+							Message:        "unterminated option expression, '=' should be followed by an expression",
+							Index:          7,
+							NodeStartIndex: 0,
+							NodeCategory:   KnownType,
+							NodeType:       (*OptionExpression)(nil),
+						},
+						nil,
+					},
+					Name:       "name",
+					SingleDash: false,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("absolute path literal : /", func(t *testing.T) {
 		n := MustParseModule("/")
 		assert.EqualValues(t, &Module{
