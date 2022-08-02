@@ -1212,6 +1212,38 @@ func (obj Object) GetOrDefault(key string, defaultVal interface{}) interface{} {
 	return v
 }
 
+type indexedEntryIterator struct {
+	i      int
+	len    int
+	object Object
+}
+
+func (it *indexedEntryIterator) HasNext(*Context) bool {
+	return it.i < it.len
+}
+
+func (it *indexedEntryIterator) GetNext(*Context) interface{} {
+	res := it.object[strconv.Itoa(it.i)]
+	it.i++
+	return res
+}
+
+func (obj Object) Indexed() Iterator {
+
+	length, hasLen := obj[IMPLICIT_KEY_LEN_KEY]
+	if !hasLen {
+		length = 0
+	}
+
+	//TODO: add more checks
+
+	return &indexedEntryIterator{
+		i:      0,
+		object: obj,
+		len:    length.(int),
+	}
+}
+
 func (list List) ContainsSimple(v interface{}) bool {
 	if !IsSimpleGopherVal(v) {
 		panic("only simple values are expected")
@@ -1223,6 +1255,11 @@ func (list List) ContainsSimple(v interface{}) bool {
 		}
 	}
 	return false
+}
+
+func IsIndexKey(key string) bool {
+	_, err := strconv.ParseUint(key, 10, 32)
+	return err == nil
 }
 
 func (pth Path) IsDirPath() bool {
@@ -9906,7 +9943,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		return pattern, nil
 	default:
-		return nil, fmt.Errorf("cannot evaluate %#v (%T)", node, node)
+		return nil, fmt.Errorf("cannot evaluate %#v (%T)\n%s", node, node, debug.Stack())
 	}
 
 }

@@ -1,0 +1,36 @@
+require {
+    use: {
+        globals: "*"
+        contextless: {
+            Application: { Run: {} }
+        }
+    }
+    read: {
+        globals: "*"
+        : /home/user/...
+    }
+}
+
+app = tui.app$ {
+    root: tui.flex$ {
+        : tui.text$ "hello"
+        : tui.tree$ {
+            setup: fn(){
+                entries = fs.ls$ ./
+                nodes = []
+                for _, e in $entries {
+                    node = $$tui.tree-node({text: $e.name, reference: $e})!
+                    nodes = append($nodes, $node)
+                }
+
+                return $nodes
+            }
+            on-selection: fn(state, item){
+                log 1
+            }
+        }
+    }
+}
+
+$app.Run()!
+

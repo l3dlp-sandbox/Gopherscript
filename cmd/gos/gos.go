@@ -1801,6 +1801,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"rand": _rand,
 	})
 
+	state.GlobalScope()["tui"] = newTuiNamespace(state)
 	return state
 }
 
