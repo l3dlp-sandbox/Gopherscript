@@ -37,6 +37,7 @@ import (
 
 	//EXTERNAL
 	"github.com/muesli/termenv"
+	"golang.org/x/net/html"
 	"golang.org/x/term"
 )
 
@@ -670,7 +671,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 						}
 					}
 				}
-
 				termenv.CursorNextLine(1)
 			}
 
@@ -1544,9 +1544,11 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		},
 
 		"mime": mime_,
-		"read": func(ctx *gopherscript.Context, args ...interface{}) (interface{}, error) {
+		"read": func(ctx *gopherscript.Context, args ...interface{}) (res interface{}, err error) {
 			var resource interface{}
 			var contentType mimetype
+			var doParse bool
+			var b []byte
 
 			for _, arg := range args {
 				switch v := arg.(type) {
@@ -1560,14 +1562,18 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						return nil, errors.New("content type provided at least twice")
 					}
 					contentType = v
+				case gopherscript.Option:
+					if v.Name == "parse" && v.Value == true {
+						doParse = true
+					}
 				default:
 					return nil, fmt.Errorf("invalid argument %#v", arg)
 				}
 			}
 
-			switch res := resource.(type) {
+			switch resrc := resource.(type) {
 			case gopherscript.URL:
-				resp, err := httpGet(ctx, res)
+				resp, err := httpGet(ctx, resrc)
 
 				if resp != nil {
 					defer resp.Body.Close()
@@ -1575,7 +1581,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				if err != nil {
 					return nil, fmt.Errorf("read: http: %s", err.Error())
 				} else {
-					b, err := io.ReadAll(resp.Body)
+					b, err = io.ReadAll(resp.Body)
 					if err != nil {
 						return nil, fmt.Errorf("read: http: body: %s", err.Error())
 					}
@@ -1586,30 +1592,52 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 						contentType = respContentType
 					}
 
-					switch contentType.WithoutParams() {
-					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
-						return string(b), nil
-					}
-
-					return b, nil
 				}
 			case gopherscript.Path:
-				if res.IsDirPath() {
-					return fsLs(ctx, res)
+				if resrc.IsDirPath() {
+					if res, err = fsLs(ctx, resrc); err != nil {
+						return nil, err
+					}
+
+					return res, err
 				} else {
-					b, err := __readEntireFile(ctx, res)
+					b, err = __readEntireFile(ctx, resrc)
 					if err != nil {
 						return nil, err
 					}
-					switch contentType {
-					case JSON_CTYPE, HTML_CTYPE, PLAIN_TEXT_CTYPE:
-						return string(b), nil
+
+					if doParse {
+						t, ok := FILE_EXTENSION_TO_MIMETYPE[filepath.Ext(string(resrc))]
+						if ok {
+							contentType = t
+						}
 					}
-					return b, nil
+
 				}
 			default:
-				return nil, fmt.Errorf("resources of type %T not supported yet", res)
+				return nil, fmt.Errorf("resources of type %T not supported yet", resrc)
 			}
+
+			switch contentType.WithoutParams() {
+			case JSON_CTYPE:
+				if doParse {
+					err = json.Unmarshal(b, &res)
+				} else {
+					res = string(b)
+				}
+			case HTML_CTYPE:
+				if doParse {
+					res, err = html.Parse(bytes.NewReader(b))
+				} else {
+					res = string(b)
+				}
+			case PLAIN_TEXT_CTYPE:
+				res = string(b)
+			default:
+				res = b
+			}
+
+			return res, err
 		},
 		"create": func(ctx *gopherscript.Context, args ...interface{}) (interface{}, error) {
 			var resource interface{}
@@ -1935,6 +1963,13 @@ func mime_(ctx *gopherscript.Context, arg string) (mimetype, error) {
 
 func (mt mimetype) WithoutParams() string {
 	return strings.Split(string(mt), ";")[0]
+}
+
+var FILE_EXTENSION_TO_MIMETYPE = map[string]mimetype{
+	".json": JSON_CTYPE,
+	".html": HTML_CTYPE,
+	".htm":  HTML_CTYPE,
+	".txt":  PLAIN_TEXT_CTYPE,
 }
 
 func fsMkdir(ctx *gopherscript.Context, arg interface{}) error {
