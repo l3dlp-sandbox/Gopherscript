@@ -27,6 +27,10 @@ fn make-entry-nodes(dir){
 
 app = tui.app$ {
     root: tui.flex$ {
+        direction: column
+
+        : tui.text$ "Filesystem browser"
+
         : tui.tree$ {
             setup: fn(){
                 return make-entry-nodes(./)

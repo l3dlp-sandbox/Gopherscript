@@ -96,6 +96,13 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 				}
 			}
 
+			switch config["direction"] {
+			case gopherscript.Identifier("column"):
+				flex.SetDirection(tview.FlexColumnCSS)
+			case gopherscript.Identifier("row"):
+				flex.SetDirection(tview.FlexRowCSS)
+			}
+
 			return flex
 		})),
 		"tree-node": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (treeNode, error) {
