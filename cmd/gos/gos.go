@@ -1842,8 +1842,21 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, er
 		return nil, errors.New(ERR)
 	}
 
-	fileInfo := make([]fs.FileInfo, 0)
 	resultFileInfo := make(gopherscript.List, 0)
+
+	makeEntry := func(info fs.FileInfo, pth string) gopherscript.Object {
+		if info.IsDir() && pth[len(pth)-1] != '/' {
+			pth += "/"
+		}
+		return gopherscript.Object{
+			"name":    info.Name(),
+			"absPath": gopherscript.Path(pth).ToAbs(),
+			"size":    info.Size(),
+			"mode":    info.Mode(),
+			"modTime": info.ModTime(),
+			"isDir":   info.IsDir(),
+		}
+	}
 
 	if pth != "" {
 
@@ -1868,7 +1881,9 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, er
 			if err != nil {
 				return nil, err
 			}
-			fileInfo = append(fileInfo, info)
+
+			resultFileInfo = append(resultFileInfo, makeEntry(info, fpath))
+
 		}
 	} else { //pattern
 		perm := gopherscript.FilesystemPermission{
@@ -1891,18 +1906,9 @@ func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, er
 			if err != nil {
 				return nil, err
 			}
-			fileInfo = append(fileInfo, info)
-		}
-	}
 
-	for _, info := range fileInfo {
-		resultFileInfo = append(resultFileInfo, gopherscript.Object{
-			"name":    info.Name(),
-			"size":    info.Size(),
-			"mode":    info.Mode(),
-			"modTime": info.ModTime(),
-			"isDir":   info.IsDir(),
-		})
+			resultFileInfo = append(resultFileInfo, makeEntry(info, match))
+		}
 	}
 
 	return resultFileInfo, nil
