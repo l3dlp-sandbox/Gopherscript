@@ -1,0 +1,11 @@
+require {
+    read: https://example.com/
+    use: {
+        globals: "*"
+    }
+}
+
+html = read$ --parse https://example.com/
+
+h1s = html.find$ "h1" $html
+log $h1s[0].FirstChild.Data

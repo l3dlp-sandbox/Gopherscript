@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	gopherscript "github.com/debloat-dev/Gopherscript"
 
 	//EXTERNAL
@@ -79,7 +80,7 @@ const OTHER_KEYWORD_COLOR = termenv.ANSIBlue
 
 var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
 	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
-	InsecureSkipVerify: true,
+	InsecureSkipVerify: true, //TODO: set to false
 }
 
 func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
@@ -1247,6 +1248,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				return io.ReadAll(reader)
 			}),
 		},
+		"html": makeHtmlNamespace(),
 		"http": gopherscript.Object{
 			"get": gopherscript.ValOf(httpGet),
 			"getbody": gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) ([]byte, error) {
@@ -2535,6 +2537,22 @@ func makeHttpServer(addr string, handler http.Handler, certFilePath string, keyF
 	}
 
 	return server, CERT_FILEPATH, CERT_KEY_FILEPATH, nil
+}
+
+func makeHtmlNamespace() interface{} {
+	return gopherscript.Object{
+		"find": gopherscript.ValOf(func(ctx *gopherscript.Context, selector string, node *html.Node) interface{} {
+			doc := goquery.NewDocumentFromNode(node)
+			nodes := doc.Find(selector).Nodes
+			list := make(gopherscript.List, 0)
+
+			for _, node := range nodes {
+				list = append(list, gopherscript.ValOf(node))
+			}
+
+			return list
+		}),
+	}
 }
 
 func toJSON(ctx *gopherscript.Context, v interface{}) string {
