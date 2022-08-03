@@ -10,6 +10,48 @@ import (
 	"github.com/rivo/tview"
 )
 
+type treeNode struct {
+	actualNode *tview.TreeNode
+}
+
+func (node treeNode) GetData(*gopherscript.Context) interface{} {
+	return node.actualNode.GetReference()
+}
+
+func (node treeNode) AddChild(ctx *gopherscript.Context, child treeNode) interface{} {
+	return node.actualNode.AddChild(child.actualNode)
+}
+
+func (node treeNode) AddChildren(ctx *gopherscript.Context, children gopherscript.List) {
+	for _, child := range children {
+		node.actualNode.AddChild(child.(treeNode).actualNode)
+	}
+}
+
+func (node treeNode) GetChildren(ctx *gopherscript.Context) gopherscript.List {
+	list := gopherscript.List{}
+
+	for _, c := range node.actualNode.GetChildren() {
+		list = append(list, treeNode{c})
+	}
+
+	return list
+}
+
+func (node treeNode) RemoveAllChildren(ctx *gopherscript.Context) {
+	for _, child := range node.GetChildren(ctx) {
+		node.actualNode.RemoveChild(child.(treeNode).actualNode)
+	}
+}
+
+func (node treeNode) Collapse(ctx *gopherscript.Context) {
+	node.actualNode.Collapse()
+}
+
+func (node treeNode) Expand(ctx *gopherscript.Context) {
+	node.actualNode.Expand()
+}
+
 func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 	return gopherscript.Object{
 		"app": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (*tview.Application, error) {
@@ -56,23 +98,23 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 
 			return flex
 		})),
-		"tree-node": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (*tview.TreeNode, error) {
+		"tree-node": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (treeNode, error) {
 			text, ok := config["text"]
 			if !ok {
 				text = "<node>"
 			}
 			actualText := fmt.Sprint(text)
 
-			ref, ok := config["ref"]
+			data, ok := config["data"]
 			if !ok {
-				ref = nil
+				data = nil
 			}
 
 			node := tview.NewTreeNode(actualText).
-				SetReference(ref).
+				SetReference(data).
 				SetSelectable(true)
 
-			return node, nil
+			return treeNode{node}, nil
 		}),
 		"tree": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (tview.Primitive, error) {
 			rootDir := "."
@@ -90,7 +132,12 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 					if err == nil {
 						for _, node := range nodes.(gopherscript.List) {
 							node = gopherscript.UnwrapReflectVal(node)
-							root.AddChild(node.(*tview.TreeNode))
+							treeNode_, ok := node.(treeNode)
+							if !ok {
+								//TODO: print error message instead
+								panic("the setup() function should return a list of tree nodes")
+							}
+							root.AddChild(treeNode_.actualNode)
 						}
 
 					} else {
@@ -100,12 +147,15 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 				}
 			}
 
-			onSelectionItem, ok := config["on-selection"]
+			onSelection, ok := config["on-selection"]
 			if ok {
-				switch fn := onSelectionItem.(type) {
+				switch fn := onSelection.(type) {
 				case gopherscript.Func:
 					tree.SetSelectedFunc(func(node *tview.TreeNode) {
-						gopherscript.CallFunc(fn, state, gopherscript.List{nil, nil}, false)
+						_, err := gopherscript.CallFunc(fn, state, gopherscript.List{nil, gopherscript.ValOf(treeNode{node})}, false)
+						if err != nil {
+							log.Println(err)
+						}
 					})
 				default:
 				}

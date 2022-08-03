@@ -11,22 +11,41 @@ require {
     }
 }
 
+
+fn make-entry-nodes(dir){
+    entries = fs.ls($dir)!
+    nodes = []
+    for _, e in $entries {
+        $e.collapsed = true
+
+        node = $$tui.tree-node({text: $e.name, data: $e})!
+        nodes = append($nodes, $node)
+    }
+
+    return $nodes
+}
+
 app = tui.app$ {
     root: tui.flex$ {
-        : tui.text$ "hello"
         : tui.tree$ {
             setup: fn(){
-                entries = fs.ls$ ./
-                nodes = []
-                for _, e in $entries {
-                    node = $$tui.tree-node({text: $e.name, reference: $e})!
-                    nodes = append($nodes, $node)
-                }
-
-                return $nodes
+                return make-entry-nodes(./)
             }
-            on-selection: fn(state, item){
-                log 1
+            on-selection: fn(state, node){
+                node-data = $node.GetData()
+
+                if $node-data.collapsed  {
+                     if $node-data.isDir {
+                        $node.RemoveAllChildren()
+                        children = make-entry-nodes($node-data.absPath)
+                        $node.AddChildren($children)
+                    }
+                    $node-data.collapsed = false
+                    $node.Expand()
+                } else {
+                    $node-data.collapsed = true
+                    $node.Collapse()
+                }
             }
         }
     }

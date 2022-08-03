@@ -7500,7 +7500,7 @@ func Memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
 		}
 
 	default:
-		return nil, nil, errors.New("cannot get property of non object/Go value")
+		return nil, nil, fmt.Errorf("cannot get property .%s of non object/Go value (type %T)", name, v)
 	}
 }
 
