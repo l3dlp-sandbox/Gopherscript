@@ -196,6 +196,7 @@ const (
 	Tab
 	Escape
 	EscapeNext
+	Delete
 )
 
 func (code SpecialCode) String() string {
@@ -241,6 +242,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 		if len(runeSlice) == 2 {
 			return EscapeNext
 		}
+
 		if len(runeSlice) == 3 {
 			switch runeSlice[2] {
 			case 65:
@@ -255,6 +257,15 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 				return End
 			case 72:
 				return Home
+			case 51:
+				return EscapeNext
+			}
+		}
+
+		if len(runeSlice) == 4 {
+			switch runeSlice[3] {
+			case 126:
+				return Delete
 			}
 		}
 	}
@@ -508,6 +519,23 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			printPromptAndInput()
 			continue
 		case Escape:
+			continue
+		case Delete:
+			if len(input) == 0 || backspaceCount == 0 {
+				continue
+			}
+
+			start := len(input) - backspaceCount
+			right := copyRuneSlice(input[start+1:])
+			input = append(input[0:start], right...)
+
+			termenv.SaveCursorPosition()
+
+			fmt.Print(string(right))
+			termenv.ClearLineRight()
+			termenv.RestoreCursorPosition()
+
+			backspaceCount -= 1
 			continue
 		case Backspace:
 
