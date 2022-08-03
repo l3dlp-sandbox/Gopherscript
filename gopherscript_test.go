@@ -463,7 +463,7 @@ func TestMustParseModule(t *testing.T) {
 						},
 						&Variable{
 							NodeBase: NodeBase{
-								NodeSpan{7, 17},
+								NodeSpan{7, 16},
 								nil,
 								nil,
 							},
@@ -493,7 +493,7 @@ func TestMustParseModule(t *testing.T) {
 		})
 	})
 
-	t.Run("absolute path expression : single trailing interpolation", func(t *testing.T) {
+	t.Run("absolute path expression : single trailing interpolation (variable)", func(t *testing.T) {
 		n := MustParseModule("/home/$username$")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
@@ -511,7 +511,7 @@ func TestMustParseModule(t *testing.T) {
 						},
 						&Variable{
 							NodeBase: NodeBase{
-								NodeSpan{6, 16},
+								NodeSpan{6, 15},
 								nil,
 								nil,
 							},
@@ -541,7 +541,7 @@ func TestMustParseModule(t *testing.T) {
 						},
 						&Variable{
 							NodeBase: NodeBase{
-								NodeSpan{6, 16},
+								NodeSpan{6, 15},
 								nil,
 								nil,
 							},
@@ -1111,7 +1111,7 @@ func TestMustParseModule(t *testing.T) {
 							},
 							&Variable{
 								NodeBase: NodeBase{
-									NodeSpan{20, 26},
+									NodeSpan{20, 25},
 									nil,
 									nil,
 								},
@@ -7622,5 +7622,28 @@ func TestUnionStringPatternRandom(t *testing.T) {
 		s := patt1.Random().(string)
 		assert.True(t, s == "a" || s == "b")
 	}
+
+}
+
+func TestShiftNodeSpans(t *testing.T) {
+
+	node := &Module{
+		NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+		Statements: []Node{
+			&IntLiteral{
+				NodeBase: NodeBase{NodeSpan{0, 1}, nil, nil},
+			},
+		},
+	}
+
+	shiftNodeSpans(node, +2)
+	assert.EqualValues(t, &Module{
+		NodeBase: NodeBase{NodeSpan{2, 4}, nil, nil},
+		Statements: []Node{
+			&IntLiteral{
+				NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
+			},
+		},
+	}, node)
 
 }

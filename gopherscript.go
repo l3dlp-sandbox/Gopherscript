@@ -88,6 +88,10 @@ func isIdentChar(r rune) bool {
 	return isAlpha(r) || isDigit(r) || r == '-' || r == '_'
 }
 
+func isInterpolationAllowedChar(r rune) bool {
+	return isIdentChar(r) || isDigit(r) || r == '[' || r == ']' || r == '.' || r == '$'
+}
+
 func isDelim(r rune) bool {
 	switch r {
 	case '{', '}', '[', ']', '(', ')', ',', ';', ':', '|':
@@ -138,6 +142,7 @@ func max(a, b int) int {
 //all node types embed NodeBase, NodeBase implements the Node interface
 type Node interface {
 	Base() NodeBase
+	BasePtr() *NodeBase
 }
 
 type Statement interface {
@@ -192,6 +197,10 @@ type NodeBase struct {
 }
 
 func (base NodeBase) Base() NodeBase {
+	return base
+}
+
+func (base *NodeBase) BasePtr() *NodeBase {
 	return base
 }
 
@@ -2140,19 +2149,32 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			if inInterpolation {
 				if s[index] == '$' { //end if interpolation
-					name := string(s[sliceStart+1 : index])
+					interpolation := string(s[sliceStart:index])
 
-					slices = append(slices, &Variable{
-						NodeBase: NodeBase{
-							NodeSpan{sliceStart, index + 1},
-							nil,
-							nil,
-						},
-						Name: name,
-					})
+					res, err := ParseModule(interpolation, "")
+
+					if err != nil {
+						slices = append(slices, &UnknownNode{
+							NodeBase: NodeBase{
+								NodeSpan{sliceStart, exclEnd},
+								&ParsingError{
+									"invalid path interpolation",
+									i,
+									-1,
+									UnspecifiedCategory,
+									nil,
+								},
+								nil,
+							},
+						})
+					} else {
+						shiftNodeSpans(res, sliceStart)
+						slices = append(slices, res.Statements[0])
+					}
+
 					inInterpolation = false
 					sliceStart = index + 1
-				} else if !isIdentChar(s[index]) {
+				} else if !isInterpolationAllowedChar(s[index]) {
 					slices = append(slices, &PathSlice{
 						NodeBase: NodeBase{
 							NodeSpan{sliceStart, exclEnd},
@@ -7994,6 +8016,16 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		}
 	}
 
+}
+
+func shiftNodeSpans(node Node, offset int) {
+	ancestorChain := make([]Node, 0)
+
+	walk(node, nil, &ancestorChain, func(node, parent, scopeNode Node, ancestorChain []Node) (error, TraversalAction) {
+		node.BasePtr().Span.Start += offset
+		node.BasePtr().Span.End += offset
+		return nil, Continue
+	})
 }
 
 type globalVarInfo struct {
