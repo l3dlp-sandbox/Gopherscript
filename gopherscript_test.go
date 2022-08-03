@@ -6597,13 +6597,10 @@ func TestEval(t *testing.T) {
 		state := NewState(NewDefaultTestContext())
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
-		assert.EqualValues(t, &LazyExpression{
-			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
-			Expression: &IntLiteral{
-				NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
-				Raw:      "1",
-				Value:    1,
-			},
+		assert.EqualValues(t, &IntLiteral{
+			NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
+			Raw:      "1",
+			Value:    1,
 		}, res)
 	})
 

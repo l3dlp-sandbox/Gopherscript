@@ -9814,7 +9814,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 	case *FunctionExpression:
 		return Func(n), nil
 	case *LazyExpression:
-		return n, nil
+		return n.Expression, nil
 	case *FunctionDeclaration:
 		funcName := n.Name.Name
 		state.GlobalScope()[funcName] = Func(n)

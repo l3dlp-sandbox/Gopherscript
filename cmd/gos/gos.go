@@ -108,11 +108,11 @@ func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_le
 		switch p := part.(type) {
 		case string:
 			s = p
-		case *gopherscript.LazyExpression:
-			if !gopherscript.IsSimpleValueLiteral(p.Expression) && !gopherscript.Is(p.Expression, (*gopherscript.URLExpression)(nil)) {
+		case gopherscript.Node:
+			if !gopherscript.IsSimpleValueLiteral(p) && !gopherscript.Is(p, (*gopherscript.URLExpression)(nil)) {
 				panic(fmt.Errorf("writePrompt: only url expressions and simple-value literals can be evaluated"))
 			}
-			v, _ := gopherscript.Eval(p.Expression, state)
+			v, _ := gopherscript.Eval(p, state)
 			s = fmt.Sprintf("%s", v)
 		default:
 		}
@@ -999,7 +999,7 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 				// 	default:
 				// 		return config, fmt.Errorf("invalid configuration: invalid part in prompt configuration: %s is not valid identifier", p)
 				// 	}
-				case *gopherscript.LazyExpression:
+				case gopherscript.Node:
 				default:
 					return config, fmt.Errorf("invalid configuration: invalid part in prompt configuration: type %T", p)
 				}
