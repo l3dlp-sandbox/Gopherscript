@@ -1253,6 +1253,14 @@ func (obj Object) Indexed() Iterator {
 	}
 }
 
+func (obj Object) IndexedItemCount() int {
+	n, ok := obj[IMPLICIT_KEY_LEN_KEY].(int)
+	if !ok {
+		n =  0
+	}
+	return n
+}
+
 func (list List) ContainsSimple(v interface{}) bool {
 	if !IsSimpleGopherVal(v) {
 		panic("only simple values are expected")

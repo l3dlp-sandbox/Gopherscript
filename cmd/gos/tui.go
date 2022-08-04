@@ -81,17 +81,35 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 			textView.SetText(text)
 			return textView
 		}),
-		"flex": gopherscript.ValOf((func(ctx *gopherscript.Context, config gopherscript.Object) *tview.Flex {
+		"flex": gopherscript.ValOf((func(ctx *gopherscript.Context, config gopherscript.Object) (*tview.Flex, error) {
 			flex := tview.NewFlex()
 
+			var itemRelSizes []int
+
+			switch sizes := config["sizes"].(type) {
+			case gopherscript.List:
+				for _, e := range sizes {
+					integer, ok := e.(int)
+					if !ok {
+						return nil, errors.New("invalid configuration for flex element: .sizes should be a list of integers")
+					}
+					itemRelSizes = append(itemRelSizes, integer)
+				}
+			}
+
+			if len(itemRelSizes) != config.IndexedItemCount() {
+				return nil, errors.New("invalid configuration for flex element: the length of .sizes should be equal to the number of child elements")
+			}
+
 			it := config.Indexed()
-			for it.HasNext(nil) {
+
+			for i := 0; it.HasNext(nil); i++ {
 				value := it.GetNext(nil)
 				value = gopherscript.UnwrapReflectVal(value)
 
 				switch val := value.(type) {
 				case tview.Primitive:
-					flex.AddItem(val, 0, 1, true)
+					flex.AddItem(val, 0, itemRelSizes[i], true)
 				default:
 				}
 			}
@@ -103,7 +121,7 @@ func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
 				flex.SetDirection(tview.FlexRowCSS)
 			}
 
-			return flex
+			return flex, nil
 		})),
 		"tree-node": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (treeNode, error) {
 			text, ok := config["text"]

@@ -28,6 +28,7 @@ fn make-entry-nodes(dir){
 app = tui.app$ {
     root: tui.flex$ {
         direction: column
+        sizes: [1, 7]
 
         : tui.text$ "Filesystem browser"
 
