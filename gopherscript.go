@@ -1256,7 +1256,7 @@ func (obj Object) Indexed() Iterator {
 func (obj Object) IndexedItemCount() int {
 	n, ok := obj[IMPLICIT_KEY_LEN_KEY].(int)
 	if !ok {
-		n =  0
+		n = 0
 	}
 	return n
 }
@@ -7535,6 +7535,7 @@ func Memb(value interface{}, name string) (interface{}, *reflect.Type, error) {
 }
 
 func AtIndex(value interface{}, index int) (interface{}, error) {
+	value = UnwrapReflectVal(value)
 	switch v := value.(type) {
 	case List:
 		return v[index], nil
@@ -7546,6 +7547,8 @@ func AtIndex(value interface{}, index int) (interface{}, error) {
 		return v[index], nil
 	case []rune:
 		return v[index], nil
+	case Object:
+		return v[strconv.Itoa(index)], nil
 	default:
 		return nil, fmt.Errorf("AtIndex: first argument has invalid type: %T", value)
 	}
@@ -9862,7 +9865,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		return list.(List)[index.(int)], nil
+		return AtIndex(list, index.(int))
 	case *SliceExpression:
 		slice, err := Eval(n.Indexed, state)
 		if err != nil {
