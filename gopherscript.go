@@ -2084,6 +2084,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	var parseGlobalConstantDeclarations func() *GlobalConstantDeclarations
 	var parseRequirements func() *Requirements
 	var parseFunction func(int) Node
+	var parseSpawnExpression func(srIdent Node) (Node, bool)
 
 	parseBlock = func() *Block {
 		openingBraceIndex := i
@@ -3692,8 +3693,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		case '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 			'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
 			identLike := parseIdentLike()
-			spawnExprStart := identLike.Base().Span.Start
-			tokens := make([]ValuelessToken, 0)
+			identStart := identLike.Base().Span.Start
 			var name string
 
 			switch v := identLike.(type) {
@@ -3705,170 +3705,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return v, false
 			}
 
-			if name == "sr" {
-				tokens = append(tokens, ValuelessToken{SPAWN_KEYWORD, identLike.Base().Span})
-				eatSpace()
-				if i >= len(s) {
-					panic(ParsingError{
-						"invalid spawn expression: sr should be followed by two expressions",
-						i,
-						spawnExprStart,
-						KnownType,
-						(*SpawnExpression)(nil),
-					})
-				}
-
-				var routineGroupIdent *IdentifierLiteral
-				var globals Node
-				e, missingExpr := parseExpression()
-
-				switch ev := e.(type) {
-				case *IdentifierLiteral: //if there is a group name the globals' object is the next expression
-					routineGroupIdent = ev
-					eatSpace()
-
-					globals, missingExpr = parseExpression()
-					eatSpace()
-				case *MissingExpression:
-				default:
-					globals = e
-				}
-
-				eatSpace()
-
-				if i >= len(s) || missingExpr {
-					return &SpawnExpression{
-						NodeBase: NodeBase{
-							NodeSpan{identLike.Base().Span.Start, i},
-							&ParsingError{
-								"invalid spawn expression: sr should be followed by two expressions",
-								i,
-								spawnExprStart,
-								KnownType,
-								(*SpawnExpression)(nil),
-							},
-							tokens,
-						},
-						GroupIdent: routineGroupIdent,
-						Globals:    globals,
-					}, false
-				}
-
-				var expr Node
-				var parsingErr *ParsingError
-
-				if s[i] == '{' { //embedded module: sr ... { <embedded module> }
-					start := i
-					i++
-					emod := &EmbeddedModule{}
-
-					var stmts []Node
-
-					eatSpace()
-					requirements := parseRequirements()
-
-					eatSpaceNewLineSemiColonComment()
-
-					for i < len(s) && s[i] != '}' {
-						stmt := parseStatement()
-						if _, isMissingExpr := stmt.(*MissingExpression); isMissingExpr {
-							if isMissingExpr {
-								i++
-
-								if i >= len(s) {
-									stmts = append(stmts, stmt)
-									break
-								}
-							}
-						}
-						stmts = append(stmts, stmt)
-						eatSpaceNewLineSemiColonComment()
-					}
-
-					var embeddedModuleErr *ParsingError
-
-					if i >= len(s) || s[i] != '}' {
-						embeddedModuleErr = &ParsingError{
-							"unterminated embedded module",
-							i,
-							start,
-							KnownType,
-							(*EmbeddedModule)(nil),
-						}
-					} else {
-						i++
-					}
-
-					emod.Requirements = requirements
-					emod.Statements = stmts
-					emod.NodeBase = NodeBase{
-						NodeSpan{start, i},
-						embeddedModuleErr,
-						nil,
-					}
-					expr = emod
-				} else {
-					expr, missingExpr = parseExpression()
-					if missingExpr {
-						parsingErr = &ParsingError{
-							"invalid spawn expression: ",
-							i,
-							spawnExprStart,
-							KnownType,
-							(*EmbeddedModule)(nil),
-						}
-					}
-				}
-
-				eatSpace()
-				var grantedPermsLit *ObjectLiteral
-
-				if i < len(s) && s[i] == 'a' {
-					allowIdent, _ := parseExpression()
-					if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
-
-						parsingErr = &ParsingError{
-							"spawn expression: argument should be followed by a the 'allow' keyword",
-							i,
-							spawnExprStart,
-							KnownType,
-							(*SpawnExpression)(nil),
-						}
-					} else { //if ok
-						tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
-
-						eatSpace()
-
-						grantedPerms, _ := parseExpression()
-						var ok bool
-						grantedPermsLit, ok = grantedPerms.(*ObjectLiteral)
-						if !ok {
-							parsingErr = &ParsingError{
-								"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
-								i,
-								spawnExprStart,
-								KnownType,
-								(*SpawnExpression)(nil),
-							}
-						}
-					}
-
-				}
-
-				return &SpawnExpression{
-					NodeBase: NodeBase{
-						NodeSpan{identLike.Base().Span.Start, i},
-						parsingErr,
-						tokens,
-					},
-					GroupIdent:         routineGroupIdent,
-					Globals:            globals,
-					ExprOrVar:          expr,
-					GrantedPermissions: grantedPermsLit,
-				}, false
-			}
-
-			if name == "fn" {
+			switch name {
+			case "sr":
+				return parseSpawnExpression(identLike)
+			case "fn":
 				return parseFunction(identLike.Base().Span.Start), false
 			}
 
@@ -3913,7 +3753,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						call.Err = &ParsingError{
 							"untermianted call: 'allow' keyword should be followed by an object literal (permissions)",
 							i,
-							spawnExprStart,
+							identStart,
 							KnownType,
 							(*SpawnExpression)(nil),
 						}
@@ -5768,6 +5608,172 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			call.Arguments = append(call.Arguments, arg)
 			eatSpaceAndComments()
 		}
+	}
+
+	parseSpawnExpression = func(srIdent Node) (Node, bool) {
+		spawnExprStart := srIdent.Base().Span.Start
+		tokens := make([]ValuelessToken, 0)
+		tokens = append(tokens, ValuelessToken{SPAWN_KEYWORD, srIdent.Base().Span})
+
+		eatSpace()
+		if i >= len(s) {
+			panic(ParsingError{
+				"invalid spawn expression: sr should be followed by two expressions",
+				i,
+				spawnExprStart,
+				KnownType,
+				(*SpawnExpression)(nil),
+			})
+		}
+
+		var routineGroupIdent *IdentifierLiteral
+		var globals Node
+		e, missingExpr := parseExpression()
+
+		switch ev := e.(type) {
+		case *IdentifierLiteral: //if there is a group name the globals' object is the next expression
+			routineGroupIdent = ev
+			eatSpace()
+
+			globals, missingExpr = parseExpression()
+			eatSpace()
+		case *MissingExpression:
+		default:
+			globals = e
+		}
+
+		eatSpace()
+
+		if i >= len(s) || missingExpr {
+			return &SpawnExpression{
+				NodeBase: NodeBase{
+					NodeSpan{spawnExprStart, i},
+					&ParsingError{
+						"invalid spawn expression: sr should be followed by two expressions",
+						i,
+						spawnExprStart,
+						KnownType,
+						(*SpawnExpression)(nil),
+					},
+					tokens,
+				},
+				GroupIdent: routineGroupIdent,
+				Globals:    globals,
+			}, false
+		}
+
+		var expr Node
+		var parsingErr *ParsingError
+
+		if s[i] == '{' { //embedded module: sr ... { <embedded module> }
+			start := i
+			i++
+			emod := &EmbeddedModule{}
+
+			var stmts []Node
+
+			eatSpace()
+			requirements := parseRequirements()
+
+			eatSpaceNewLineSemiColonComment()
+
+			for i < len(s) && s[i] != '}' {
+				stmt := parseStatement()
+				if _, isMissingExpr := stmt.(*MissingExpression); isMissingExpr {
+					if isMissingExpr {
+						i++
+
+						if i >= len(s) {
+							stmts = append(stmts, stmt)
+							break
+						}
+					}
+				}
+				stmts = append(stmts, stmt)
+				eatSpaceNewLineSemiColonComment()
+			}
+
+			var embeddedModuleErr *ParsingError
+
+			if i >= len(s) || s[i] != '}' {
+				embeddedModuleErr = &ParsingError{
+					"unterminated embedded module",
+					i,
+					start,
+					KnownType,
+					(*EmbeddedModule)(nil),
+				}
+			} else {
+				i++
+			}
+
+			emod.Requirements = requirements
+			emod.Statements = stmts
+			emod.NodeBase = NodeBase{
+				NodeSpan{start, i},
+				embeddedModuleErr,
+				nil,
+			}
+			expr = emod
+		} else {
+			expr, missingExpr = parseExpression()
+			if missingExpr {
+				parsingErr = &ParsingError{
+					"invalid spawn expression: ",
+					i,
+					spawnExprStart,
+					KnownType,
+					(*EmbeddedModule)(nil),
+				}
+			}
+		}
+
+		eatSpace()
+		var grantedPermsLit *ObjectLiteral
+
+		if i < len(s) && s[i] == 'a' {
+			allowIdent, _ := parseExpression()
+			if ident, ok := allowIdent.(*IdentifierLiteral); !ok || ident.Name != "allow" {
+
+				parsingErr = &ParsingError{
+					"spawn expression: argument should be followed by a the 'allow' keyword",
+					i,
+					spawnExprStart,
+					KnownType,
+					(*SpawnExpression)(nil),
+				}
+			} else { //if ok
+				tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
+
+				eatSpace()
+
+				grantedPerms, _ := parseExpression()
+				var ok bool
+				grantedPermsLit, ok = grantedPerms.(*ObjectLiteral)
+				if !ok {
+					parsingErr = &ParsingError{
+						"spawn expression: 'allow' keyword should be followed by an object literal (permissions)",
+						i,
+						spawnExprStart,
+						KnownType,
+						(*SpawnExpression)(nil),
+					}
+				}
+			}
+
+		}
+
+		return &SpawnExpression{
+			NodeBase: NodeBase{
+				NodeSpan{spawnExprStart, i},
+				parsingErr,
+				tokens,
+			},
+			GroupIdent:         routineGroupIdent,
+			Globals:            globals,
+			ExprOrVar:          expr,
+			GrantedPermissions: grantedPermsLit,
+		}, false
 	}
 
 	parseFunction = func(start int) Node {
