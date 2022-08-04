@@ -263,6 +263,7 @@ type Module struct {
 	GlobalConstantDeclarations *GlobalConstantDeclarations //nil if no const declarations at the top of the module
 	Requirements               *Requirements               //nil if no require at the top of the module
 	Statements                 []Node
+	IsShellChunk               bool
 }
 
 type EmbeddedModule struct {
@@ -9140,12 +9141,17 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		return nil, nil
 	case *Module:
 		state.ScopeStack = state.ScopeStack[:1] //we only keep the global scope
-		state.PushScope()
+
+		if !n.IsShellChunk {
+			state.PushScope()
+		}
 		state.ReturnValue = nil
 		defer func() {
 			state.ReturnValue = nil
 			state.IterationChange = NoIterationChange
-			state.PopScope()
+			if !n.IsShellChunk {
+				state.PushScope()
+			}
 		}()
 
 		//CONSTANTS

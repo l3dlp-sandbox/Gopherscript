@@ -452,6 +452,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		}
 	}
 
+	//we add a local scope in order to persist local variables across executions
+	state.PushScope()
+	defer state.PopScope()
+
 	for {
 		r, _, err := reader.ReadRune()
 
@@ -685,11 +689,20 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			default:
 				reset()
 
-				mod, err := gopherscript.ParseAndCheckModule(inputString, "")
+				mod, err := gopherscript.ParseModule(inputString, "")
+				if err == nil {
+					checkErr := gopherscript.Check(mod)
+					//some errors are ignored because they make no sense in the context of the shell
+					if checkErr != nil && !strings.Contains(checkErr.Error(), "not defined") {
+						err = checkErr
+					}
+				}
+
 				if err != nil {
 					errString := replaceNewLinesRawMode(err.Error())
 					fmt.Print(errString, "\n\r")
 				} else {
+					mod.IsShellChunk = true
 					res, evalErr := gopherscript.Eval(mod, state)
 					if evalErr != nil {
 						errString := replaceNewLinesRawMode(evalErr.Error())
