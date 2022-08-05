@@ -48,7 +48,7 @@ var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
 var LOOSE_URL_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_URL_EXPR_PATTERN)
 var isSpace = regexp.MustCompile(`^\s+`).MatchString
-var KEYWORDS = []string{"if", "else", "require", "drop-perms", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue"}
+var KEYWORDS = []string{"if", "else", "require", "drop-perms", "for", "assign", "const", "fn", "switch", "match", "import", "sr", "return", "break", "continue", "allow"}
 var REQUIRE_KEYWORD_STR = "require"
 var CONST_KEYWORD_STR = "const"
 var PERMISSION_KIND_STRINGS = []string{"read", "update", "create", "delete", "use", "consume", "provide"}
@@ -57,7 +57,7 @@ var CTX_PTR_TYPE = reflect.TypeOf(&Context{})
 var ERROR_INTERFACE_TYPE = reflect.TypeOf((*error)(nil)).Elem()
 var ITERABLE_INTERFACE_TYPE = reflect.TypeOf((*Iterable)(nil)).Elem()
 var UINT8_SLICE_TYPE = reflect.TypeOf(([]uint8)(nil)).Elem()
-var MODULE_CACHE = map[string]string{
+var moduleCache = map[string]string{
 	RETURN_1_MODULE_HASH:        "return 1",
 	RETURN_GLOBAL_A_MODULE_HASH: "return $$a",
 }
@@ -185,6 +185,7 @@ const (
 	SEMICOLON
 )
 
+//represents a token with no data such as ',', '['
 type ValuelessToken struct {
 	Type ValuelessTokenType
 	Span NodeSpan
@@ -268,7 +269,7 @@ type Module struct {
 
 type EmbeddedModule struct {
 	NodeBase
-	Requirements *Requirements
+	Requirements *Requirements //can be nil
 	Statements   []Node
 }
 
@@ -488,6 +489,7 @@ type PropertySpreadElement struct {
 	Extraction *ExtractionExpression
 }
 
+//compute the list of CommandPermission.s from a given part of the requirements
 func getCommandPermissions(n Node) ([]Permission, error) {
 
 	var perms []Permission
@@ -573,7 +575,7 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 	return perms, nil
 }
 
-//this function get permissions limitations & by evaluating a "requirement" object literal
+//this function gets permissions limitations & by evaluating a "requirement" object literal
 //custom permissions & most limitations are handled by the handleCustomType argument (optional)
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
@@ -948,7 +950,7 @@ type Block struct {
 
 type ReturnStatement struct {
 	NodeBase
-	Expr Node
+	Expr Node //can be nil
 }
 
 type BreakStatement struct {
@@ -1830,7 +1832,7 @@ func downloadAndParseModule(importURL URL, validation string) (*Module, error) {
 	var modString string
 	var ok bool
 
-	if modString, ok = MODULE_CACHE[validation]; !ok {
+	if modString, ok = moduleCache[validation]; !ok {
 		req, err := http.NewRequest("GET", string(importURL), nil)
 		req.Header.Add("Accept", GOPHERSCRIPT_MIMETYPE)
 
@@ -1873,7 +1875,7 @@ func downloadAndParseModule(importURL URL, validation string) (*Module, error) {
 			}
 		}
 		modString = string(b)
-		MODULE_CACHE[validation] = modString
+		moduleCache[validation] = modString
 
 		//TODO: limit cache size
 	}
@@ -3897,6 +3899,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}, false
 				}
 
+				//else float
 				for i < len(s) && (isDigit(s[i]) || s[i] == '-') {
 					i++
 				}
@@ -3907,7 +3910,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var literal Node
 			var fValue float64
 
-			if strings.ContainsRune(raw, '.') {
+			if strings.ContainsRune(raw, '.') { //float
 
 				float, err := strconv.ParseFloat(raw, 64)
 				if err != nil {
@@ -3937,7 +3940,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				fValue = float64(integer)
 			}
 
-			if i < len(s) && (isAlpha(s[i]) || s[i] == '%') {
+			if i < len(s) && (isAlpha(s[i]) || s[i] == '%') { //quantity literal or rate literal
 				unitStart := i
 
 				i++
@@ -4014,12 +4017,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var parsingErr *ParsingError
 
 		object_literal_top_loop:
-			for i < len(s) && s[i] != '}' {
+			for i < len(s) && s[i] != '}' { //one iteration == one entry (that can be invalid)
 				var elementParsingErr *ParsingError
 				eatSpaceAndNewLineAndCommaAndComment()
 
 				if i < len(s) && s[i] == '}' {
-					break
+					break object_literal_top_loop
 				}
 
 				var keys []Node //example of multiple keys: {a,b: 1}
@@ -4447,8 +4450,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				Lower: lower,
 				Upper: upper,
 			}, false
-		case '"': //string
-			//strings are JSON strings
+		case '"': //string (JSON string)
 			start := i
 			var parsingErr *ParsingError
 			var value string
@@ -4534,7 +4536,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 				},
 			}, false
-		case '-': //options / flags
+		case '-': //options | flags
 			i++
 			if i >= len(s) {
 				return &FlagLiteral{
@@ -4638,7 +4640,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				SingleDash: singleDash,
 			}, false
 
-		case '#':
+		case '#': //might be used in the future
 			i++
 			return &UnknownNode{
 				NodeBase: NodeBase{
@@ -4680,7 +4682,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					},
 					Expression: e,
 				}, false
-			} else if s[i] == '/' || (s[i] >= 'a' && s[i] <= 'z') {
+			} else if s[i] >= 'a' && s[i] <= 'z' { //host alias definition | url expression starting with an alias
 				j := i
 				i--
 
@@ -4775,7 +4777,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			} else {
 				return parseComplexPatternStuff(false), false
 			}
-		case '(': //parenthesized expression and binary expressions
+		case '(': //parenthesized expression or binary expression
 			openingParenIndex := i
 			i++
 			left, _ := parseExpression()
@@ -5427,6 +5429,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}, true
 	}
 
+	//can return nil
 	parseRequirements = func() *Requirements {
 		var requirements *Requirements
 		if i < len(s) && strings.HasPrefix(string(s[i:]), REQUIRE_KEYWORD_STR) {
@@ -5542,26 +5545,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 				eatSpace()
 
-				var rhs Node
-
-				if i >= len(s) || s[i] == ')' {
+				rhs, isMissingExpr := parseExpression()
+				if !isMissingExpr && !IsSimpleValueLiteral(rhs) {
 					declParsingErr = &ParsingError{
-						fmt.Sprintf("invalid global const declarations, missing value after '%s ='", globvar.Name),
+						fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
 						i,
 						start,
 						KnownType,
 						(*GlobalConstantDeclarations)(nil),
-					}
-				} else {
-					rhs, _ = parseExpression()
-					if !IsSimpleValueLiteral(rhs) {
-						declParsingErr = &ParsingError{
-							fmt.Sprintf("invalid global const declarations, only literals are allowed as values : %T", rhs),
-							i,
-							start,
-							KnownType,
-							(*GlobalConstantDeclarations)(nil),
-						}
 					}
 				}
 
@@ -7875,7 +7866,9 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		for _, decl := range n.Declarations {
 			walk(decl, node, ancestorChain, fn)
 		}
-
+	case *GlobalConstantDeclaration:
+		walk(n.Left, node, ancestorChain, fn)
+		walk(n.Right, node, ancestorChain, fn)
 	case *ObjectLiteral:
 		for _, prop := range n.Properties {
 			walk(&prop, node, ancestorChain, fn)
