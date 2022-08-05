@@ -46,6 +46,5 @@ require {
 
 return {
     builtin-commands: [cd]
-    aliased-commands: [echo, go]
-    prompt: ["> "]
+    aliased-commands: [echo, go] # TODO: specify timeout durations ?
 }

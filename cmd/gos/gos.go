@@ -55,6 +55,7 @@ const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
 const DEFAULT_DIR_FMODE = fs.FileMode(0o500)
 const DEFAULT_HTTP_CLIENT_TIMEOUT = 10 * time.Second
 const KV_STORE_PERSISTENCE_INTERVAL = 100 * time.Millisecond
+const EX_DEFAULT_TIMEOUT_DURATION = 500 * time.Millisecond
 
 const PATH_ARG_PROVIDED_TWICE = "path argument provided at least twice"
 const CONTENT_ARG_PROVIDED_TWICE = "content argument provided at least twice"
@@ -1209,7 +1210,9 @@ func main() {
 					}
 					globalScope[cmd] = func(cmd string) interface{} {
 						return gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (string, error) {
-							return ex(ctx, gopherscript.Identifier(cmd), args...)
+							exArgs := []interface{}{gopherscript.Identifier(cmd)}
+							exArgs = append(exArgs, args...)
+							return ex(ctx, exArgs...)
 						})
 					}(cmd)
 				}
@@ -1230,10 +1233,47 @@ func main() {
 type CommandResult struct {
 }
 
-func ex(ctx *gopherscript.Context, cmdName gopherscript.Identifier, args ...interface{}) (string, error) {
+func ex(ctx *gopherscript.Context, args ...interface{}) (string, error) {
 
 	var subcommandNameChain []string
 	var cmdArgs []string
+	var cmdName gopherscript.Identifier
+	var timeoutDuration time.Duration
+	var maxMemory gopherscript.ByteCount //future use
+
+	//options come first
+top:
+	for len(args) != 0 {
+		switch a := args[0].(type) {
+		case gopherscript.Identifier:
+			cmdName = a
+			args = args[1:]
+			break top
+		case gopherscript.QuantityRange:
+
+			switch end := a.End.(type) {
+			case time.Duration:
+				if timeoutDuration != 0 {
+					return "", fmt.Errorf("ex: error: maximum duration provided at least twice")
+				}
+				timeoutDuration = end
+			case gopherscript.ByteCount:
+				if maxMemory != 0 {
+					return "", fmt.Errorf("ex: error: maximum memory provided at least twice")
+				}
+				maxMemory = end
+			default:
+				return "", fmt.Errorf("ex: error: invalid argument of type %T", end)
+			}
+			args = args[1:]
+		default:
+			return "", fmt.Errorf("ex: error: arguments preceding the name of the command should be: at most one duration range")
+		}
+	}
+
+	if timeoutDuration == 0 {
+		timeoutDuration = EX_DEFAULT_TIMEOUT_DURATION
+	}
 
 	//we remove the subcommand chain from <argss>
 	for len(args) != 0 {
@@ -1268,8 +1308,27 @@ func ex(ctx *gopherscript.Context, cmdName gopherscript.Identifier, args ...inte
 	passedArgs = append(passedArgs, subcommandNameChain...)
 	passedArgs = append(passedArgs, cmdArgs...)
 
-	b, err := exec.Command(string(cmdName), passedArgs...).Output()
-	return string(b), err
+	cmd := exec.Command(string(cmdName), passedArgs...)
+	var b []byte
+	var err error
+	doneChan := make(chan bool)
+	limitChan := make(chan error)
+
+	go func() {
+		b, err = cmd.Output()
+		doneChan <- true
+		close(doneChan)
+	}()
+
+	select {
+	case <-doneChan:
+		return string(b), err
+	case <-time.After(timeoutDuration):
+		err = errors.New("ex: timeout")
+		return "", err
+	case err = <-limitChan:
+		return "", err
+	}
 }
 
 func NewState(ctx *gopherscript.Context) *gopherscript.State {
