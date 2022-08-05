@@ -5603,7 +5603,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				break
 			}
 
-			arg, _ := parseExpression()
+			arg, isMissingExpr := parseExpression()
+			if isMissingExpr {
+				i++
+
+				if i >= len(s) {
+					call.Arguments = append(call.Arguments, arg)
+					break
+				}
+			}
 
 			call.Arguments = append(call.Arguments, arg)
 			eatSpaceAndComments()
