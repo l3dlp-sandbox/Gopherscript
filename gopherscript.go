@@ -8448,6 +8448,9 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		for _, el := range n.Elements {
 			walk(el, node, ancestorChain, fn)
 		}
+	case *CssAttributeSelector:
+		walk(n.AttributeName, node, ancestorChain, fn)
+		walk(n.Value, node, ancestorChain, fn)
 	}
 
 }

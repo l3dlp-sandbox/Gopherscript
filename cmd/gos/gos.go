@@ -423,6 +423,16 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  gopherscript.NodeSpan{Start: n.Span.Start, End: n.Value.Base().Span.Start - 1},
 					color: termenv.ANSI256Color(209),
 				})
+			case *gopherscript.CssTypeSelector:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIBlue,
+				})
+			case *gopherscript.CssIdSelector, *gopherscript.CssClassSelector, *gopherscript.CssPseudoClassSelector, *gopherscript.CssPseudoElementSelector:
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  n.Base().Span,
+					color: termenv.ANSIYellow,
+				})
 			}
 
 			return nil, gopherscript.Continue
