@@ -5276,6 +5276,387 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("pattern definition : missing RHS (no semicolon)", func(t *testing.T) {
+		n, err := ParseModule("%i =", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
+			Statements: []Node{
+				&PatternDefinition{
+					NodeBase: NodeBase{
+						NodeSpan{0, 4},
+						nil,
+						nil,
+					},
+					Left: &PatternIdentifierLiteral{
+						NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
+						Name:     "i",
+					},
+					Right: &InvalidComplexPatternElement{
+						NodeBase: NodeBase{
+							NodeSpan{4, 4},
+							&ParsingError{
+								"a pattern was expected: ...%i =<<here>>",
+								4,
+								4,
+								UnspecifiedCategory,
+								nil,
+							},
+							nil,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : type selector", func(t *testing.T) {
+		n := MustParseModule("s!div")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "div",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : selector followed by newline", func(t *testing.T) {
+
+		n := MustParseModule("s!div\n")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "div",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : selector followed by exclamation mark", func(t *testing.T) {
+
+		n := MustParseModule("s!div!")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "div",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : selector followed by exclamation mark and an expression", func(t *testing.T) {
+
+		n := MustParseModule("s!div! 1")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 8}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "div",
+						},
+					},
+				},
+				&IntLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{7, 8},
+						nil,
+						nil,
+					},
+					Raw:   "1",
+					Value: 1,
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : class selector", func(t *testing.T) {
+		n := MustParseModule("s!.ab")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssClassSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "ab",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : pseudo class selector", func(t *testing.T) {
+		n := MustParseModule("s!:ab")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssPseudoClassSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 5},
+								nil,
+								nil,
+							},
+							Name: "ab",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : pseudo element selector", func(t *testing.T) {
+		n := MustParseModule("s!::ab")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssPseudoElementSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 6},
+								nil,
+								nil,
+							},
+							Name: "ab",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : pseudo element selector", func(t *testing.T) {
+		n := MustParseModule("s!::ab")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssPseudoElementSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 6},
+								nil,
+								nil,
+							},
+							Name: "ab",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : single element : attribute selector", func(t *testing.T) {
+		n := MustParseModule(`s![a="1"]`)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 9},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssAttributeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 9},
+								nil,
+								nil,
+							},
+							AttributeName: &IdentifierLiteral{
+								NodeBase: NodeBase{
+									NodeSpan{3, 4},
+									nil,
+									nil,
+								},
+								Name: "a",
+							},
+							Matcher: "=",
+							Value: &StringLiteral{
+								NodeBase: NodeBase{
+									NodeSpan{5, 8},
+									nil,
+									nil,
+								},
+								Raw:   `"1"`,
+								Value: "1",
+							},
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : direct child", func(t *testing.T) {
+		n := MustParseModule("s!a > b")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 7},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 3},
+								nil,
+								nil,
+							},
+							Name: "a",
+						},
+						&CssCombinator{
+							NodeBase: NodeBase{
+								NodeSpan{4, 5},
+								nil,
+								nil,
+							},
+							Name: ">",
+						},
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{6, 7},
+								nil,
+								nil,
+							},
+							Name: "b",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("css selector : descendant", func(t *testing.T) {
+		n := MustParseModule("s!a b")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{NodeSpan{0, 5}, nil, nil},
+			Statements: []Node{
+				&CssSelectorExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 5},
+						nil,
+						nil,
+					},
+					Elements: []Node{
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{2, 3},
+								nil,
+								nil,
+							},
+							Name: "a",
+						},
+						&CssCombinator{
+							NodeBase: NodeBase{
+								NodeSpan{3, 4},
+								nil,
+								nil,
+							},
+							Name: " ",
+						},
+						&CssTypeSelector{
+							NodeBase: NodeBase{
+								NodeSpan{4, 5},
+								nil,
+								nil,
+							},
+							Name: "b",
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 }
 
 type User struct {

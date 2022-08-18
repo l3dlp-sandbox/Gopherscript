@@ -110,6 +110,15 @@ func isNotPairedOrIsClosingDelim(r rune) bool {
 	}
 }
 
+func isNonSpaceCSSCombinator(r rune) bool {
+	switch r {
+	case '>', '~', '+':
+		return true
+	default:
+		return false
+	}
+}
+
 func HasPathLikeStart(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -183,6 +192,7 @@ const (
 	COMMA
 	COLON
 	SEMICOLON
+	CSS_SELECTOR_PREFIX
 )
 
 //represents a token with no data such as ',', '['
@@ -243,6 +253,10 @@ type InvalidPathSlice struct {
 }
 
 type MissingExpression struct {
+	NodeBase
+}
+
+type InvalidCSSselectorNode struct {
 	NodeBase
 }
 
@@ -1162,6 +1176,51 @@ type PatternPieceElement struct {
 type PatternUnion struct {
 	NodeBase
 	Cases []Node
+}
+
+//CSS selectors & combinators
+
+type CssSelectorExpression struct {
+	NodeBase
+	Elements []Node
+}
+
+type CssCombinator struct {
+	NodeBase
+	Name string
+}
+
+type CssClassSelector struct {
+	NodeBase
+	Name string
+}
+
+type CssPseudoClassSelector struct {
+	NodeBase
+	Name      string
+	Arguments []Node
+}
+
+type CssPseudoElementSelector struct {
+	NodeBase
+	Name string
+}
+
+type CssTypeSelector struct {
+	NodeBase
+	Name string
+}
+
+type CssIdSelector struct {
+	NodeBase
+	Name string
+}
+
+type CssAttributeSelector struct {
+	NodeBase
+	AttributeName *IdentifierLiteral
+	Matcher       string
+	Value         Node
 }
 
 func IsSimpleValueLiteral(node Node) bool {
@@ -2087,8 +2146,355 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	var parseRequirements func() *Requirements
 	var parseFunction func(int) Node
 	var parseSpawnExpression func(srIdent Node) (Node, bool)
+	var parseIdentLike func() Node
+
+	parseCssSelectorElement := func(ignoreNextSpace bool) (node Node, isSpace bool) {
+		start := i
+		switch s[i] {
+		case '>', '~', '+':
+			name := string(s[i])
+			i++
+			return &CssCombinator{
+				NodeBase{
+					NodeSpan{i - 1, i},
+					nil,
+					nil,
+				},
+				name,
+			}, false
+		case '.':
+			i++
+			if i >= len(s) || !isAlpha(s[i]) {
+				return &CssClassSelector{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							Message:        "unterminated CSS class selector, a name was expected",
+							Index:          i,
+							NodeStartIndex: start,
+							NodeCategory:   KnownType,
+							NodeType:       (*CssClassSelector)(nil),
+						},
+						nil,
+					},
+				}, false
+			}
+
+			i++
+			for i < len(s) && isIdentChar(s[i]) {
+				i++
+			}
+
+			return &CssClassSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: string(s[start+1 : i]),
+			}, false
+		case '#':
+			i++
+			if i >= len(s) || !isAlpha(s[i]) {
+				return &CssIdSelector{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						&ParsingError{
+							Message:        "unterminated CSS id selector, a name was expected",
+							Index:          i,
+							NodeStartIndex: start,
+							NodeCategory:   KnownType,
+							NodeType:       (*CssIdSelector)(nil),
+						},
+						nil,
+					},
+				}, false
+			}
+
+			i++
+			for i < len(s) && isIdentChar(s[i]) {
+				i++
+			}
+
+			return &CssIdSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: string(s[start+1 : i]),
+			}, false
+		case '[':
+			i++
+
+			makeNode := func(err string) Node {
+				return &CssAttributeSelector{
+					NodeBase: NodeBase{
+						NodeSpan{i - 1, i},
+						&ParsingError{
+							Message:        err,
+							Index:          i,
+							NodeStartIndex: start,
+							NodeCategory:   UnspecifiedCategory,
+							NodeType:       nil,
+						},
+						nil,
+					},
+				}
+			}
+
+			if i >= len(s) {
+				return makeNode("unterminated CSS attribute selector, an attribute name was expected"), false
+			}
+
+			if !isAlpha(s[i]) {
+				return makeNode("an attribute name should start with an alpha character like identifiers"), false
+			}
+
+			name := parseIdentLike()
+
+			if i >= len(s) {
+				return makeNode("unterminated CSS attribute selector, a matcher is expected after the name"), false
+			}
+
+			var matcher string
+
+			switch s[i] {
+			case '~', '*', '^', '|', '$':
+				i++
+				if i >= len(s) {
+					return makeNode("unterminated CSS attribute selector, invalid matcher"), false
+				}
+				if s[i] != '=' {
+					return makeNode("unterminated CSS attribute selector, invalid matcher"), false
+				}
+				i++
+				matcher = string(s[i-2 : i])
+
+			case '=':
+				matcher = string(s[i])
+				i++
+			default:
+				return makeNode("unterminated CSS attribute selector, invalid matcher"), false
+			}
+
+			value, _ := parseExpression()
+
+			if i >= len(s) || s[i] != ']' {
+				return makeNode("unterminated CSS attribute selector, missing closing bracket"), false
+			}
+			i++
+
+			return &CssAttributeSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				AttributeName: name.(*IdentifierLiteral),
+				Matcher:       matcher,
+				Value:         value,
+			}, false
+
+		case ':':
+			i++
+			makeErr := func(err string) *ParsingError {
+				return &ParsingError{
+					Message:        err,
+					Index:          i,
+					NodeStartIndex: start,
+					NodeCategory:   UnspecifiedCategory,
+					NodeType:       nil,
+				}
+
+			}
+			if i >= len(s) {
+				return &InvalidCSSselectorNode{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						makeErr("invalid CSS selector"),
+						nil,
+					},
+				}, false
+			}
+
+			if s[i] != ':' { //pseudo class
+				nameStart := i
+				i++
+
+				if i >= len(s) || !isAlpha(s[i]) {
+					return &CssPseudoClassSelector{
+						NodeBase: NodeBase{
+							NodeSpan{start, i},
+							makeErr("invalid CSS class selector, invalid name"),
+							nil,
+						},
+					}, false
+				}
+
+				i++
+				for i < len(s) && isIdentChar(s[i]) {
+					i++
+				}
+
+				nameEnd := i
+
+				return &CssPseudoClassSelector{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						nil,
+						nil,
+					},
+					Name: string(s[nameStart:nameEnd]),
+				}, false
+			}
+
+			i++
+
+			//pseudo element
+			if i >= len(s) || !isAlpha(s[i]) {
+				return &CssPseudoElementSelector{
+					NodeBase: NodeBase{
+						NodeSpan{start, i},
+						makeErr("invalid CSS pseudo element selector, invalid name"),
+						nil,
+					},
+				}, false
+			}
+
+			nameStart := i
+
+			i++
+			for i < len(s) && isIdentChar(s[i]) {
+				i++
+			}
+
+			nameEnd := i
+
+			return &CssPseudoElementSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: string(s[nameStart:nameEnd]),
+			}, false
+		case ' ':
+			i++
+			eatSpace()
+			if i >= len(s) || isNonSpaceCSSCombinator(s[i]) || ignoreNextSpace {
+				return nil, true
+			}
+
+			return &CssCombinator{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: " ",
+			}, false
+		case '*':
+			i++
+			return &CssTypeSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: "*",
+			}, false
+		}
+
+		if i < len(s) && isAlpha(s[i]) {
+			i++
+			for i < len(s) && isIdentChar(s[i]) {
+				i++
+			}
+
+			return &CssTypeSelector{
+				NodeBase: NodeBase{
+					NodeSpan{start, i},
+					nil,
+					nil,
+				},
+				Name: string(s[start:i]),
+			}, false
+		}
+
+		return &InvalidCSSselectorNode{
+			NodeBase: NodeBase{
+				NodeSpan{start - 1, i},
+				&ParsingError{
+					Message:        "empty CSS selector",
+					Index:          i,
+					NodeStartIndex: start,
+					NodeCategory:   UnspecifiedCategory,
+					NodeType:       nil,
+				},
+				nil,
+			},
+		}, false
+
+	}
+
+	parseTopCssSelector := func(start int) Node {
+
+		//s!
+		tokens := []ValuelessToken{
+			{Type: CSS_SELECTOR_PREFIX, Span: NodeSpan{start, i}},
+		}
+
+		if i >= len(s) {
+			return &InvalidCSSselectorNode{
+				NodeBase: NodeBase{
+					NodeSpan{i - 1, i},
+					&ParsingError{
+						Message:        "empty CSS selector",
+						Index:          i,
+						NodeStartIndex: start,
+						NodeCategory:   UnspecifiedCategory,
+						NodeType:       nil,
+					},
+					tokens,
+				},
+			}
+		}
+
+		var elements []Node
+		var ignoreNextSpace bool
+
+		for i < len(s) && s[i] != '\n' {
+			if s[i] == '!' {
+				i++
+				break
+			}
+			e, isSpace := parseCssSelectorElement(ignoreNextSpace)
+
+			if !isSpace {
+				elements = append(elements, e)
+				_, ignoreNextSpace = e.(*CssCombinator)
+
+				if e.Base().Err != nil {
+					i++
+				}
+			} else {
+				ignoreNextSpace = false
+			}
+		}
+
+		return &CssSelectorExpression{
+			NodeBase: NodeBase{
+				NodeSpan{start, i},
+				nil,
+				nil,
+			},
+			Elements: elements,
+		}
+	}
 
 	parseBlock = func() *Block {
+
 		openingBraceIndex := i
 		i++
 		var parsingErr *ParsingError
@@ -2830,7 +3236,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		}
 	}
 
-	parseIdentLike := func() Node {
+	parseIdentLike = func() Node {
 		start := i
 		i++
 		for i < len(s) && isIdentChar(s[i]) {
@@ -3712,6 +4118,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return parseSpawnExpression(identLike)
 			case "fn":
 				return parseFunction(identLike.Base().Span.Start), false
+			case "s":
+				if i < len(s) && s[i] == '!' {
+					i++
+					return parseTopCssSelector(i - 2), false
+				}
 			}
 
 			if i >= len(s) {
@@ -8033,6 +8444,10 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 		for _, case_ := range n.Cases {
 			walk(case_, node, ancestorChain, fn)
 		}
+	case *CssSelectorExpression:
+		for _, el := range n.Elements {
+			walk(el, node, ancestorChain, fn)
+		}
 	}
 
 }
@@ -9998,6 +10413,49 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 
 		return pattern, nil
+	case *CssSelectorExpression:
+		selector := bytes.NewBufferString("")
+
+		for _, element := range n.Elements {
+			switch e := element.(type) {
+			case *CssCombinator:
+				switch e.Name {
+				case ">", "+", "~":
+					selector.WriteRune(' ')
+					selector.WriteString(e.Name)
+					selector.WriteRune(' ')
+				case " ":
+					selector.WriteRune(' ')
+				}
+			case *CssTypeSelector:
+				selector.WriteString(e.Name)
+			case *CssClassSelector:
+				selector.WriteRune('.')
+				selector.WriteString(e.Name)
+			case *CssPseudoClassSelector:
+				selector.WriteRune(':')
+				selector.WriteString(e.Name)
+			case *CssPseudoElementSelector:
+				selector.WriteString(`::`)
+				selector.WriteString(e.Name)
+			case *CssIdSelector:
+				selector.WriteRune('#')
+				selector.WriteString(e.Name)
+			case *CssAttributeSelector:
+				selector.WriteRune('[')
+				selector.WriteString(e.AttributeName.Name)
+				selector.WriteString(`="`)
+
+				val, err := Eval(e.Value, state)
+				if err != nil {
+					return nil, err
+				}
+				selector.WriteString(fmt.Sprint(val))
+				selector.WriteString(`"]`)
+			}
+
+		}
+		return selector.String(), nil
 	default:
 		return nil, fmt.Errorf("cannot evaluate %#v (%T)\n%s", node, node, debug.Stack())
 	}
