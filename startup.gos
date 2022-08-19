@@ -47,4 +47,9 @@ require {
 return {
     builtin-commands: [cd, pwd]
     aliased-commands: [echo, go] # TODO: specify timeout durations ?
+    prompt: [
+        ["[" bright-green]
+        [@(pwd()) bright-black]
+        ["]> " bright-green]
+    ]
 }

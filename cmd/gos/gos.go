@@ -110,8 +110,16 @@ func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_le
 		case string:
 			s = p
 		case gopherscript.Node:
-			if !gopherscript.IsSimpleValueLiteral(p) && !gopherscript.Is(p, (*gopherscript.URLExpression)(nil)) {
-				panic(fmt.Errorf("writePrompt: only url expressions and simple-value literals can be evaluated"))
+
+			if call, isCall := p.(*gopherscript.Call); isCall {
+
+				idnt, isIdent := call.Callee.(*gopherscript.IdentifierLiteral)
+				if !isIdent || idnt.Name != "pwd" || len(call.Arguments) != 0 {
+					panic(fmt.Errorf("writePrompt: only some restricted call expressions are allowed"))
+				}
+
+			} else if !gopherscript.IsSimpleValueLiteral(p) && !gopherscript.Is(p, (*gopherscript.URLExpression)(nil)) {
+				panic(fmt.Errorf("writePrompt: only url expressions, simple-value literals and some other restricted expressions can be evaluated"))
 			}
 			v, _ := gopherscript.Eval(p, state)
 			s = fmt.Sprintf("%s", v)
