@@ -45,6 +45,6 @@ require {
 @loc = https://localhost
 
 return {
-    builtin-commands: [cd]
+    builtin-commands: [cd, pwd]
     aliased-commands: [echo, go] # TODO: specify timeout durations ?
 }

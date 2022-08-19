@@ -440,7 +440,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					color: termenv.ANSIBlue,
 				})
 			}
-			
+
 			return nil, gopherscript.Continue
 		})
 
@@ -1201,6 +1201,7 @@ func main() {
 			switch r := startupResult.(type) {
 			case gopherscript.Object:
 				config, err = makeConfiguration(r)
+
 				if strSliceContains(config.builtinCommands, "cd") {
 					state.GlobalScope()["cd"] = gopherscript.ValOf(func(ctx *gopherscript.Context, newdir gopherscript.Path) error {
 						if !newdir.IsDirPath() {
@@ -1213,6 +1214,14 @@ func main() {
 						return nil
 					})
 				}
+
+				if strSliceContains(config.builtinCommands, "pwd") {
+					state.GlobalScope()["pwd"] = gopherscript.ValOf(func(ctx *gopherscript.Context) gopherscript.Path {
+						dir, _ := os.Getwd()
+						return gopherscript.Path(dir)
+					})
+				}
+
 				if err != nil {
 					log.Println(replaceNewLinesRawMode(err.Error()))
 				}
