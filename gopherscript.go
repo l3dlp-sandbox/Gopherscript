@@ -6348,6 +6348,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		if ident != nil {
 			fn.Err = nil
+			fn.ValuelessTokens = nil
+
 			return &FunctionDeclaration{
 				NodeBase: NodeBase{
 					Span:            fn.Span,

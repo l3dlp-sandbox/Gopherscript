@@ -433,8 +433,14 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					span:  n.Base().Span,
 					color: termenv.ANSIYellow,
 				})
+			case *gopherscript.FunctionDeclaration, *gopherscript.FunctionExpression:
+				fn_keyword := n.Base().ValuelessTokens[0]
+				colorizations = append(colorizations, ColorizationInfo{
+					span:  fn_keyword.Span,
+					color: termenv.ANSIBlue,
+				})
 			}
-
+			
 			return nil, gopherscript.Continue
 		})
 
