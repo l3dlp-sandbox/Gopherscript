@@ -4,6 +4,7 @@ import (
 	//STANDARD LIBRARY
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -33,10 +34,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	gopherscript "github.com/debloat-dev/Gopherscript"
 
 	//EXTERNAL
+	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/chromedp"
 	"github.com/muesli/termenv"
 	"golang.org/x/net/html"
 	"golang.org/x/term"
@@ -1387,6 +1389,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			}),
 		},
 		"html": makeHtmlNamespace(),
+		"wnav": makeWnavNamespace(),
 		"http": gopherscript.Object{
 			"get": gopherscript.ValOf(httpGet),
 			"getbody": gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) ([]byte, error) {
@@ -2689,6 +2692,88 @@ func makeHtmlNamespace() interface{} {
 			}
 
 			return list
+		}),
+	}
+}
+
+type buffWrapper struct {
+	buff []byte
+}
+
+func makeWnavNamespace() interface{} {
+	return gopherscript.Object{
+		"do": gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (gopherscript.Object, error) {
+
+			i := 0
+
+			ERR := "wnav.do: some action's arguments are invalid"
+			var tasks chromedp.Tasks
+			result := gopherscript.Object{}
+			nameToBuffWrapper := map[string]*buffWrapper{}
+
+			for i < len(args) {
+				name, ok := args[i].(gopherscript.Identifier)
+				if !ok {
+					return nil, errors.New("wnav.do: missing action name")
+				}
+
+				switch name {
+				case "navigate": //----------------------------------------
+					i++
+					if i >= len(args) {
+						return nil, errors.New(ERR)
+					}
+
+					url_, ok := args[i].(gopherscript.URL)
+					if !ok {
+						return nil, errors.New(ERR)
+					}
+
+					tasks = append(tasks, chromedp.Navigate(string(url_)))
+					i++
+				case "screenshot":
+					i++
+					if i >= len(args) {
+						return nil, errors.New(ERR)
+					}
+
+					selector, ok := args[i].(string)
+					if !ok {
+						return nil, errors.New(ERR)
+					}
+
+					i++
+					name, ok := args[i].(string)
+
+					if !ok {
+						return nil, errors.New(ERR)
+					}
+
+					wrapper := &buffWrapper{}
+					nameToBuffWrapper[name] = wrapper
+
+					tasks = append(tasks, chromedp.Screenshot(string(selector), &wrapper.buff))
+					i++
+				default:
+					return nil, fmt.Errorf("wnav.do: %s is not a valid action name", name)
+				}
+			}
+
+			chromedpCtx, cancel := chromedp.NewContext(
+				context.Background(),
+				chromedp.WithErrorf(log.Printf),
+			)
+			defer cancel()
+
+			if err := chromedp.Run(chromedpCtx, tasks); err != nil {
+				return nil, err
+			}
+
+			for name, wrapper := range nameToBuffWrapper {
+				result[name] = wrapper.buff
+			}
+
+			return result, nil
 		}),
 	}
 }
