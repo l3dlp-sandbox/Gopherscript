@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"errors"
@@ -52,7 +52,7 @@ func (node treeNode) Expand(ctx *gopherscript.Context) {
 	node.actualNode.Expand()
 }
 
-func newTuiNamespace(state *gopherscript.State) gopherscript.Object {
+func NewTuiNamespace(state *gopherscript.State) gopherscript.Object {
 	return gopherscript.Object{
 		"app": gopherscript.ValOf(func(ctx *gopherscript.Context, config gopherscript.Object) (*tview.Application, error) {
 

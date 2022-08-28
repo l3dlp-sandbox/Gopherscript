@@ -34,6 +34,7 @@ import (
 	"time"
 
 	gopherscript "github.com/debloat-dev/Gopherscript"
+	tui "github.com/debloat-dev/Gopherscript/internal/tui"
 
 	//EXTERNAL
 	"github.com/PuerkitoBio/goquery"
@@ -1969,7 +1970,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 		"rand": _rand,
 	})
 
-	state.GlobalScope()["tui"] = newTuiNamespace(state)
+	state.GlobalScope()["tui"] = tui.NewTuiNamespace(state)
 	return state
 }
 
