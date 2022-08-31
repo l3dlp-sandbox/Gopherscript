@@ -148,7 +148,7 @@ func max(a, b int) int {
 	return b
 }
 
-//all node types embed NodeBase, NodeBase implements the Node interface
+// all node types embed NodeBase, NodeBase implements the Node interface
 type Node interface {
 	Base() NodeBase
 	BasePtr() *NodeBase
@@ -195,7 +195,7 @@ const (
 	CSS_SELECTOR_PREFIX
 )
 
-//represents a token with no data such as ',', '['
+// represents a token with no data such as ',', '['
 type ValuelessToken struct {
 	Type ValuelessTokenType
 	Span NodeSpan
@@ -431,7 +431,7 @@ type RelativePathPatternLiteral struct {
 	Value string
 }
 
-//TODO: rename
+// TODO: rename
 type NamedSegmentPathPatternLiteral struct {
 	NodeBase
 	Slices []Node //PathSlice | Variable
@@ -503,7 +503,7 @@ type PropertySpreadElement struct {
 	Extraction *ExtractionExpression
 }
 
-//compute the list of CommandPermission.s from a given part of the requirements
+// compute the list of CommandPermission.s from a given part of the requirements
 func getCommandPermissions(n Node) ([]Permission, error) {
 
 	var perms []Permission
@@ -589,8 +589,8 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 	return perms, nil
 }
 
-//this function gets permissions limitations & by evaluating a "requirement" object literal
-//custom permissions & most limitations are handled by the handleCustomType argument (optional)
+// this function gets permissions limitations & by evaluating a "requirement" object literal
+// custom permissions & most limitations are handled by the handleCustomType argument (optional)
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
 	runningState *State,
@@ -1249,7 +1249,7 @@ const (
 
 // the following types are considered as Gopherscript values
 
-//int, float64, string, bool, reflect.Value
+// int, float64, string, bool, reflect.Value
 type Object map[string]interface{}
 type List []interface{}
 type KeyList []string
@@ -1263,7 +1263,7 @@ type Option struct {
 	Value interface{}
 }
 
-//special string types
+// special string types
 type JSONstring string
 type Path string
 type PathPattern string
@@ -1404,7 +1404,7 @@ type GroupMatcher interface {
 	MatchGroups(interface{}) (ok bool, groups map[string]interface{})
 }
 
-//todo: improve name
+// todo: improve name
 type GenerativePattern interface {
 	Random() interface{}
 }
@@ -1514,8 +1514,8 @@ func samePointer(a, b interface{}) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
-//CallFunc calls calleeNode, whatever its kind (Gopherscript function or Go function).
-//If must is true and the second result of a Go function is a non-nil error, CallFunc will panic.
+// CallFunc calls calleeNode, whatever its kind (Gopherscript function or Go function).
+// If must is true and the second result of a Go function is a non-nil error, CallFunc will panic.
 func CallFunc(calleeNode Node, state *State, arguments interface{}, must bool) (interface{}, error) {
 	state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
 
@@ -1979,8 +1979,8 @@ func MustParseModule(str string) (result *Module) {
 	return n
 }
 
-//parses a file module, resultErr is either a non-sntax error or an aggregation of syntax errors.
-//result and resultErr can be both non-nil at the same time because syntax errors are also stored in each node.
+// parses a file module, resultErr is either a non-sntax error or an aggregation of syntax errors.
+// result and resultErr can be both non-nil at the same time because syntax errors are also stored in each node.
 func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	s := []rune(str)
 
@@ -7526,8 +7526,8 @@ func ExtValOf(v interface{}, state *State) interface{} {
 	}
 }
 
-//Unwraps any reflect.Value that wraps a Gopherscript value.
-//Wraps its argument in a reflect.Value if it is not a Gopherscript value.
+// Unwraps any reflect.Value that wraps a Gopherscript value.
+// Wraps its argument in a reflect.Value if it is not a Gopherscript value.
 func ValOf(v interface{}) interface{} {
 	if IsGopherVal(v) {
 		return v
@@ -7547,7 +7547,7 @@ func ValOf(v interface{}) interface{} {
 	}
 }
 
-//Wraps its argument in a reflect.Value if it is not already wrapped.
+// Wraps its argument in a reflect.Value if it is not already wrapped.
 func ToReflectVal(v interface{}) reflect.Value {
 	switch val := v.(type) {
 	case reflect.Value:
@@ -7557,7 +7557,7 @@ func ToReflectVal(v interface{}) reflect.Value {
 	}
 }
 
-//Unwraps the content of a reflect.Value.
+// Unwraps the content of a reflect.Value.
 func UnwrapReflectVal(v interface{}) interface{} {
 	switch val := v.(type) {
 	case reflect.Value:
@@ -7756,7 +7756,7 @@ func (ctx *Context) CheckHasPermission(perm Permission) error {
 	return nil
 }
 
-//Creates a new Context  with additional permissions
+// Creates a new Context  with additional permissions
 func (ctx *Context) NewWith(additionalPerms []Permission) (*Context, error) {
 
 	var perms []Permission = make([]Permission, len(ctx.grantedPermissions))
@@ -7777,8 +7777,8 @@ top:
 	return newCtx, nil
 }
 
-//Creates a new Context with the permissions passed as argument removed.
-//The limiters are shared between the two contexts.
+// Creates a new Context with the permissions passed as argument removed.
+// The limiters are shared between the two contexts.
 func (ctx *Context) NewWithout(removedPerms []Permission) (*Context, error) {
 
 	var perms []Permission
@@ -8073,9 +8073,9 @@ type TraversalConfiguration struct {
 	MaxDepth int
 }
 
-//Traverse a graph of values starting from v.
-//Only objects & lists are considered source nodes, the other ones are sinks (leafs).
-//A list of encountered source nodes is used to prevent cycling
+// Traverse a graph of values starting from v.
+// Only objects & lists are considered source nodes, the other ones are sinks (leafs).
+// A list of encountered source nodes is used to prevent cycling
 func Traverse(v interface{}, fn func(interface{}) (TraversalAction, error), config TraversalConfiguration) (terror error) {
 	encounteredSourceNodes := make(List, 0)
 	depth := 0
@@ -8159,7 +8159,7 @@ func traverse(v interface{}, fn func(interface{}) (TraversalAction, error), conf
 	return nil
 }
 
-//This functions performs a pre-order traversal on an AST (depth first).
+// This functions performs a pre-order traversal on an AST (depth first).
 func Walk(node Node, fn func(Node, Node, Node, []Node) (error, TraversalAction)) (err error) {
 	defer func() {
 
@@ -8471,8 +8471,8 @@ type globalVarInfo struct {
 	isConst bool
 }
 
-//Check performs various checks on an AST, like checking that return, break and continue statements are not misplaced.
-//Some checks are done while parsing : see the ParseModule function.
+// Check performs various checks on an AST, like checking that return, break and continue statements are not misplaced.
+// Some checks are done while parsing : see the ParseModule function.
 func Check(node Node) error {
 
 	//key: *Module|*EmbeddedModule
@@ -9167,7 +9167,7 @@ func (patt ListPattern) Test(v interface{}) bool {
 	return true
 }
 
-//MustEval calls Eval and panics if there is an error.
+// MustEval calls Eval and panics if there is an error.
 func MustEval(node Node, state *State) interface{} {
 	res, err := Eval(node, state)
 	if err != nil {
@@ -9176,7 +9176,7 @@ func MustEval(node Node, state *State) interface{} {
 	return res
 }
 
-//Evaluates a node, panics are always recovered so this function should not panic.
+// Evaluates a node, panics are always recovered so this function should not panic.
 func Eval(node Node, state *State) (result interface{}, err error) {
 
 	defer func() {
@@ -10764,7 +10764,7 @@ type QuantityRange struct {
 	End          interface{}
 }
 
-//TODO: implement Iterable
+// TODO: implement Iterable
 type RuneRange struct {
 	Start rune
 	End   rune
