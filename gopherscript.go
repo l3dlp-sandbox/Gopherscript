@@ -3289,7 +3289,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					return memberExpr
 				}
 
-				for i < len(s) && isAlpha(s[i]) {
+				for i < len(s) && isIdentChar(s[i]) {
 					i++
 				}
 
