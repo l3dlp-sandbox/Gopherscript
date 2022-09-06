@@ -1444,6 +1444,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 								URL:     gopherscript.URL(r.URL.String()),
 								Path:    gopherscript.Path(r.URL.Path),
 								Body:    r.Body,
+								Cookies: r.Cookies(),
 								request: r,
 							}
 
@@ -2298,6 +2299,7 @@ type httpRequest struct {
 	URL     gopherscript.URL
 	Path    gopherscript.Path
 	Body    io.ReadCloser
+	Cookies []*http.Cookie
 	request *http.Request
 }
 
@@ -2322,6 +2324,36 @@ func (resp *httpResponse) WriteJSON(ctx *gopherscript.Context, v interface{}) (i
 	}
 	resp.rw.Header().Set("Content-Type", JSON_CTYPE)
 	return resp.rw.Write(b)
+}
+
+func (resp *httpResponse) SetCookie(ctx *gopherscript.Context, obj gopherscript.Object) error {
+	cookie := &http.Cookie{}
+
+	for k, v := range obj {
+		switch k {
+		case "domain":
+			host, ok := v.(gopherscript.HTTPHost)
+			if !ok {
+				return fmt.Errorf("setCookie: .domain should be a HTTPHost not a(n) %T", v)
+			}
+			cookie.Domain = host.WithoutScheme()
+		case "name":
+			name, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("setCookie: .name should be a string not a(n) %T", v)
+			}
+			cookie.Name = name
+		case "value":
+			value, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("setCookie: .value should be a string not a(n) %T", v)
+			}
+			cookie.Value = value
+		}
+	}
+
+	http.SetCookie(resp.rw, cookie)
+	return nil
 }
 
 func (resp *httpResponse) WriteHeader(ctx *gopherscript.Context, status int) {

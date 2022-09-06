@@ -1283,6 +1283,10 @@ type Identifier string
 
 // ---------------------------
 
+func (host HTTPHost) WithoutScheme() string {
+	return strings.Split(string(host), "://")[1]
+}
+
 func (obj Object) GetOrDefault(key string, defaultVal interface{}) interface{} {
 	v, ok := obj[key]
 	if !ok {

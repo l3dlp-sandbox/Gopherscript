@@ -1,0 +1,41 @@
+const (
+    DOMAIN = https://localhost:8080
+    URL = https://localhost:8080/
+)
+
+require {
+    use: {
+        globals: ["http", "log", "tostr"]
+        contextless: {
+            Response: { Cookies: {} }
+        }
+    }
+    read: {
+        globals: "*"
+        : $$URL
+    }
+    provide: $$DOMAIN
+}
+
+
+fn handle(rw, r){
+    match $r.Path {
+        / {
+            log "cookies from request =" $r.Cookies
+            $rw.SetCookie({
+                name: "Foo"
+                value: "Bar"
+            })
+        }
+    }
+}
+
+http.define_profile user {
+    save-cookies: true
+}
+
+
+server = http.serve($$DOMAIN $$handle .{})!
+
+http.get$ --profile=user $$URL
+http.get$ --profile=user $$URL # the request should have cookies 
