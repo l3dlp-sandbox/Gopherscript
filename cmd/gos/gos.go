@@ -51,6 +51,8 @@ const CTRL_C_CODE = 3
 const TAB_CODE = 9
 const ESCAPE_CODE = 27
 
+const OPTION_DOES_NOT_EXIST_FMT = "option '%s' does not exist"
+
 const DEFAULT_FILE_FMODE = fs.FileMode(0o400)
 const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
 const DEFAULT_DIR_FMODE = fs.FileMode(0o500)
@@ -80,8 +82,8 @@ const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 const CONTROL_KEYWORD_COLOR = termenv.ANSIBrightMagenta
 const OTHER_KEYWORD_COLOR = termenv.ANSIBlue
 
-var DEFAULT_HTTP_REQUEST_OPTIONS = &httpRequestOptions{
-	timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
+var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
+	Timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
 	InsecureSkipVerify: true, //TODO: set to false
 }
 
@@ -1401,9 +1403,10 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				}
 				return b, nil
 			}),
-			"post":   gopherscript.ValOf(httpPost),
-			"patch":  gopherscript.ValOf(httpPatch),
-			"delete": gopherscript.ValOf(httpDelete),
+			"post":           gopherscript.ValOf(httpPost),
+			"patch":          gopherscript.ValOf(httpPatch),
+			"delete":         gopherscript.ValOf(httpDelete),
+			"define_profile": gopherscript.ValOf(setHttpProfile),
 			"serve": gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (*httpServer, error) {
 				var addr string
 				var handler http.Handler
@@ -2325,13 +2328,10 @@ func (resp *httpResponse) WriteHeader(ctx *gopherscript.Context, status int) {
 	resp.rw.WriteHeader(status)
 }
 
-type httpRequestOptions struct {
-	timeout            time.Duration
-	InsecureSkipVerify bool
-}
-
-func checkHttpOptions(obj gopherscript.Object) (*httpRequestOptions, error) {
+func checkHttpOptions(obj gopherscript.Object, profile *gopherscript.HttpProfile) (*gopherscript.HttpRequestOptions, error) {
 	options := *DEFAULT_HTTP_REQUEST_OPTIONS
+
+	specifiedOptionNames := make(map[string]int, 0)
 
 	for k, v := range obj {
 
@@ -2352,11 +2352,12 @@ func checkHttpOptions(obj gopherscript.Object) (*httpRequestOptions, error) {
 
 		switch optVal := v.(type) {
 		case gopherscript.QuantityRange:
-			if options.timeout != DEFAULT_HTTP_CLIENT_TIMEOUT {
+			if options.Timeout != DEFAULT_HTTP_CLIENT_TIMEOUT {
 				return nil, errors.New("http option object: timeout already at least twice")
 			}
 			if d, ok := optVal.End.(time.Duration); ok {
-				options.timeout = d
+				options.Timeout = d
+				specifiedOptionNames["timeout"] = 1
 			} else {
 				return nil, fmt.Errorf("invalid http option: a quantity range with end of type %T", optVal.End)
 			}
@@ -2365,47 +2366,91 @@ func checkHttpOptions(obj gopherscript.Object) (*httpRequestOptions, error) {
 		}
 	}
 
+	if profile != nil {
+		if specifiedOptionNames["timeout"] == 0 {
+			options.Timeout = profile.Options.Timeout
+		}
+		//specified options cannot override the profile's jar
+		options.Jar = profile.Options.Jar
+	}
+
 	return &options, nil
 }
 
-func getOrMakeHttpClient(opts *httpRequestOptions) *http.Client {
+func getOrMakeHttpClient(opts *gopherscript.HttpRequestOptions) *http.Client {
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: opts.InsecureSkipVerify,
 			},
 		},
-		Timeout: opts.timeout,
+		Timeout: opts.Timeout,
+		Jar:     opts.Jar,
 	}
 
 	return client
+}
+
+func setHttpProfile(ctx *gopherscript.Context, name gopherscript.Identifier, configObject gopherscript.Object) error {
+	return ctx.SetHttpProfile(name, configObject)
 }
 
 func httpGet(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
 	var contentType mimetype
 	var URL gopherscript.URL
 	var opts = DEFAULT_HTTP_REQUEST_OPTIONS
+	var optionObject gopherscript.Object
+	var profile *gopherscript.HttpProfile
 
 	for _, arg := range args {
 		switch argVal := arg.(type) {
 		case gopherscript.URL:
+			if URL != "" {
+				return nil, errors.New("URL has been provided at least twice")
+			}
 			URL = argVal
 		case mimetype:
+			if contentType != "" {
+				return nil, errors.New("mimetype has been provided at least twice")
+			}
 			contentType = argVal
 		case gopherscript.Object:
-			var err error
-			opts, err = checkHttpOptions(argVal)
-			if err != nil {
-				return nil, err
+			if optionObject != nil {
+				return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
+			}
+			optionObject = argVal
+		case gopherscript.Option:
+			switch argVal.Name {
+			case "profile":
+				profile_, err := ctx.GetHttpProfile(argVal.Value)
+				if err != nil {
+					return nil, err
+				}
+				profile = profile_
+			default:
+				return nil, fmt.Errorf(OPTION_DOES_NOT_EXIST_FMT, argVal.Name)
 			}
 		default:
 			return nil, fmt.Errorf("invalid argument, type = %T ", arg)
 		}
 	}
 
+	//checks
+
 	if URL == "" {
 		return nil, errors.New(MISSING_URL_ARG)
 	}
+
+	if profile == nil {
+		profile = ctx.GetDefaultHttpProfile()
+	}
+
+	var err error
+	if opts, err = checkHttpOptions(optionObject, profile); err != nil {
+		return nil, err
+	}
+
+	///
 
 	perm := gopherscript.HttpPermission{
 		Kind_:  gopherscript.ReadPerm,
@@ -2431,10 +2476,20 @@ func httpGet(ctx *gopherscript.Context, args ...interface{}) (*http.Response, er
 }
 
 func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
+	return _httpPostPatch(ctx, false, args...)
+}
+
+func httpPatch(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
+	return _httpPostPatch(ctx, true, args...)
+}
+
+func _httpPostPatch(ctx *gopherscript.Context, isPatch bool, args ...interface{}) (*http.Response, error) {
 	var contentType mimetype
 	var URL gopherscript.URL
 	var body io.Reader
 	var opts = DEFAULT_HTTP_REQUEST_OPTIONS
+	var optionObject gopherscript.Object
+	var profile *gopherscript.HttpProfile
 
 	for _, arg := range args {
 		switch argVal := arg.(type) {
@@ -2474,21 +2529,37 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 				if opts != DEFAULT_HTTP_REQUEST_OPTIONS {
 					return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
 				}
-				var err error
-				opts, err = checkHttpOptions(argVal)
+
+				optionObject = argVal
+			}
+		case gopherscript.Option:
+			switch argVal.Name {
+			case "profile":
+				profile_, err := ctx.GetHttpProfile(argVal.Value)
 				if err != nil {
 					return nil, err
 				}
+				profile = profile_
+			default:
+				return nil, fmt.Errorf(OPTION_DOES_NOT_EXIST_FMT, argVal.Name)
 			}
-
 		default:
 			return nil, fmt.Errorf("only an URL argument is expected, not a(n) %T ", arg)
 		}
 	}
 
+	//checks
+
 	if URL == "" {
 		return nil, errors.New(MISSING_URL_ARG)
 	}
+
+	var err error
+	if opts, err = checkHttpOptions(optionObject, profile); err != nil {
+		return nil, err
+	}
+
+	//
 
 	perm := gopherscript.HttpPermission{
 		Kind_:  gopherscript.CreatePerm,
@@ -2501,71 +2572,11 @@ func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, e
 	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
 
 	client := getOrMakeHttpClient(opts)
-	req, err := http.NewRequest("POST", string(URL), body)
-
-	if contentType != "" {
-		req.Header.Add("Content-Type", string(contentType))
+	method := "POST"
+	if isPatch {
+		method = "PATCH"
 	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %s", err.Error())
-	}
-	return client.Do(req)
-}
-
-func httpPatch(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
-	var contentType mimetype
-	var URL gopherscript.URL
-	var body io.Reader
-	var opts = DEFAULT_HTTP_REQUEST_OPTIONS
-
-	for _, arg := range args {
-		switch argVal := arg.(type) {
-		case gopherscript.URL:
-			if URL != "" {
-				return nil, errors.New("URL provided at least twice")
-			}
-			URL = argVal
-		case mimetype:
-			if contentType != "" {
-				return nil, errors.New("MIME type provided at least twice")
-			}
-			contentType = argVal
-		case io.Reader:
-			if body != nil {
-				return nil, errors.New("body provided at least twice")
-			}
-			body = argVal
-		case gopherscript.Object:
-			if opts != nil {
-				return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
-			}
-			var err error
-			opts, err = checkHttpOptions(argVal)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, fmt.Errorf("only an URL argument is expected, not a(n) %T ", arg)
-		}
-	}
-
-	if URL == "" {
-		return nil, errors.New(MISSING_URL_ARG)
-	}
-
-	perm := gopherscript.HttpPermission{
-		Kind_:  gopherscript.UpdatePerm,
-		Entity: URL,
-	}
-	if err := ctx.CheckHasPermission(perm); err != nil {
-		return nil, err
-	}
-
-	ctx.Take(HTTP_REQUEST_RATE_LIMIT_NAME, 1)
-
-	client := getOrMakeHttpClient(opts)
-	req, err := http.NewRequest("PATCH", string(URL), body)
+	req, err := http.NewRequest(method, string(URL), body)
 
 	if contentType != "" {
 		req.Header.Add("Content-Type", string(contentType))
@@ -2580,6 +2591,8 @@ func httpPatch(ctx *gopherscript.Context, args ...interface{}) (*http.Response, 
 func httpDelete(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
 	var URL gopherscript.URL
 	var opts = DEFAULT_HTTP_REQUEST_OPTIONS
+	var optionObject gopherscript.Object
+	var profile *gopherscript.HttpProfile
 
 	for _, arg := range args {
 		switch argVal := arg.(type) {
@@ -2592,19 +2605,35 @@ func httpDelete(ctx *gopherscript.Context, args ...interface{}) (*http.Response,
 			if opts != nil {
 				return nil, errors.New(HTTP_OPTION_OBJECT_PROVIDED_TWICE)
 			}
-			var err error
-			opts, err = checkHttpOptions(argVal)
-			if err != nil {
-				return nil, err
+			optionObject = argVal
+		case gopherscript.Option:
+			switch argVal.Name {
+			case "profile":
+				profile_, err := ctx.GetHttpProfile(argVal.Value)
+				if err != nil {
+					return nil, err
+				}
+				profile = profile_
+			default:
+				return nil, fmt.Errorf(OPTION_DOES_NOT_EXIST_FMT, argVal.Name)
 			}
 		default:
 			return nil, fmt.Errorf("only an URL argument is expected, not a(n) %T ", arg)
 		}
 	}
 
+	//checks
+
 	if URL == "" {
 		return nil, errors.New(MISSING_URL_ARG)
 	}
+
+	var err error
+	if opts, err = checkHttpOptions(optionObject, profile); err != nil {
+		return nil, err
+	}
+
+	//
 
 	perm := gopherscript.HttpPermission{
 		Kind_:  gopherscript.DeletePerm,

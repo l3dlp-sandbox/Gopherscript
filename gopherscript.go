@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -24,6 +25,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 const TRULY_MAX_STACK_HEIGHT = 10
@@ -44,6 +47,8 @@ const EXECUTION_TOTAL_LIMIT_NAME = "execution/total-time"
 const COMPUTE_TIME_TOTAL_LIMIT_NAME = "execution/total-compute-time"
 const IO_TIME_TOTAL_LIMIT_NAME = "execution/total-io-time"
 
+const HTTP_PROFILE_OPTION_SHOULD_BE_AN_IDENT = "the value of the option 'profile should be an identifier"
+
 var HTTP_URL_REGEX = regexp.MustCompile(HTTP_URL_PATTERN)
 var LOOSE_HTTP_HOST_PATTERN_REGEX = regexp.MustCompile(LOOSE_HTTP_HOST_PATTERN_PATTERN)
 var LOOSE_URL_EXPR_PATTERN_REGEX = regexp.MustCompile(LOOSE_URL_EXPR_PATTERN)
@@ -60,6 +65,9 @@ var UINT8_SLICE_TYPE = reflect.TypeOf(([]uint8)(nil)).Elem()
 var moduleCache = map[string]string{
 	RETURN_1_MODULE_HASH:        "return 1",
 	RETURN_GLOBAL_A_MODULE_HASH: "return $$a",
+}
+var defaultHttpProfileConfig = HttpProfileConfig{
+	SaveCookies: false,
 }
 
 func isKeyword(str string) bool {
@@ -7647,6 +7655,22 @@ type Limiter struct {
 
 type LoadType int
 
+type HttpRequestOptions struct {
+	Timeout            time.Duration
+	InsecureSkipVerify bool
+	Jar                http.CookieJar
+}
+
+type HttpProfileConfig struct {
+	SaveCookies bool
+	Headers     http.Header
+}
+
+type HttpProfile struct {
+	Config  HttpProfileConfig
+	Options HttpRequestOptions
+}
+
 const (
 	ComputeLoad LoadType = iota
 	IOLoad
@@ -7662,6 +7686,7 @@ type Context struct {
 	stackPermission      StackPermission
 	hostAliases          map[string]interface{}
 	namedPatterns        map[string]Matcher
+	httpProfiles         map[Identifier]*HttpProfile
 }
 
 func NewContext(permissions []Permission, forbiddenPermissions []Permission, limitations []Limitation) *Context {
@@ -7680,7 +7705,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 
 	limiters := map[string]*Limiter{}
 
-	ctx := &Context{}
+	var ctx = &Context{} //the context is initialized later in the function but we need the address
 
 	for _, l := range limitations {
 
@@ -7725,6 +7750,7 @@ func NewContext(permissions []Permission, forbiddenPermissions []Permission, lim
 		stackPermission:      stackPermission,
 		hostAliases:          map[string]interface{}{},
 		namedPatterns:        map[string]Matcher{},
+		httpProfiles:         make(map[Identifier]*HttpProfile),
 	}
 
 	return ctx
@@ -7870,6 +7896,75 @@ func (ctx *Context) addNamedPattern(name string, pattern Matcher) {
 		panic(errors.New("cannot register a pattern more than once"))
 	}
 	ctx.namedPatterns[name] = pattern
+}
+
+func (ctx *Context) SetHttpProfile(name Identifier, configObject Object) error {
+
+	config := HttpProfileConfig{}
+
+	if _, alreadyExist := ctx.httpProfiles[name]; alreadyExist {
+		return errors.New("profile already defined")
+	}
+
+	for name, value := range configObject {
+		switch name {
+		case "save-cookies":
+			saveCookies, ok := value.(bool)
+			if !ok {
+				return errors.New("profile configuration: .save-cookies should be a boolean")
+			}
+			config.SaveCookies = saveCookies
+		case "headers":
+			headers, ok := value.(Object)
+			if !ok {
+				return errors.New("profile configuration: .headers should be an object")
+			}
+			config.Headers = http.Header{}
+			for k, v := range headers {
+				config.Headers[k] = []string{fmt.Sprint(v)}
+			}
+		}
+	}
+	profile := &HttpProfile{
+		Config:  config,
+		Options: HttpRequestOptions{},
+	}
+
+	ctx.httpProfiles[name] = profile
+	if config.SaveCookies {
+		jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		if err != nil {
+			return err
+		}
+		profile.Options.Jar = jar
+	}
+	return nil
+}
+
+func (ctx *Context) GetHttpProfile(name interface{}) (*HttpProfile, error) {
+	profileName, ok := name.(Identifier)
+
+	if !ok {
+		return nil, errors.New(HTTP_PROFILE_OPTION_SHOULD_BE_AN_IDENT)
+	}
+
+	if name == "default" {
+		return &HttpProfile{
+			Config: defaultHttpProfileConfig,
+		}, nil
+	}
+
+	profile, ok := ctx.httpProfiles[profileName]
+	if !ok {
+		return nil, fmt.Errorf("http profile '%s' does not exist", profileName)
+	}
+
+	return profile, nil
+}
+
+func (ctx *Context) GetDefaultHttpProfile() *HttpProfile {
+	profile, _ := ctx.GetHttpProfile("default")
+	return profile
 }
 
 type IterationChange int

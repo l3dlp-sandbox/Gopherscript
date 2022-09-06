@@ -8,7 +8,7 @@ require (
 	github.com/muesli/termenv v0.11.0
 	github.com/rivo/tview v0.0.0-20220801133142-711ef394f9b3
 	github.com/stretchr/testify v1.7.1
-	golang.org/x/net v0.0.0-20220802222814-0bcc04d9c69b
+	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
 	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035
 )
 

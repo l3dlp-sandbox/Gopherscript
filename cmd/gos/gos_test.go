@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"testing"
@@ -222,4 +224,101 @@ func TestStorePersistence(t *testing.T) {
 	statAfterPersistence, _ := os.Stat(string(fpath))
 
 	assert.Greater(t, statAfterPersistence.Size(), statBeforePersistence.Size())
+}
+
+func TestHttpProfiles(t *testing.T) {
+
+	const ADDR = "localhost:8080"
+	const URL = G.URL("http://" + ADDR + "/")
+	url_, _ := url.Parse(string(URL))
+
+	makeServer := func() *http.Server {
+		server := &http.Server{
+			Addr: ADDR,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				cookie := http.Cookie{Name: "k", Value: "1"}
+				http.SetCookie(w, &cookie)
+			}),
+		}
+
+		go server.ListenAndServe()
+		time.Sleep(time.Millisecond)
+		return server
+	}
+
+	t.Run("setHttpProfile", func(t *testing.T) {
+
+		const PROFILE_NAME = G.Identifier("myprofile")
+
+		ctx := G.NewContext([]G.Permission{
+			G.HttpPermission{Kind_: G.ReadPerm, Entity: URL},
+		}, nil, []G.Limitation{})
+
+		assert.NoError(t, setHttpProfile(ctx, PROFILE_NAME, G.Object{}))
+		profile, _ := ctx.GetHttpProfile(PROFILE_NAME)
+		assert.NotNil(t, profile)
+	})
+
+	t.Run("if cookies are disabled the cookie jar should be empty", func(t *testing.T) {
+
+		server := makeServer()
+		ctx := G.NewContext([]G.Permission{
+			G.HttpPermission{Kind_: G.ReadPerm, Entity: URL},
+		}, nil, []G.Limitation{})
+		defer server.Close()
+
+		const PROFILE_NAME = G.Identifier("nocookie")
+
+		setHttpProfile(ctx, PROFILE_NAME, G.Object{"save-cookies": false})
+		profile, _ := ctx.GetHttpProfile(PROFILE_NAME)
+
+		_, err := httpGet(ctx, URL, G.Option{Name: "profile", Value: PROFILE_NAME})
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+
+		assert.Nil(t, profile.Options.Jar)
+	})
+
+	t.Run("if cookies are enabled the cookie jar should not be empty", func(t *testing.T) {
+
+		server := makeServer()
+		ctx := G.NewContext([]G.Permission{
+			G.HttpPermission{Kind_: G.ReadPerm, Entity: URL},
+		}, nil, []G.Limitation{})
+		defer server.Close()
+
+		const PROFILE_NAME = G.Identifier("withcookie")
+
+		setHttpProfile(ctx, PROFILE_NAME, G.Object{"save-cookies": true})
+		profile, _ := ctx.GetHttpProfile(PROFILE_NAME)
+
+		_, err := httpGet(ctx, URL, G.Option{Name: "profile", Value: PROFILE_NAME})
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+
+		assert.NotEmpty(t, profile.Options.Jar.Cookies(url_))
+	})
+
+	t.Run("set cookies should be sent", func(t *testing.T) {
+
+		server := makeServer()
+		ctx := G.NewContext([]G.Permission{
+			G.HttpPermission{Kind_: G.ReadPerm, Entity: URL},
+		}, nil, []G.Limitation{})
+		defer server.Close()
+
+		const PROFILE_NAME = G.Identifier("withcookie")
+
+		setHttpProfile(ctx, PROFILE_NAME, G.Object{"save-cookies": true})
+		httpGet(ctx, URL, G.Option{Name: "profile", Value: PROFILE_NAME})
+
+		resp, err := httpGet(ctx, URL, G.Option{Name: "profile", Value: PROFILE_NAME})
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+
+		assert.NotEmpty(t, resp.Request.Cookies())
+	})
 }
