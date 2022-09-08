@@ -216,11 +216,8 @@ func TestStorePersistence(t *testing.T) {
 
 	store, err := OpenOrCreateStore(ctx, fpath)
 	assert.NoError(t, err)
-	store.Set(ctx, "a", 1.0)
-
 	statBeforePersistence, _ := os.Stat(string(fpath))
-	time.Sleep(2 * KV_STORE_PERSISTENCE_INTERVAL)
-
+	store.Set(ctx, "a", 1.0)
 	statAfterPersistence, _ := os.Stat(string(fpath))
 
 	assert.Greater(t, statAfterPersistence.Size(), statBeforePersistence.Size())

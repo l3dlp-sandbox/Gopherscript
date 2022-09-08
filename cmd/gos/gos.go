@@ -57,7 +57,8 @@ const DEFAULT_FILE_FMODE = fs.FileMode(0o400)
 const DEFAULT_RW_FILE_FMODE = fs.FileMode(0o600)
 const DEFAULT_DIR_FMODE = fs.FileMode(0o500)
 const DEFAULT_HTTP_CLIENT_TIMEOUT = 10 * time.Second
-const KV_STORE_PERSISTENCE_INTERVAL = 100 * time.Millisecond
+
+// const KV_STORE_PERSISTENCE_INTERVAL = 100 * time.Millisecond
 const EX_DEFAULT_TIMEOUT_DURATION = 500 * time.Millisecond
 
 const PATH_ARG_PROVIDED_TWICE = "path argument provided at least twice"
@@ -2504,7 +2505,8 @@ func httpGet(ctx *gopherscript.Context, args ...interface{}) (*http.Response, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %s", err.Error())
 	}
-	return client.Do(req)
+	resp, err := client.Do(req)
+	return resp, err
 }
 
 func httpPost(ctx *gopherscript.Context, args ...interface{}) (*http.Response, error) {
@@ -3033,18 +3035,28 @@ func OpenOrCreateStore(ctx *gopherscript.Context, filepath gopherscript.Path) (*
 		return nil, errors.New("open store: failed to parse JSON: " + err.Error())
 	}
 
-	timer := time.NewTicker(KV_STORE_PERSISTENCE_INTERVAL)
+	// timer := time.NewTicker(KV_STORE_PERSISTENCE_INTERVAL)
 
-	go func() {
-		for range timer.C {
-			if store.closed {
-				break
-			}
-			store.persist()
-		}
-	}()
+	// go func() {
+	// 	for range timer.C {
+	// 		if store.closed {
+	// 			break
+	// 		}
+	// 		if err := store.persist(); err != nil {
+	// 			log.Println(err)
+	// 		}
+	// 	}
+	// }()
 
 	return store, nil
+}
+
+func (store *SmallKVStore) Lock() {
+	store.lock.Lock()
+}
+
+func (store *SmallKVStore) Unlock() {
+	store.lock.Unlock()
 }
 
 func (store *SmallKVStore) Set(ctx *gopherscript.Context, key string, value interface{}) {
@@ -3053,6 +3065,10 @@ func (store *SmallKVStore) Set(ctx *gopherscript.Context, key string, value inte
 
 	store.inMemory[key] = value
 	store.hasChanges = true
+
+	if err := store.persist(); err != nil {
+		log.Println(err)
+	}
 }
 
 func (store *SmallKVStore) Get(ctx *gopherscript.Context, key string) (interface{}, bool) {
@@ -3072,9 +3088,6 @@ func (store *SmallKVStore) Has(ctx *gopherscript.Context, key string) bool {
 }
 
 func (store *SmallKVStore) persist() error {
-	store.lock.Lock()
-	defer store.lock.Unlock()
-
 	if !store.hasChanges {
 		return nil
 	}
@@ -3088,11 +3101,6 @@ func (store *SmallKVStore) persist() error {
 	store.hasChanges = false
 
 	return err
-}
-
-func (store *SmallKVStore) Close() {
-	store.persist()
-	store.closed = true
 }
 
 func _rand(ctx *gopherscript.Context, v interface{}) interface{} {

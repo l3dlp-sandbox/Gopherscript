@@ -1,11 +1,11 @@
 const (
-    DOMAIN = https://localhost:8080
-    URL = https://localhost:8080/
+    DOMAIN = https://localhost:8081
+    URL = https://localhost:8081/
 )
 
 require {
     use: {
-        globals: ["http", "log", "tostr"]
+        globals:  ["http", "log", "tostr", "open-store"]
         contextless: {
             Response: { Cookies: {} }
         }
@@ -13,29 +13,39 @@ require {
     read: {
         globals: "*"
         : $$URL
+        : /home/user/...
+    }
+    create: {
+        globals: "*"
+        : /home/user/...
     }
     provide: $$DOMAIN
+    limits: {
+        "fs/write": 1kB/s
+        "fs/read": 1kB/s
+    }
 }
 
 
 fn handle(rw, r){
     match $r.Path {
         / {
-            log "cookies from request =" $r.Cookies
             $rw.SetCookie({
-                name: "Foo"
-                value: "Bar"
+                name: "a"
+                value: "1"
             })
+            log "done"
         }
+       
     }
 }
 
+$$kv = open-store$ ./db.json
+
 http.define_profile user {
     save-cookies: true
+    store: $$kv
 }
 
-
 server = http.serve($$DOMAIN $$handle .{})!
-
 http.get$ --profile=user $$URL
-http.get$ --profile=user $$URL # the request should have cookies 

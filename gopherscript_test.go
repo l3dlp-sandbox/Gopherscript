@@ -2,9 +2,11 @@ package gopherscript
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -8024,4 +8026,184 @@ func TestShiftNodeSpans(t *testing.T) {
 		},
 	}, node)
 
+}
+
+type inMemoryKv struct {
+	data map[string]interface{}
+	lock sync.Mutex
+}
+
+func (kv *inMemoryKv) Get(ctx *Context, key string) (interface{}, bool) {
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
+	v, ok := kv.data[key]
+	return v, ok
+}
+
+func (kv *inMemoryKv) Set(ctx *Context, key string, value interface{}) {
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
+	kv.data[key] = value
+}
+
+func (kv *inMemoryKv) Has(ctx *Context, key string) bool {
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
+
+	_, ok := kv.data[key]
+	return ok
+}
+
+func (kv *inMemoryKv) Lock() {
+	kv.lock.Lock()
+}
+
+func (kv *inMemoryKv) Unlock() {
+	kv.lock.Unlock()
+}
+
+func TestCookieJar(t *testing.T) {
+
+	const PROFILE_1_NAME = "user"
+	const HOST_1 = "localhost"
+
+	URL_1, _ := url.Parse("https://localhost/")
+	URL_2, _ := url.Parse("https://localhost:8080/")
+
+	makeNewContext := func() *Context {
+		return NewContext([]Permission{
+			GlobalVarPermission{ReadPerm, "*"},
+			GlobalVarPermission{UsePerm, "*"},
+		}, nil, nil)
+
+	}
+
+	t.Run("set a cookie", func(t *testing.T) {
+		kv := &inMemoryKv{data: map[string]interface{}{}}
+		ctx := makeNewContext()
+		jar, _ := newCookieJar(ctx, PROFILE_1_NAME, kv)
+
+		cookies := []*http.Cookie{{Name: "a", Value: "0"}}
+		jar.SetCookies(URL_1, cookies)
+		assert.EqualValues(t, cookies, jar.Cookies(URL_1))
+
+		data, ok := kv.Get(nil, COOKIE_KV_KEY)
+		assert.True(t, ok)
+
+		assert.EqualValues(t, map[string]interface{}{
+			PROFILE_1_NAME: map[string]interface{}{
+				HOST_1: []interface{}{_toUnstructured(http.Cookie{Name: "a", Value: "0"})},
+			},
+		}, data)
+
+	})
+
+	t.Run("set two cookies at the same URL, one after another", func(t *testing.T) {
+		kv := &inMemoryKv{data: map[string]interface{}{}}
+		ctx := makeNewContext()
+		jar, _ := newCookieJar(ctx, PROFILE_1_NAME, kv)
+
+		cookie1 := &http.Cookie{Name: "a", Value: "0"}
+		cookie2 := &http.Cookie{Name: "b", Value: "1"}
+
+		jar.SetCookies(URL_1, []*http.Cookie{cookie1})
+		jar.SetCookies(URL_1, []*http.Cookie{cookie2})
+
+		assert.EqualValues(t, []*http.Cookie{cookie1, cookie2}, jar.Cookies(URL_1))
+
+		data, ok := kv.Get(nil, COOKIE_KV_KEY)
+		assert.True(t, ok)
+
+		assert.EqualValues(t, map[string]interface{}{
+			PROFILE_1_NAME: map[string]interface{}{
+				HOST_1: []interface{}{
+					_toUnstructured(http.Cookie{Name: "a", Value: "0"}),
+					_toUnstructured(http.Cookie{Name: "b", Value: "1"}),
+				},
+			},
+		}, data)
+
+	})
+
+	t.Run("set two cookies at two diffents origins, one after another", func(t *testing.T) {
+		kv := &inMemoryKv{data: map[string]interface{}{}}
+		ctx := makeNewContext()
+		jar, _ := newCookieJar(ctx, PROFILE_1_NAME, kv)
+
+		cookie1 := &http.Cookie{Name: "a", Value: "0"}
+		cookie2 := &http.Cookie{Name: "b", Value: "1"}
+
+		jar.SetCookies(URL_1, []*http.Cookie{cookie1})
+		jar.SetCookies(URL_2, []*http.Cookie{cookie2})
+
+		assert.EqualValues(t, []*http.Cookie{cookie1, cookie2}, jar.Cookies(URL_1))
+		assert.EqualValues(t, []*http.Cookie{cookie1, cookie2}, jar.Cookies(URL_2))
+
+		data, ok := kv.Get(nil, COOKIE_KV_KEY)
+		assert.True(t, ok)
+
+		assert.EqualValues(t, map[string]interface{}{
+			PROFILE_1_NAME: map[string]interface{}{
+				HOST_1: []interface{}{
+					_toUnstructured(http.Cookie{Name: "a", Value: "0"}),
+					_toUnstructured(http.Cookie{Name: "b", Value: "1"}),
+				},
+			},
+		}, data)
+
+	})
+
+	t.Run("set two cookies at the same URL at the same time", func(t *testing.T) {
+		kv := &inMemoryKv{data: map[string]interface{}{}}
+		ctx := makeNewContext()
+		jar, _ := newCookieJar(ctx, PROFILE_1_NAME, kv)
+
+		cookies := []*http.Cookie{{Name: "a", Value: "0"}, {Name: "b", Value: "1"}}
+		jar.SetCookies(URL_1, cookies)
+		assert.EqualValues(t, cookies, jar.Cookies(URL_1))
+
+		data, ok := kv.Get(nil, COOKIE_KV_KEY)
+		assert.True(t, ok)
+
+		assert.EqualValues(t, map[string]interface{}{
+			PROFILE_1_NAME: map[string]interface{}{
+				HOST_1: []interface{}{
+					_toUnstructured(http.Cookie{Name: "a", Value: "0"}),
+					_toUnstructured(http.Cookie{Name: "b", Value: "1"}),
+				},
+			},
+		}, data)
+
+	})
+
+	t.Run("init cookie jar with non-empty KV store and add a new cookie at the same URL", func(t *testing.T) {
+		kv := &inMemoryKv{data: map[string]interface{}{
+			COOKIE_KV_KEY: map[string]interface{}{
+				PROFILE_1_NAME: map[string]interface{}{
+					HOST_1: []interface{}{_toUnstructured(http.Cookie{Name: "a", Value: "0"})},
+				},
+			},
+		}}
+		ctx := makeNewContext()
+		jar, _ := newCookieJar(ctx, PROFILE_1_NAME, kv)
+
+		assert.EqualValues(t, []*http.Cookie{{Name: "a", Value: "0"}}, jar.Cookies(URL_1))
+
+		//ADD NEW COOKIE
+		jar.SetCookies(URL_1, []*http.Cookie{{Name: "b", Value: "1"}})
+		assert.EqualValues(t, []*http.Cookie{{Name: "a", Value: "0"}, {Name: "b", Value: "1"}}, jar.Cookies(URL_1))
+
+		data, ok := kv.Get(nil, COOKIE_KV_KEY)
+		assert.True(t, ok)
+
+		assert.EqualValues(t, map[string]interface{}{
+			PROFILE_1_NAME: map[string]interface{}{
+				HOST_1: []interface{}{
+					_toUnstructured(http.Cookie{Name: "a", Value: "0"}),
+					_toUnstructured(http.Cookie{Name: "b", Value: "1"}),
+				},
+			},
+		}, data)
+
+	})
 }

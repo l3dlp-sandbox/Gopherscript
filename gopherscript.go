@@ -26,6 +26,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/debloat-dev/Gopherscript/internal"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -42,6 +43,7 @@ const RETURN_1_MODULE_HASH = "SG2a/7YNuwBjsD2OI6bM9jZM4gPcOp9W8g51DrQeyt4="
 const RETURN_GLOBAL_A_MODULE_HASH = "UYvV2gLwfuQ2D91v7PzQ8RMugUTcM0lOysCMqMqXfmg"
 const TOKEN_BUCKET_CAPACITY_SCALE = 100
 const TOKEN_BUCKET_INTERVAL = time.Second / TOKEN_BUCKET_CAPACITY_SCALE
+const COOKIE_KV_KEY = "cookies"
 
 const EXECUTION_TOTAL_LIMIT_NAME = "execution/total-time"
 const COMPUTE_TIME_TOTAL_LIMIT_NAME = "execution/total-compute-time"
@@ -7668,11 +7670,132 @@ type HttpRequestOptions struct {
 type HttpProfileConfig struct {
 	SaveCookies bool
 	Headers     http.Header
+	Store       KVStore
 }
 
 type HttpProfile struct {
 	Config  HttpProfileConfig
 	Options HttpRequestOptions
+}
+
+type _cookiejar struct {
+	jar         http.CookieJar
+	context     *Context
+	kv          KVStore
+	profileName string
+	urls        map[string]bool
+	lock        sync.Mutex
+}
+
+func cookieId(domain string, cookie *http.Cookie) string {
+	return fmt.Sprintf("%s;%s;%s", domain, cookie.Path, cookie.Name)
+}
+
+func newCookieJar(ctx *Context, profileName string, kv KVStore) (*_cookiejar, error) {
+	j, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil, err
+	}
+	jar := _cookiejar{
+		jar:         j,
+		context:     ctx,
+		kv:          kv,
+		profileName: profileName,
+		urls:        make(map[string]bool),
+	}
+
+	immutCookiesObj, ok := jar.kv.Get(jar.context, COOKIE_KV_KEY)
+	if !ok {
+		immutCookiesObj = make(map[string]interface{})
+	}
+
+	immutObj, isObj := immutCookiesObj.(map[string]interface{})
+	if !isObj {
+		log.Panic("invalid cookies from store")
+	}
+
+	cookieMap, ok := immutObj[jar.profileName]
+	if ok {
+		for hostname, jsonCookies := range cookieMap.(map[string]interface{}) {
+
+			var cookies []*http.Cookie
+			//simple but not fast
+			b, _ := json.Marshal(jsonCookies)
+			if err := json.Unmarshal(b, &cookies); err != nil {
+				continue
+			}
+
+			for _, cookie := range cookies {
+				path := cookie.Path
+				if path == "" {
+					path = "/"
+				}
+				u, err := url.Parse("http://" + hostname + path)
+				if err != nil {
+					continue
+				}
+				jar.SetCookies(u, cookies)
+			}
+
+		}
+	}
+
+	return &jar, nil
+}
+
+func (jar *_cookiejar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	jar.lock.Lock()
+	defer jar.lock.Unlock()
+
+	jar.jar.SetCookies(u, cookies)
+	jar.urls[u.String()] = true
+
+	handledCookies := make(map[string]bool)
+	toSet := make(map[string]interface{})
+
+	if jar.kv != nil {
+		for url_, _ := range jar.urls {
+			parsedURL, _ := url.Parse(url_)
+			canonicalHost, _ := internal.CanonicalHost(parsedURL.Host)
+			urlCookies := jar.jar.Cookies(parsedURL)
+			jsonCookiesToSet := make([]interface{}, 0)
+			jsonCookies, ok := toSet[parsedURL.Hostname()]
+			if ok {
+				jsonCookiesToSet = append(jsonCookiesToSet, jsonCookies.([]interface{})...)
+			}
+
+			for _, hostCookie := range urlCookies {
+				id := cookieId(canonicalHost, hostCookie)
+				if handledCookies[id] {
+					continue
+				}
+				jsonCookiesToSet = append(jsonCookiesToSet, _toUnstructured(hostCookie))
+				handledCookies[id] = true
+			}
+			toSet[parsedURL.Hostname()] = interface{}(jsonCookiesToSet)
+		}
+
+		cookiesObj, ok := jar.kv.Get(jar.context, COOKIE_KV_KEY)
+
+		if !ok {
+			cookiesObj = make(map[string]interface{})
+		}
+
+		obj, isObj := cookiesObj.(map[string]interface{})
+		if !isObj {
+			log.Panic("cannot set cookies in store")
+		}
+
+		jar.kv.Lock()
+		obj[jar.profileName] = toSet
+		jar.kv.Unlock()
+
+		jar.kv.Set(jar.context, COOKIE_KV_KEY, cookiesObj)
+	}
+}
+
+func (jar *_cookiejar) Cookies(u *url.URL) []*http.Cookie {
+	return jar.jar.Cookies(u)
 }
 
 const (
@@ -7911,6 +8034,7 @@ func (ctx *Context) SetHttpProfile(name Identifier, configObject Object) error {
 	}
 
 	for name, value := range configObject {
+		value = UnwrapReflectVal(value)
 		switch name {
 		case "save-cookies":
 			saveCookies, ok := value.(bool)
@@ -7918,6 +8042,12 @@ func (ctx *Context) SetHttpProfile(name Identifier, configObject Object) error {
 				return errors.New("profile configuration: .save-cookies should be a boolean")
 			}
 			config.SaveCookies = saveCookies
+		case "store":
+			store, ok := value.(KVStore)
+			if !ok {
+				return errors.New("profile configuration: .store should be a KVStore")
+			}
+			config.Store = store
 		case "headers":
 			headers, ok := value.(Object)
 			if !ok {
@@ -7929,18 +8059,21 @@ func (ctx *Context) SetHttpProfile(name Identifier, configObject Object) error {
 			}
 		}
 	}
+
 	profile := &HttpProfile{
 		Config:  config,
 		Options: HttpRequestOptions{},
 	}
 
 	ctx.httpProfiles[name] = profile
+
 	if config.SaveCookies {
-		jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		jar, err := newCookieJar(ctx, string(name), profile.Config.Store)
 		if err != nil {
 			return err
 		}
 		profile.Options.Jar = jar
+
 	}
 	return nil
 }
@@ -11116,3 +11249,18 @@ func (tb *TokenBucket) checkCount(count int64) {
 }
 
 //END OF TOCKEN BUCKET IMPLEMENTATION
+
+type KVStore interface {
+	Set(*Context, string, interface{})
+	Get(*Context, string) (interface{}, bool)
+	Has(*Context, string) bool
+	Lock()
+	Unlock()
+}
+
+func _toUnstructured(v interface{}) interface{} {
+	b, _ := json.Marshal(v)
+	var r interface{}
+	json.Unmarshal(b, &r)
+	return r
+}
