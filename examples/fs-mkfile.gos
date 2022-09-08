@@ -3,9 +3,6 @@ require {
     use: {
         globals: "*"
     }
-    limits: {
-        "fs/write": 1MB/s
-    }
 }
 
 

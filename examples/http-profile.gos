@@ -20,10 +20,6 @@ require {
         : /home/user/...
     }
     provide: $$DOMAIN
-    limits: {
-        "fs/write": 1kB/s
-        "fs/read": 1kB/s
-    }
 }
 
 
