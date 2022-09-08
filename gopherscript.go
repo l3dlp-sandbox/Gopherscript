@@ -604,11 +604,13 @@ func getCommandPermissions(n Node) ([]Permission, error) {
 func (objLit ObjectLiteral) PermissionsLimitations(
 	globalConsts *GlobalConstantDeclarations,
 	runningState *State,
+	defaultLimitations []Limitation,
 	handleCustomType func(kind PermissionKind, name string, value Node) (perms []Permission, handled bool, err error),
 ) ([]Permission, []Limitation) {
 
 	perms := make([]Permission, 0)
 	limitations := make([]Limitation, 0)
+	defaultLimitationsToNotSet := make(map[string]bool)
 
 	if (globalConsts != nil) && (runningState != nil) {
 		log.Panicln("Permissions(): invalid arguments: both arguments cannot be non nil")
@@ -643,11 +645,12 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 
 			for _, limitProp := range limitObjLiteral.Properties {
 
+				limitName := limitProp.Name()
+				defaultLimitationsToNotSet[limitName] = true
+
 				switch node := limitProp.Value.(type) {
 				case *RateLiteral:
-					limitation := Limitation{
-						Name: limitProp.Name(),
-					}
+					limitation := Limitation{Name: limitName}
 					rate := MustEval(node, state)
 
 					switch r := rate.(type) {
@@ -662,14 +665,12 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 					limitations = append(limitations, limitation)
 				case *IntLiteral:
 					limitation := Limitation{
-						Name:  limitProp.Name(),
+						Name:  limitName,
 						Total: int64(node.Value),
 					}
 					limitations = append(limitations, limitation)
 				case *QuantityLiteral:
-					limitation := Limitation{
-						Name: limitProp.Name(),
-					}
+					limitation := Limitation{Name: limitName}
 					total := UnwrapReflectVal(MustEval(node, state))
 
 					switch d := total.(type) {
@@ -867,6 +868,15 @@ func (objLit ObjectLiteral) PermissionsLimitations(
 		}
 
 	}
+
+	//add default limitations
+	for _, limitation := range defaultLimitations {
+		if defaultLimitationsToNotSet[limitation.Name] {
+			continue
+		}
+		limitations = append(limitations, limitation)
+	}
+
 	return perms, limitations
 }
 
@@ -7704,40 +7714,43 @@ func newCookieJar(ctx *Context, profileName string, kv KVStore) (*_cookiejar, er
 		urls:        make(map[string]bool),
 	}
 
-	immutCookiesObj, ok := jar.kv.Get(jar.context, COOKIE_KV_KEY)
-	if !ok {
-		immutCookiesObj = make(map[string]interface{})
-	}
+	if jar.kv != nil {
+		immutCookiesObj, ok := jar.kv.Get(jar.context, COOKIE_KV_KEY)
+		if !ok {
+			immutCookiesObj = make(map[string]interface{})
+		}
 
-	immutObj, isObj := immutCookiesObj.(map[string]interface{})
-	if !isObj {
-		log.Panic("invalid cookies from store")
-	}
+		immutObj, isObj := immutCookiesObj.(map[string]interface{})
+		if !isObj {
+			log.Panic("invalid cookies from store")
+		}
 
-	cookieMap, ok := immutObj[jar.profileName]
-	if ok {
-		for hostname, jsonCookies := range cookieMap.(map[string]interface{}) {
+		cookieMap, ok := immutObj[jar.profileName]
+		if ok {
+			for hostname, jsonCookies := range cookieMap.(map[string]interface{}) {
 
-			var cookies []*http.Cookie
-			//simple but not fast
-			b, _ := json.Marshal(jsonCookies)
-			if err := json.Unmarshal(b, &cookies); err != nil {
-				continue
-			}
-
-			for _, cookie := range cookies {
-				path := cookie.Path
-				if path == "" {
-					path = "/"
-				}
-				u, err := url.Parse("http://" + hostname + path)
-				if err != nil {
+				var cookies []*http.Cookie
+				//simple but not fast
+				b, _ := json.Marshal(jsonCookies)
+				if err := json.Unmarshal(b, &cookies); err != nil {
 					continue
 				}
-				jar.SetCookies(u, cookies)
-			}
 
+				for _, cookie := range cookies {
+					path := cookie.Path
+					if path == "" {
+						path = "/"
+					}
+					u, err := url.Parse("http://" + hostname + path)
+					if err != nil {
+						continue
+					}
+					jar.SetCookies(u, cookies)
+				}
+
+			}
 		}
+
 	}
 
 	return &jar, nil
@@ -9874,7 +9887,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 		return nil, nil
 	case *PermissionDroppingStatement:
-		perms, _ := n.Object.PermissionsLimitations(nil, state, nil)
+		perms, _ := n.Object.PermissionsLimitations(nil, state, nil, nil)
 		state.ctx.DropPermissions(perms)
 		return nil, nil
 	case *ImportStatement:
@@ -9903,7 +9916,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 			return nil, err
 		}
 
-		perms, _ := n.GrantedPermissions.PermissionsLimitations(nil, nil, nil)
+		perms, _ := n.GrantedPermissions.PermissionsLimitations(nil, nil, nil, nil)
 		for _, perm := range perms {
 			if err := state.ctx.CheckHasPermission(perm); err != nil {
 				return nil, fmt.Errorf("import: cannot allow permission: %s", err.Error())
@@ -10006,7 +10019,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 
 		if n.GrantedPermissions != nil {
-			perms, _ := n.GrantedPermissions.PermissionsLimitations(nil, state, nil)
+			perms, _ := n.GrantedPermissions.PermissionsLimitations(nil, state, nil, nil)
 			for _, perm := range perms {
 				if err := state.ctx.CheckHasPermission(perm); err != nil {
 					return nil, fmt.Errorf("spawn: cannot allow permission: %s", err.Error())

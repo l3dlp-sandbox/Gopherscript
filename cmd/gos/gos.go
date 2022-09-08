@@ -77,6 +77,16 @@ const FS_NEW_FILE_RATE_LIMIT_NAME = "fs/new-file"
 
 const HTTP_REQUEST_RATE_LIMIT_NAME = "http/request"
 
+var DEFAULT_LIMITATIONS = []gopherscript.Limitation{
+	{Name: FS_READ_LIMIT_NAME, ByteRate: 1_000},
+	{Name: FS_WRITE_LIMIT_NAME, ByteRate: 1_000},
+
+	{Name: FS_NEW_FILE_RATE_LIMIT_NAME, SimpleRate: 1},
+	{Name: FS_TOTAL_NEW_FILE_LIMIT_NAME, ByteRate: 1},
+
+	{Name: HTTP_REQUEST_RATE_LIMIT_NAME, ByteRate: 1},
+}
+
 const FS_WRITE_MIN_CHUNK_SIZE = 100_000
 const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 
@@ -1118,6 +1128,7 @@ func main() {
 			requiredPermissions, limitations := mod.Requirements.Object.PermissionsLimitations(
 				mod.GlobalConstantDeclarations,
 				nil,
+				DEFAULT_LIMITATIONS,
 				func(kind gopherscript.PermissionKind, name string, value gopherscript.Node) ([]gopherscript.Permission, bool, error) {
 					if kind != gopherscript.ReadPerm || name != "cli-args" {
 						return nil, false, nil
@@ -1133,6 +1144,10 @@ func main() {
 					return nil, true, nil //okay to not give a permission ???
 				},
 			)
+
+			//set default limitations
+
+			//
 
 			if perms == "required" {
 				ctx = gopherscript.NewContext(requiredPermissions, nil, limitations)
@@ -1202,7 +1217,7 @@ func main() {
 			if err != nil {
 				log.Panicln("failed to parse & check startup file:", err)
 			}
-			requiredPermissions, limitations := startupMod.Requirements.Object.PermissionsLimitations(startupMod.GlobalConstantDeclarations, nil, nil)
+			requiredPermissions, limitations := startupMod.Requirements.Object.PermissionsLimitations(startupMod.GlobalConstantDeclarations, nil, nil, nil)
 			ctx := gopherscript.NewContext(requiredPermissions, nil, limitations)
 			state := NewState(ctx)
 

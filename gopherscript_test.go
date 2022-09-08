@@ -5949,7 +5949,7 @@ func TestRequirements(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mod := MustParseModule(testCase.inputModule)
-			perms, limitations := mod.Requirements.Object.PermissionsLimitations(mod.GlobalConstantDeclarations, nil, nil)
+			perms, limitations := mod.Requirements.Object.PermissionsLimitations(mod.GlobalConstantDeclarations, nil, nil, nil)
 			assert.EqualValues(t, testCase.expectedPermissions, perms)
 			assert.EqualValues(t, testCase.expectedLimitations, limitations)
 		})
