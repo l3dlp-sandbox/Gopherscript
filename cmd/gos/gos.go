@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"path/filepath"
 	"sort"
@@ -98,6 +99,10 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
 	InsecureSkipVerify: true, //TODO: set to false
 }
 
+var ALLOWED_PROMPT_FUNCTION_NAMES = []string{
+	"pwd", "whoami",
+}
+
 func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
 
 	for _, part := range config.prompt {
@@ -128,7 +133,7 @@ func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_le
 			if call, isCall := p.(*gopherscript.Call); isCall {
 
 				idnt, isIdent := call.Callee.(*gopherscript.IdentifierLiteral)
-				if !isIdent || idnt.Name != "pwd" || len(call.Arguments) != 0 {
+				if !isIdent || !strSliceContains(ALLOWED_PROMPT_FUNCTION_NAMES, idnt.Name) || len(call.Arguments) != 0 {
 					panic(fmt.Errorf("writePrompt: only some restricted call expressions are allowed"))
 				}
 
@@ -1251,6 +1256,13 @@ func main() {
 					state.GlobalScope()["pwd"] = gopherscript.ValOf(func(ctx *gopherscript.Context) gopherscript.Path {
 						dir, _ := os.Getwd()
 						return gopherscript.Path(dir)
+					})
+				}
+
+				if strSliceContains(config.builtinCommands, "whoami") {
+					state.GlobalScope()["whoami"] = gopherscript.ValOf(func(ctx *gopherscript.Context) string {
+						user, _ := user.Current()
+						return user.Username
 					})
 				}
 

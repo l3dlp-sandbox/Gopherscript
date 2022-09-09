@@ -45,10 +45,12 @@ require {
 @loc = https://localhost
 
 return {
-    builtin-commands: [cd, pwd]
+    builtin-commands: [cd, pwd, whoami]
     aliased-commands: [echo, go] # TODO: specify timeout durations ?
     prompt: [
         ["[" bright-green]
+        [@(whoami()) bright-blue]
+        ":"
         [@(pwd()) bright-black]
         ["]> " bright-green]
     ]
