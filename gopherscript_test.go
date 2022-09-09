@@ -3355,7 +3355,7 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
-	t.Run("single line empty for .. in statement", func(t *testing.T) {
+	t.Run("single line empty for <index>, <elem>  in statement", func(t *testing.T) {
 		n := MustParseModule("for i, u in $users { }")
 		assert.EqualValues(t, &Module{
 			NodeBase: NodeBase{
@@ -3405,6 +3405,57 @@ func TestMustParseModule(t *testing.T) {
 							[]ValuelessToken{
 								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{21, 22}},
+							},
+						},
+						Statements: nil,
+					},
+				},
+			},
+		}, n)
+	})
+
+	t.Run("single line empty for <elem> in statement", func(t *testing.T) {
+		n := MustParseModule("for u in $users { }")
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 19},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&ForStatement{
+					NodeBase: NodeBase{
+						NodeSpan{0, 19},
+						nil,
+						[]ValuelessToken{
+							{FOR_KEYWORD, NodeSpan{0, 3}},
+							{IN_KEYWORD, NodeSpan{6, 8}},
+						},
+					},
+					KeyIndexIdent: nil,
+					ValueElemIdent: &IdentifierLiteral{
+						NodeBase: NodeBase{
+							NodeSpan{4, 5},
+							nil,
+							nil,
+						},
+						Name: "u",
+					},
+					IteratedValue: &Variable{
+						NodeBase: NodeBase{
+							NodeSpan{9, 15},
+							nil,
+							nil,
+						},
+						Name: "users",
+					},
+					Body: &Block{
+						NodeBase: NodeBase{
+							NodeSpan{16, 19},
+							nil,
+							[]ValuelessToken{
+								{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
 							},
 						},
 						Statements: nil,
@@ -6395,6 +6446,14 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n, state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, List{0, 5}, res)
+	})
+
+	t.Run("for statement (only element variable) : single elem list", func(t *testing.T) {
+		n := MustParseModule(`$c = 0; for e in [5] { $c = $e; }; return $c`)
+		state := NewState(NewDefaultTestContext())
+		res, err := Eval(n, state)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 5, res)
 	})
 
 	t.Run("for statement : two-elem list", func(t *testing.T) {

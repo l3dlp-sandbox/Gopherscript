@@ -421,7 +421,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					color: termenv.ANSIBrightRed,
 				})
 				// other nodes
-			case *gopherscript.IfStatement, *gopherscript.SwitchStatement, *gopherscript.MatchStatement,
+			case *gopherscript.IfStatement, *gopherscript.SwitchStatement, *gopherscript.MatchStatement, *gopherscript.ForStatement,
 				*gopherscript.ReturnStatement, *gopherscript.BreakStatement, *gopherscript.ContinueStatement, *gopherscript.SpawnExpression:
 				for _, tok := range n.Base().ValuelessTokens {
 					colorizations = append(colorizations, ColorizationInfo{

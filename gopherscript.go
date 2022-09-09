@@ -6515,13 +6515,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 			case "for":
 				var parsingErr *ParsingError
+				var valueElemIdent *IdentifierLiteral
+				var keyIndexIdent *IdentifierLiteral
 				forStart := expr.Base().Span.Start
 				eatSpace()
-				keyIndexIdent, _ := parseExpression()
+				first, _ := parseExpression()
 
 				tokens := []ValuelessToken{{FOR_KEYWORD, ev.Span}}
 
-				switch v := keyIndexIdent.(type) {
+				switch v := first.(type) {
 				case *IdentifierLiteral:
 					eatSpace()
 
@@ -6540,86 +6542,96 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					}
 
-					if s[i] != ',' {
-						parsingErr = &ParsingError{
-							"for statement : key/index name should be followed by a comma ',' , not " + string(s[i]),
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
+					//if not directly followed by "in"
+					if i >= len(s)-1 || s[i] != 'i' || s[i+1] != 'n' {
+						keyIndexIdent = v
+
+						if s[i] != ',' {
+							parsingErr = &ParsingError{
+								"for statement : key/index name should be followed by a comma ',' , not " + string(s[i]),
+								i,
+								forStart,
+								KnownType,
+								(*ForStatement)(nil),
+							}
 						}
-					}
 
-					tokens = append(tokens, ValuelessToken{COMMA, NodeSpan{i, i + 1}})
+						tokens = append(tokens, ValuelessToken{COMMA, NodeSpan{i, i + 1}})
 
-					i++
-					eatSpace()
+						i++
+						eatSpace()
 
-					if i > len(s) {
-						return &ForStatement{
-							NodeBase: NodeBase{
-								Span: NodeSpan{ev.Span.Start, i},
-								Err: &ParsingError{
-									"unterminated for statement",
-									i,
-									forStart,
-									KnownType,
-									(*ForStatement)(nil),
+						if i > len(s) {
+							return &ForStatement{
+								NodeBase: NodeBase{
+									Span: NodeSpan{ev.Span.Start, i},
+									Err: &ParsingError{
+										"unterminated for statement",
+										i,
+										forStart,
+										KnownType,
+										(*ForStatement)(nil),
+									},
 								},
-							},
+							}
 						}
-					}
 
-					valueElemIdent, _ := parseExpression()
+						e, _ := parseExpression()
 
-					if _, isVar := valueElemIdent.(*IdentifierLiteral); !isVar {
-						parsingErr = &ParsingError{
-							fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexIdent),
-							i,
-							forStart,
-							KnownType,
-							(*ForStatement)(nil),
+						if _, isVar := e.(*IdentifierLiteral); !isVar {
+							parsingErr = &ParsingError{
+								fmt.Sprintf("invalid for statement : 'for <key-index var> <colon> should be followed by a variable, not a(n) %T", keyIndexIdent),
+								i,
+								forStart,
+								KnownType,
+								(*ForStatement)(nil),
+							}
 						}
-					}
+						valueElemIdent = e.(*IdentifierLiteral)
 
-					eatSpace()
+						eatSpace()
 
-					if i >= len(s) {
-						return &ForStatement{
-							NodeBase: NodeBase{
-								Span: NodeSpan{ev.Span.Start, i},
-								Err: &ParsingError{
-									"unterminated for statement",
-									i,
-									forStart,
-									KnownType,
-									(*ForStatement)(nil),
+						if i >= len(s) {
+							return &ForStatement{
+								NodeBase: NodeBase{
+									Span: NodeSpan{ev.Span.Start, i},
+									Err: &ParsingError{
+										"unterminated for statement",
+										i,
+										forStart,
+										KnownType,
+										(*ForStatement)(nil),
+									},
 								},
-							},
+							}
 						}
-					}
 
-					if s[i] != 'i' || i > len(s)-2 || s[i+1] != 'n' {
-						return &ForStatement{
-							NodeBase: NodeBase{
-								Span: NodeSpan{ev.Span.Start, i},
-								Err: &ParsingError{
-									"invalid for statement : missing 'in' keyword ",
-									i,
-									forStart,
-									KnownType,
-									(*ForStatement)(nil),
+						if s[i] != 'i' || i > len(s)-2 || s[i+1] != 'n' {
+							return &ForStatement{
+								NodeBase: NodeBase{
+									Span: NodeSpan{ev.Span.Start, i},
+									Err: &ParsingError{
+										"invalid for statement : missing 'in' keyword ",
+										i,
+										forStart,
+										KnownType,
+										(*ForStatement)(nil),
+									},
 								},
-							},
-							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
-							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+								KeyIndexIdent:  keyIndexIdent,
+								ValueElemIdent: valueElemIdent,
+							}
 						}
+
+					} else { //if directly followed by "in"
+						valueElemIdent = v
 					}
 
 					tokens = append(tokens, ValuelessToken{IN_KEYWORD, NodeSpan{i, i + 2}})
 					i += 2
 
 					if i < len(s) && s[i] != ' ' {
+
 						return &ForStatement{
 							NodeBase: NodeBase{
 								Span: NodeSpan{ev.Span.Start, i},
@@ -6631,8 +6643,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									(*ForStatement)(nil),
 								},
 							},
-							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
-							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+							KeyIndexIdent:  keyIndexIdent,
+							ValueElemIdent: valueElemIdent,
 						}
 					}
 					eatSpace()
@@ -6649,8 +6661,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 									(*ForStatement)(nil),
 								},
 							},
-							KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
-							ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+							KeyIndexIdent:  keyIndexIdent,
+							ValueElemIdent: valueElemIdent,
 						}
 					}
 
@@ -6658,7 +6670,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 					var blk *Block
 
-					if i >= len(s) {
+					var end = i
+
+					if i >= len(s) || s[i] != '{' {
 						parsingErr = &ParsingError{
 							"unterminated for statement, missing block",
 							i,
@@ -6668,22 +6682,24 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						}
 					} else {
 						blk = parseBlock()
+						end = blk.Span.End
 					}
 
 					return &ForStatement{
 						NodeBase: NodeBase{
-							Span:            NodeSpan{ev.Span.Start, blk.Span.End},
+							Span:            NodeSpan{ev.Span.Start, end},
 							Err:             parsingErr,
 							ValuelessTokens: tokens,
 						},
-						KeyIndexIdent:  keyIndexIdent.(*IdentifierLiteral),
-						ValueElemIdent: valueElemIdent.(*IdentifierLiteral),
+						KeyIndexIdent:  keyIndexIdent,
+						ValueElemIdent: valueElemIdent,
 						Body:           blk,
 						IteratedValue:  iteratedValue,
 					}
 				case *BinaryExpression:
+
 					if v.Operator == Range || v.Operator == ExclEndRange {
-						iteratedValue := keyIndexIdent
+						iteratedValue := v
 						keyIndexIdent = nil
 
 						eatSpace()
@@ -8601,6 +8617,8 @@ func walk(node, parent Node, ancestorChain *[]Node, fn func(Node, Node, Node, []
 	case *ForStatement:
 		if n.KeyIndexIdent != nil {
 			walk(n.KeyIndexIdent, node, ancestorChain, fn)
+		}
+		if n.ValueElemIdent != nil {
 			walk(n.ValueElemIdent, node, ancestorChain, fn)
 		}
 
@@ -8891,6 +8909,8 @@ func Check(node Node) error {
 			}
 			if node.KeyIndexIdent != nil {
 				variables[node.KeyIndexIdent.Name] = 0
+			}
+			if node.ValueElemIdent != nil {
 				variables[node.ValueElemIdent.Name] = 0
 			}
 
@@ -10127,6 +10147,7 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 		}
 	case *ForStatement:
 		iteratedValue, err := Eval(n.IteratedValue, state)
+		scope := state.CurrentScope()
 		if err != nil {
 			return nil, err
 		}
@@ -10136,13 +10157,17 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 
 		if n.KeyIndexIdent != nil {
 			kVarname = n.KeyIndexIdent.Name
+		}
+		if n.ValueElemIdent != nil {
 			eVarname = n.ValueElemIdent.Name
 		}
 
 		defer func() {
 			if n.KeyIndexIdent != nil {
-				state.CurrentScope()[kVarname] = nil
-				state.CurrentScope()[eVarname] = nil
+				scope[kVarname] = nil
+			}
+			if n.ValueElemIdent != nil {
+				scope[eVarname] = nil
 			}
 		}()
 
@@ -10153,8 +10178,10 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
 
 				if n.KeyIndexIdent != nil {
-					state.CurrentScope()[kVarname] = k
-					state.CurrentScope()[eVarname] = v
+					scope[kVarname] = k
+				}
+				if n.ValueElemIdent != nil {
+					scope[eVarname] = v
 				}
 				_, err := Eval(n.Body, state)
 				if err != nil {
@@ -10176,10 +10203,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 				state.ctx.Take(EXECUTION_TOTAL_LIMIT_NAME, 1)
 
 				if n.KeyIndexIdent != nil {
-
-					state.CurrentScope()[kVarname] = i
-					state.CurrentScope()[eVarname] = e
+					scope[kVarname] = i
 				}
+				if n.ValueElemIdent != nil {
+					scope[eVarname] = e
+				}
+
 				_, err := Eval(n.Body, state)
 				if err != nil {
 					return nil, err
@@ -10210,9 +10239,12 @@ func Eval(node Node, state *State) (result interface{}, err error) {
 					e := it.GetNext(state.ctx)
 
 					if n.KeyIndexIdent != nil {
-						state.CurrentScope()[kVarname] = index
-						state.CurrentScope()[eVarname] = e
+						scope[kVarname] = index
 					}
+					if n.ValueElemIdent != nil {
+						scope[eVarname] = e
+					}
+
 					_, err := Eval(n.Body, state)
 					if err != nil {
 						return nil, err
