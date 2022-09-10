@@ -100,7 +100,7 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
 }
 
 var ALLOWED_PROMPT_FUNCTION_NAMES = []string{
-	"pwd", "whoami", "hostname",
+	"pwd", "whoami", "hostname", "now",
 }
 
 func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
@@ -1270,6 +1270,30 @@ func main() {
 					state.GlobalScope()["hostname"] = gopherscript.ValOf(func(ctx *gopherscript.Context) string {
 						name, _ := os.Hostname()
 						return name
+					})
+				}
+
+				if strSliceContains(config.builtinCommands, "now") {
+					state.GlobalScope()["now"] = gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) interface{} {
+
+						format := ""
+						for _, arg := range args {
+							switch a := arg.(type) {
+							case string:
+								if format != "" {
+									return errors.New("now: format string provided at least twice")
+								}
+								format = a
+							default:
+								return errors.New("now: a single argument is expected : the format string")
+							}
+						}
+
+						now := time.Now()
+						if format == "" {
+							return now
+						}
+						return now.Format(format)
 					})
 				}
 
