@@ -100,7 +100,7 @@ var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
 }
 
 var ALLOWED_PROMPT_FUNCTION_NAMES = []string{
-	"pwd", "whoami",
+	"pwd", "whoami", "hostname",
 }
 
 func writePrompt(state *gopherscript.State, config REPLConfiguration) (prompt_length int) {
@@ -1263,6 +1263,13 @@ func main() {
 					state.GlobalScope()["whoami"] = gopherscript.ValOf(func(ctx *gopherscript.Context) string {
 						user, _ := user.Current()
 						return user.Username
+					})
+				}
+
+				if strSliceContains(config.builtinCommands, "hostname") {
+					state.GlobalScope()["hostname"] = gopherscript.ValOf(func(ctx *gopherscript.Context) string {
+						name, _ := os.Hostname()
+						return name
 					})
 				}
 
