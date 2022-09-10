@@ -265,7 +265,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 		}
 	}
 
-	if len(runeSlice) >= 2 && runeSlice[0] == 27 && runeSlice[1] == 91 {
+	if len(runeSlice) >= 2 && runeSlice[0] == ESCAPE_CODE && runeSlice[1] == 91 {
 
 		if len(runeSlice) == 2 {
 			return EscapeNext
@@ -281,7 +281,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 				return ArrowRight
 			case 68:
 				return ArrowLeft
-			case 54:
+			case 70:
 				return End
 			case 72:
 				return Home
@@ -615,13 +615,11 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			continue
 		case End:
 			if backspaceCount == 0 {
-				ignoreNextChar = true
 				continue
 			}
 			prevBackspaceCount := backspaceCount
 			backspaceCount = 0
 			termenv.CursorForward(prevBackspaceCount)
-			ignoreNextChar = true
 			continue
 		case ArrowLeft:
 			if backspaceCount < len(input) {
@@ -769,7 +767,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			continue
 		}
 
-		if strconv.IsPrint(r) {
+		if code == NotSpecialCode && strconv.IsPrint(r) {
 			termenv.ClearLine()
 			moveCursorLineStart()
 			input = append(left, r)
