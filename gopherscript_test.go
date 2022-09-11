@@ -95,7 +95,14 @@ func TestMustParseModule(t *testing.T) {
 					{REQUIRE_KEYWORD, NodeSpan{0, 7}},
 				},
 				Object: &ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{8, 10}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{8, 10},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{9, 10}},
+						},
+					},
 					Properties: nil,
 				},
 			},
@@ -2531,7 +2538,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 2}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 2}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 2},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{1, 2}},
+						},
+					},
 					Properties: nil,
 				},
 			},
@@ -2544,7 +2558,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 3}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 3}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 3},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{2, 3}},
+						},
+					},
 					Properties: nil,
 				},
 			},
@@ -2557,7 +2578,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 9},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{8, 9}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
@@ -2602,7 +2630,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 7}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 7},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{6, 7}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 5}, nil, nil},
@@ -2625,7 +2660,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 16}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 16},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
@@ -2660,10 +2702,21 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident : integer , ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a : 1 , b : 2 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
+			NodeBase: NodeBase{
+				NodeSpan{0, 17},
+				nil,
+				nil,
+			},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 17},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{16, 17}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
@@ -2698,10 +2751,21 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("single line object literal { ident, ident: integer } ", func(t *testing.T) {
 		n := MustParseModule("{ a, b: 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
+			NodeBase: NodeBase{
+				NodeSpan{0, 11},
+				nil,
+				nil,
+			},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 11},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 9}, nil, nil},
@@ -2739,7 +2803,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 11},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
@@ -2762,10 +2833,21 @@ func TestMustParseModule(t *testing.T) {
 	t.Run("multiline object literal { <newline> ident : integer } ", func(t *testing.T) {
 		n := MustParseModule("{ \n a : 1 }")
 		assert.EqualValues(t, &Module{
-			NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
+			NodeBase: NodeBase{
+				NodeSpan{0, 11},
+				nil,
+				nil,
+			},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 11}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 11},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{4, 9}, nil, nil},
@@ -2791,7 +2873,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 17},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{16, 17}},
+						},
+					},
 					Properties: []ObjectProperty{
 						{
 							NodeBase: NodeBase{NodeSpan{2, 7}, nil, nil},
@@ -2829,7 +2918,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 17}, nil, nil},
 			Statements: []Node{
 				&ObjectLiteral{
-					NodeBase:   NodeBase{NodeSpan{0, 17}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 17},
+						nil,
+						[]Token{
+							{OPENING_CURLY_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_CURLY_BRACKET, NodeSpan{16, 17}},
+						},
+					},
 					Properties: nil,
 					SpreadElements: []*PropertySpreadElement{
 						{
@@ -4003,7 +4099,10 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{13, 15},
 								nil,
-								nil,
+								[]Token{
+									{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
+									{CLOSING_CURLY_BRACKET, NodeSpan{14, 15}},
+								},
 							},
 							Properties: nil,
 						},
@@ -4580,7 +4679,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{83, 85},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_CURLY_BRACKET, NodeSpan{83, 84}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{84, 85}},
+							},
 						},
 						Properties: nil,
 					},
@@ -4588,7 +4690,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{92, 94},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_CURLY_BRACKET, NodeSpan{92, 93}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{93, 94}},
+							},
 						},
 						Properties: nil,
 					},
@@ -4675,7 +4780,10 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{17, 19},
 									nil,
-									nil,
+									[]Token{
+										{OPENING_CURLY_BRACKET, NodeSpan{17, 18}},
+										{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
+									},
 								},
 								Properties: nil,
 							},
@@ -4757,7 +4865,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{11, 13},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_CURLY_BRACKET, NodeSpan{11, 12}},
+								{CLOSING_CURLY_BRACKET, NodeSpan{12, 13}},
+							},
 						},
 					},
 				},

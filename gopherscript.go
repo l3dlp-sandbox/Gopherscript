@@ -4474,6 +4474,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			var spreadElements []*PropertySpreadElement
 			var invalidElements []*InvalidObjectElement
 			var parsingErr *ParsingError
+			var tokens = []Token{{OPENING_CURLY_BRACKET, NodeSpan{i - 1, i}}}
 
 		object_literal_top_loop:
 			for i < len(s) && s[i] != '}' { //one iteration == one entry (that can be invalid)
@@ -4691,13 +4692,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					(*ObjectLiteral)(nil),
 				}
 			} else {
+				tokens = append(tokens, Token{CLOSING_CURLY_BRACKET, NodeSpan{i, i + 1}})
 				i++
 			}
 
 			return &ObjectLiteral{
 				NodeBase: NodeBase{
-					Span: NodeSpan{openingBraceIndex, i},
-					Err:  parsingErr,
+					Span:            NodeSpan{openingBraceIndex, i},
+					Err:             parsingErr,
+					ValuelessTokens: tokens,
 				},
 				Properties:     properties,
 				SpreadElements: spreadElements,
