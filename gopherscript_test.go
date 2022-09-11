@@ -4080,7 +4080,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
-						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{
+							{FN_KEYWORD, NodeSpan{0, 2}},
+							{OPENING_PARENTHESIS, NodeSpan{2, 3}},
+							{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+						},
 					},
 					Parameters: nil,
 					Body: &Block{
@@ -4112,7 +4116,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
-						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{
+							{FN_KEYWORD, NodeSpan{0, 2}},
+							{OPENING_PARENTHESIS, NodeSpan{2, 3}},
+							{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+						},
 					},
 					Parameters: nil,
 					Body: &Block{
@@ -4160,7 +4168,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
-						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{
+							{FN_KEYWORD, NodeSpan{0, 2}},
+							{OPENING_PARENTHESIS, NodeSpan{2, 3}},
+							{CLOSING_PARENTHESIS, NodeSpan{4, 5}},
+						},
 					},
 					Parameters: []*FunctionParameter{
 						{
@@ -4210,6 +4222,8 @@ func TestMustParseModule(t *testing.T) {
 						nil,
 						[]Token{
 							{FN_KEYWORD, NodeSpan{0, 2}},
+							{OPENING_PARENTHESIS, NodeSpan{2, 3}},
+							{CLOSING_PARENTHESIS, NodeSpan{6, 7}},
 						},
 					},
 					Parameters: []*FunctionParameter{
@@ -4260,6 +4274,35 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("function expression : only fn keyword", func(t *testing.T) {
+		n, err := ParseModule("fn", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 2},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&FunctionExpression{
+					NodeBase: NodeBase{
+						NodeSpan{0, 2},
+						&ParsingError{
+							"function : fn keyword (or function name) should be followed by '(' <param list> ')' ",
+							2,
+							0,
+							UnspecifiedCategory,
+							nil,
+						},
+						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
+					},
+					Parameters: nil,
+					Body:       nil,
+				},
+			},
+		}, n)
+	})
+
 	t.Run("function expression : parameter list not followed by a block ", func(t *testing.T) {
 		n, err := ParseModule("fn()1", "")
 		assert.Error(t, err)
@@ -4274,13 +4317,17 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 4},
 						&ParsingError{
-							"function : parameter list should be followed by a block, not 1",
+							"function : parameter list should be followed by a block",
 							4,
 							0,
 							UnspecifiedCategory,
 							nil,
 						},
-						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{
+							{FN_KEYWORD, NodeSpan{0, 2}},
+							{OPENING_PARENTHESIS, NodeSpan{2, 3}},
+							{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+						},
 					},
 					Parameters: nil,
 					Body:       nil,

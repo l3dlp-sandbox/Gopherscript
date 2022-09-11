@@ -6279,10 +6279,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				UnspecifiedCategory,
 				nil,
 			}
+			if i < len(s) && s[i] == '(' {
+				tokens = append(tokens, Token{OPENING_PARENTHESIS, NodeSpan{i, i + 1}})
+			}
 
 			fn := FunctionExpression{
 				NodeBase: NodeBase{
-					Span: NodeSpan{start, i},
+					Span:            NodeSpan{start, i},
+					ValuelessTokens: tokens,
 				},
 			}
 
@@ -6297,8 +6301,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					Name:     ident,
 				}
 			}
+			fn.Err = parsingErr
+			return &fn
 		}
 
+		if s[i] == '(' {
+			tokens = append(tokens, Token{OPENING_PARENTHESIS, NodeSpan{i, i + 1}})
+		}
 		i++
 
 		var parameters []*FunctionParameter
@@ -6343,6 +6352,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		var requirements *Requirements
 		var blk *Block
+		var end int
 
 		if i >= len(s) {
 			parsingErr = &ParsingError{
@@ -6352,6 +6362,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				UnspecifiedCategory,
 				nil,
 			}
+			end = i
 		} else if s[i] != ')' {
 			parsingErr = &ParsingError{
 				"function : invalid syntax",
@@ -6360,7 +6371,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				UnspecifiedCategory,
 				nil,
 			}
+			end = i
 		} else {
+			tokens = append(tokens, Token{CLOSING_PARENTHESIS, NodeSpan{i, i + 1}})
 			i++
 
 			eatSpace()
@@ -6373,7 +6386,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						Span: NodeSpan{start, i},
 						Err: &ParsingError{
-							"function : parameter list should be followed by a block, not " + string(s[i]),
+							"function : parameter list should be followed by a block",
 							i,
 							start,
 							UnspecifiedCategory,
@@ -6389,11 +6402,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 			blk = parseBlock()
+			end = blk.Span.End
 		}
 
 		fn := FunctionExpression{
 			NodeBase: NodeBase{
-				Span:            NodeSpan{start, blk.Span.End},
+				Span:            NodeSpan{start, end},
 				Err:             parsingErr,
 				ValuelessTokens: tokens,
 			},
