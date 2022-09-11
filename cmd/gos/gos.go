@@ -364,7 +364,9 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	if err != nil {
 		panic(err)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), old)
+	defer func() {
+		term.Restore(int(os.Stdin.Fd()), old)
+	}()
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -759,7 +761,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			}
 			continue
 		case CtrlC:
-			os.Exit(0)
+			return
 		case Tab:
 			pressedTabCount++
 
