@@ -91,7 +91,7 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase:   NodeBase{NodeSpan{0, 10}, nil, nil},
 			Statements: nil,
 			Requirements: &Requirements{
-				ValuelessTokens: []ValuelessToken{
+				ValuelessTokens: []Token{
 					{REQUIRE_KEYWORD, NodeSpan{0, 7}},
 				},
 				Object: &ObjectLiteral{
@@ -112,7 +112,7 @@ func TestMustParseModule(t *testing.T) {
 				NodeBase: NodeBase{
 					NodeSpan{0, 8},
 					nil,
-					[]ValuelessToken{{CONST_KEYWORD, NodeSpan{0, 5}}},
+					[]Token{{CONST_KEYWORD, NodeSpan{0, 5}}},
 				},
 				Declarations: nil,
 			},
@@ -129,7 +129,7 @@ func TestMustParseModule(t *testing.T) {
 				NodeBase: NodeBase{
 					NodeSpan{0, 15},
 					nil,
-					[]ValuelessToken{{CONST_KEYWORD, NodeSpan{0, 5}}},
+					[]Token{{CONST_KEYWORD, NodeSpan{0, 5}}},
 				},
 				Declarations: []*GlobalConstantDeclaration{
 					{
@@ -1678,7 +1678,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{ASSIGN_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -1706,7 +1706,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 15},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{ASSIGN_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -3114,7 +3114,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 11},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IF_KEYWORD, NodeSpan{0, 2}},
 						},
 					}, Test: &BooleanLiteral{
@@ -3129,7 +3129,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 11},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
 							},
@@ -3155,7 +3155,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IF_KEYWORD, NodeSpan{0, 2}},
 						},
 					}, Test: &BooleanLiteral{
@@ -3170,7 +3170,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 13},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{12, 13}},
 							},
@@ -3206,7 +3206,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 15},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IF_KEYWORD, NodeSpan{0, 2}},
 						},
 					},
@@ -3222,7 +3222,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 15},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{14, 15}},
 							},
@@ -3275,7 +3275,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IF_KEYWORD, NodeSpan{0, 2}},
 						},
 					},
@@ -3291,7 +3291,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 13},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{12, 13}},
 							},
@@ -3316,7 +3316,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 19},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IF_KEYWORD, NodeSpan{0, 2}},
 							{ELSE_KEYWORD, NodeSpan{12, 16}},
 						},
@@ -3332,7 +3332,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{8, 11},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{8, 9}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{10, 11}},
 							},
@@ -3343,7 +3343,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{17, 19},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{17, 18}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
 							},
@@ -3368,7 +3368,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 22},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FOR_KEYWORD, NodeSpan{0, 3}},
 							{COMMA, NodeSpan{5, 6}},
 							{IN_KEYWORD, NodeSpan{9, 11}},
@@ -3402,7 +3402,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 22},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{21, 22}},
 							},
@@ -3427,7 +3427,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 19},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FOR_KEYWORD, NodeSpan{0, 3}},
 							{IN_KEYWORD, NodeSpan{6, 8}},
 						},
@@ -3453,7 +3453,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{16, 19},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
 							},
@@ -3478,7 +3478,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 28},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FOR_KEYWORD, NodeSpan{0, 3}},
 							{COMMA, NodeSpan{5, 6}},
 							{IN_KEYWORD, NodeSpan{9, 11}},
@@ -3512,7 +3512,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 28},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{27, 28}},
 							},
@@ -3522,7 +3522,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{21, 26},
 									nil,
-									[]ValuelessToken{{BREAK_KEYWORD, NodeSpan{21, 26}}},
+									[]Token{{BREAK_KEYWORD, NodeSpan{21, 26}}},
 								},
 								Label: nil,
 							},
@@ -3546,7 +3546,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 31},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FOR_KEYWORD, NodeSpan{0, 3}},
 							{COMMA, NodeSpan{5, 6}},
 							{IN_KEYWORD, NodeSpan{9, 11}},
@@ -3580,7 +3580,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{19, 31},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{30, 31}},
 							},
@@ -3590,7 +3590,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{21, 29},
 									nil,
-									[]ValuelessToken{{CONTINUE_KEYWORD, NodeSpan{21, 29}}},
+									[]Token{{CONTINUE_KEYWORD, NodeSpan{21, 29}}},
 								},
 								Label: nil,
 							},
@@ -3614,7 +3614,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FOR_KEYWORD, NodeSpan{0, 3}},
 						},
 					},
@@ -3650,7 +3650,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{13, 16},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
 							},
@@ -3949,14 +3949,14 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
-						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: nil,
 					Body: &Block{
 						NodeBase: NodeBase{
 							NodeSpan{4, 6},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{4, 5}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{5, 6}},
 							},
@@ -3981,14 +3981,14 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
-						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: nil,
 					Body: &Block{
 						NodeBase: NodeBase{
 							NodeSpan{16, 18},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{17, 18}},
 							},
@@ -3996,7 +3996,7 @@ func TestMustParseModule(t *testing.T) {
 						Statements: nil,
 					},
 					Requirements: &Requirements{
-						ValuelessTokens: []ValuelessToken{
+						ValuelessTokens: []Token{
 							{REQUIRE_KEYWORD, NodeSpan{5, 12}},
 						},
 						Object: &ObjectLiteral{
@@ -4026,7 +4026,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
-						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: []*FunctionParameter{
 						{
@@ -4049,7 +4049,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{5, 7},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{5, 6}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{6, 7}},
 							},
@@ -4074,7 +4074,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{FN_KEYWORD, NodeSpan{0, 2}},
 						},
 					},
@@ -4114,7 +4114,7 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{7, 9},
 							nil,
-							[]ValuelessToken{
+							[]Token{
 								{OPENING_CURLY_BRACKET, NodeSpan{7, 8}},
 								{CLOSING_CURLY_BRACKET, NodeSpan{8, 9}},
 							},
@@ -4146,7 +4146,7 @@ func TestMustParseModule(t *testing.T) {
 							UnspecifiedCategory,
 							nil,
 						},
-						[]ValuelessToken{{FN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{FN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Parameters: nil,
 					Body:       nil,
@@ -4244,7 +4244,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 12},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{SWITCH_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -4276,7 +4276,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 18},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{SWITCH_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -4309,7 +4309,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{13, 16},
 									nil,
-									[]ValuelessToken{
+									[]Token{
 										{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
 										{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
 									},
@@ -4336,7 +4336,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 24},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{SWITCH_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -4369,7 +4369,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{13, 16},
 									nil,
-									[]ValuelessToken{
+									[]Token{
 										{OPENING_CURLY_BRACKET, NodeSpan{13, 14}},
 										{CLOSING_CURLY_BRACKET, NodeSpan{15, 16}},
 									},
@@ -4396,7 +4396,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{19, 22},
 									nil,
-									[]ValuelessToken{
+									[]Token{
 										{OPENING_CURLY_BRACKET, NodeSpan{19, 20}},
 										{CLOSING_CURLY_BRACKET, NodeSpan{21, 22}},
 									},
@@ -4423,7 +4423,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 21},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{SWITCH_KEYWORD, NodeSpan{0, 6}},
 						},
 					},
@@ -4456,7 +4456,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{16, 19},
 									nil,
-									[]ValuelessToken{
+									[]Token{
 										{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
 										{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
 									},
@@ -4483,7 +4483,7 @@ func TestMustParseModule(t *testing.T) {
 								NodeBase: NodeBase{
 									NodeSpan{16, 19},
 									nil,
-									[]ValuelessToken{
+									[]Token{
 										{OPENING_CURLY_BRACKET, NodeSpan{16, 17}},
 										{CLOSING_CURLY_BRACKET, NodeSpan{18, 19}},
 									},
@@ -4546,7 +4546,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 94},
 						nil,
-						[]ValuelessToken{
+						[]Token{
 							{IMPORT_KEYWORD, NodeSpan{0, 6}},
 							{ALLOW_KEYWORD, NodeSpan{86, 91}},
 						},
@@ -4610,7 +4610,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 10},
 						nil,
-						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Globals: &NilLiteral{
 						NodeBase: NodeBase{
@@ -4652,7 +4652,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 21},
 						nil,
-						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					Globals: &NilLiteral{
 						NodeBase: NodeBase{
@@ -4668,7 +4668,7 @@ func TestMustParseModule(t *testing.T) {
 							nil,
 						},
 						Requirements: &Requirements{
-							[]ValuelessToken{
+							[]Token{
 								{REQUIRE_KEYWORD, NodeSpan{9, 16}},
 							},
 							&ObjectLiteral{
@@ -4699,7 +4699,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 16},
 						nil,
-						[]ValuelessToken{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
+						[]Token{{SPAWN_KEYWORD, NodeSpan{0, 2}}},
 					},
 					GroupIdent: &IdentifierLiteral{
 						NodeBase: NodeBase{
@@ -4751,7 +4751,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 13},
 						nil,
-						[]ValuelessToken{{DROP_PERMS_KEYWORD, NodeSpan{0, 10}}},
+						[]Token{{DROP_PERMS_KEYWORD, NodeSpan{0, 10}}},
 					},
 					Object: &ObjectLiteral{
 						NodeBase: NodeBase{
@@ -4791,7 +4791,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 8},
 						nil,
-						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
+						[]Token{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 					Expr: &IntLiteral{
 						NodeBase: NodeBase{
@@ -4821,7 +4821,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
-						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
+						[]Token{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 				},
 			},
@@ -4842,7 +4842,7 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
-						[]ValuelessToken{{RETURN_KEYWORD, NodeSpan{0, 6}}},
+						[]Token{{RETURN_KEYWORD, NodeSpan{0, 6}}},
 					},
 				},
 			},

@@ -215,6 +215,8 @@ const (
 	ArrowDown
 	ArrowRight
 	ArrowLeft
+	CtrlLeft
+	CtrlRight
 	End
 	Home
 	Backspace
@@ -233,6 +235,8 @@ func (code SpecialCode) String() string {
 		ArrowUp:        "ArrowUp",
 		ArrowDown:      "ArrowDown",
 		ArrowLeft:      "ArrowLeft",
+		CtrlLeft:       "CtrlLeft",
+		CtrlRight:      "CtrlRight",
 		End:            "end",
 		Home:           "Home",
 		Backspace:      "Backspace",
@@ -246,6 +250,7 @@ func (code SpecialCode) String() string {
 	return mp[code]
 }
 
+// TODO: handle sequences from most terminal eumulators
 func getSpecialCode(runeSlice []rune) SpecialCode {
 
 	if len(runeSlice) == 1 {
@@ -285,7 +290,7 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 				return End
 			case 72:
 				return Home
-			case 51:
+			case 49, 51:
 				return EscapeNext
 			}
 		}
@@ -294,6 +299,24 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 			switch runeSlice[3] {
 			case 126:
 				return Delete
+			case 59:
+				return EscapeNext
+			}
+		}
+
+		if len(runeSlice) == 5 {
+			switch runeSlice[4] {
+			case 53:
+				return EscapeNext
+			}
+		}
+
+		if len(runeSlice) == 6 {
+			switch runeSlice[5] {
+			case 67:
+				return CtrlRight
+			case 68:
+				return CtrlLeft
 			}
 		}
 	}
@@ -545,6 +568,24 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			copy(right, _right)
 		}
 
+		moveHome := func() {
+			prevBackspaceCount := backspaceCount
+			backspaceCount = len(input)
+			if backspaceCount == prevBackspaceCount {
+				return
+			}
+			termenv.CursorBack(backspaceCount - prevBackspaceCount)
+		}
+
+		moveEnd := func() {
+			if backspaceCount == 0 {
+				return
+			}
+			prevBackspaceCount := backspaceCount
+			backspaceCount = 0
+			termenv.CursorForward(prevBackspaceCount)
+		}
+
 		switch code {
 		case ArrowUp:
 			fallthrough
@@ -609,17 +650,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 			continue
 		case Home:
-			prevBackspaceCount := backspaceCount
-			backspaceCount = len(input)
-			termenv.CursorBack(backspaceCount - prevBackspaceCount)
+			moveHome()
 			continue
 		case End:
-			if backspaceCount == 0 {
-				continue
-			}
-			prevBackspaceCount := backspaceCount
-			backspaceCount = 0
-			termenv.CursorForward(prevBackspaceCount)
+			moveEnd()
 			continue
 		case ArrowLeft:
 			if backspaceCount < len(input) {
@@ -631,6 +665,97 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			if backspaceCount > 0 {
 				backspaceCount -= 1
 				termenv.CursorForward(1)
+			}
+			continue
+		case CtrlLeft:
+			mod, _ := gopherscript.ParseModule(string(input), "")
+			tokens := gopherscript.GetTokens(mod)
+
+			switch len(tokens) {
+			case 0:
+				continue
+			case 1:
+				//TODO: fix
+				moveHome()
+				continue
+			}
+
+			cursorIndex := len(input) - backspaceCount
+			lastTokenIndex := 0
+			var newCursorIndex int
+
+			for i, token := range tokens {
+				if cursorIndex < token.Span.Start {
+					break
+				} else {
+					lastTokenIndex = i
+				}
+			}
+
+			if lastTokenIndex == 0 {
+				moveHome()
+				continue
+			}
+
+			lastToken := tokens[lastTokenIndex]
+
+			if cursorIndex >= lastToken.Span.End {
+				newCursorIndex = lastToken.Span.Start
+			} else if cursorIndex == lastToken.Span.Start {
+				newCursorIndex = tokens[lastTokenIndex-1].Span.Start
+			} else {
+				newCursorIndex = lastToken.Span.Start
+			}
+
+			backward := cursorIndex - newCursorIndex
+			backspaceCount += backward
+
+			if backward != 0 {
+				termenv.CursorBack(backward)
+			}
+			continue
+		case CtrlRight:
+			mod, _ := gopherscript.ParseModule(string(input), "")
+
+			tokens := gopherscript.GetTokens(mod)
+
+			switch len(tokens) {
+			case 0:
+				continue
+			case 1:
+				moveEnd()
+				continue
+			}
+
+			cursorIndex := len(input) - backspaceCount
+			lastTokenIndex := len(tokens) - 1
+			var newCursorIndex int
+
+			for i, token := range tokens {
+				if cursorIndex < token.Span.Start {
+					break
+				} else {
+					lastTokenIndex = i
+				}
+			}
+
+			lastToken := tokens[lastTokenIndex]
+
+			if cursorIndex >= lastToken.Span.End {
+				if lastTokenIndex < len(tokens)-1 {
+					newCursorIndex = tokens[lastTokenIndex+1].Span.End
+				} else {
+					newCursorIndex = lastToken.Span.End
+				}
+			} else {
+				newCursorIndex = lastToken.Span.End
+			}
+
+			forward := newCursorIndex - cursorIndex
+
+			backspaceCount -= forward
+			if forward != 0 {
+				termenv.CursorForward(forward)
 			}
 			continue
 		case CtrlC:

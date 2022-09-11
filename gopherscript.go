@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,10 +174,11 @@ type NodeSpan struct {
 	End   int
 }
 
-type ValuelessTokenType int
+type TokenType int
 
 const (
-	IF_KEYWORD ValuelessTokenType = iota
+	//WITH NO VALUE
+	IF_KEYWORD TokenType = iota
 	ELSE_KEYWORD
 	REQUIRE_KEYWORD
 	DROP_PERMS_KEYWORD
@@ -203,18 +205,40 @@ const (
 	COLON
 	SEMICOLON
 	CSS_SELECTOR_PREFIX
+
+	//WITH VALUE
+	INT_LITERAL
+	NIL_LITERAL
+	FLOAT_LITERAL
+	BOOLEAN_LITERAL
+	STRING_LITERAL
+	RATE_LITERAL
+	QUANTITY_LITERAL
+	FLAG_LITERAL
+	RUNE_LITERAL
+	AT_HOST_LITERAL
+	HTTP_HOST_LITERAL
+	URL_LITERAL
+	URL_PATTERN_LITERAL
+	HTTP_HOST_PATTERN_LITERAL
+	PATTERN_IDENTIFIER_LITERAL
+	IDENTIFIER_LITERAL
+	ABSOLUTE_PATH_LITERAL
+	RELATIVE_PATH_LITERAL
+	ABSOLUTE_PATH_PATTERN_LITERAL
+	RELATIVE_PATH_PATTERN_LITERAL
 )
 
 // represents a token with no data such as ',', '['
-type ValuelessToken struct {
-	Type ValuelessTokenType
+type Token struct {
+	Type TokenType
 	Span NodeSpan
 }
 
 type NodeBase struct {
 	Span            NodeSpan
 	Err             *ParsingError
-	ValuelessTokens []ValuelessToken
+	ValuelessTokens []Token
 }
 
 func (base NodeBase) Base() NodeBase {
@@ -1102,7 +1126,7 @@ type FunctionParameter struct {
 }
 
 type Requirements struct {
-	ValuelessTokens []ValuelessToken
+	ValuelessTokens []Token
 	Object          *ObjectLiteral
 }
 
@@ -2465,7 +2489,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parseTopCssSelector := func(start int) Node {
 
 		//s!
-		tokens := []ValuelessToken{
+		tokens := []Token{
 			{Type: CSS_SELECTOR_PREFIX, Span: NodeSpan{start, i}},
 		}
 
@@ -2558,7 +2582,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			NodeBase: NodeBase{
 				Span: NodeSpan{openingBraceIndex, end},
 				Err:  parsingErr,
-				ValuelessTokens: []ValuelessToken{
+				ValuelessTokens: []Token{
 					{OPENING_CURLY_BRACKET, NodeSpan{openingBraceIndex, openingBraceIndex + 1}},
 					{CLOSING_CURLY_BRACKET, NodeSpan{closingBraceIndex, closingBraceIndex + 1}},
 				},
@@ -5868,7 +5892,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	parseRequirements = func() *Requirements {
 		var requirements *Requirements
 		if i < len(s) && strings.HasPrefix(string(s[i:]), REQUIRE_KEYWORD_STR) {
-			tokens := []ValuelessToken{{REQUIRE_KEYWORD, NodeSpan{i, i + len(REQUIRE_KEYWORD_STR)}}}
+			tokens := []Token{{REQUIRE_KEYWORD, NodeSpan{i, i + len(REQUIRE_KEYWORD_STR)}}}
 			i += len(REQUIRE_KEYWORD_STR)
 
 			eatSpace()
@@ -5904,7 +5928,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*GlobalConstantDeclarations)(nil),
 						},
-						[]ValuelessToken{{CONST_KEYWORD, constKeywordSpan}},
+						[]Token{{CONST_KEYWORD, constKeywordSpan}},
 					},
 				}
 			}
@@ -6010,7 +6034,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				NodeBase: NodeBase{
 					NodeSpan{start, i},
 					parsingErr,
-					[]ValuelessToken{{CONST_KEYWORD, constKeywordSpan}},
+					[]Token{{CONST_KEYWORD, constKeywordSpan}},
 				},
 				Declarations: declarations,
 			}
@@ -6046,8 +6070,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 	parseSpawnExpression = func(srIdent Node) (Node, bool) {
 		spawnExprStart := srIdent.Base().Span.Start
-		tokens := make([]ValuelessToken, 0)
-		tokens = append(tokens, ValuelessToken{SPAWN_KEYWORD, srIdent.Base().Span})
+		tokens := make([]Token, 0)
+		tokens = append(tokens, Token{SPAWN_KEYWORD, srIdent.Base().Span})
 
 		eatSpace()
 		if i >= len(s) {
@@ -6177,7 +6201,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					(*SpawnExpression)(nil),
 				}
 			} else { //if ok
-				tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
+				tokens = append(tokens, Token{ALLOW_KEYWORD, allowIdent.Base().Span})
 
 				eatSpace()
 
@@ -6211,7 +6235,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 	}
 
 	parseFunction = func(start int) Node {
-		tokens := []ValuelessToken{{FN_KEYWORD, NodeSpan{i - 2, i}}}
+		tokens := []Token{{FN_KEYWORD, NodeSpan{i - 2, i}}}
 		eatSpace()
 
 		var ident *IdentifierLiteral
@@ -6443,7 +6467,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				var end int
 				var parsingErr *ParsingError
 
-				tokens := []ValuelessToken{
+				tokens := []Token{
 					{Type: IF_KEYWORD, Span: ev.Span},
 				}
 
@@ -6473,7 +6497,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					eatSpace()
 
 					if i < len(s)-4 && string(s[i:i+4]) == "else" {
-						tokens = append(tokens, ValuelessToken{
+						tokens = append(tokens, Token{
 							Type: ELSE_KEYWORD,
 							Span: NodeSpan{i, i + 4},
 						})
@@ -6521,7 +6545,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				eatSpace()
 				first, _ := parseExpression()
 
-				tokens := []ValuelessToken{{FOR_KEYWORD, ev.Span}}
+				tokens := []Token{{FOR_KEYWORD, ev.Span}}
 
 				switch v := first.(type) {
 				case *IdentifierLiteral:
@@ -6556,7 +6580,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							}
 						}
 
-						tokens = append(tokens, ValuelessToken{COMMA, NodeSpan{i, i + 1}})
+						tokens = append(tokens, Token{COMMA, NodeSpan{i, i + 1}})
 
 						i++
 						eatSpace()
@@ -6627,7 +6651,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						valueElemIdent = v
 					}
 
-					tokens = append(tokens, ValuelessToken{IN_KEYWORD, NodeSpan{i, i + 2}})
+					tokens = append(tokens, Token{IN_KEYWORD, NodeSpan{i, i + 2}})
 					i += 2
 
 					if i < len(s) && s[i] != ' ' {
@@ -6759,11 +6783,11 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			case "switch", "match":
 				switchMatchStart := expr.Base().Span.Start
-				var tokens []ValuelessToken
+				var tokens []Token
 				if ev.Name[0] == 's' {
-					tokens = append(tokens, ValuelessToken{SWITCH_KEYWORD, expr.Base().Span})
+					tokens = append(tokens, Token{SWITCH_KEYWORD, expr.Base().Span})
 				} else {
-					tokens = append(tokens, ValuelessToken{MATCH_KEYWORD, expr.Base().Span})
+					tokens = append(tokens, Token{MATCH_KEYWORD, expr.Base().Span})
 				}
 
 				eatSpace()
@@ -7035,14 +7059,14 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						NodeSpan{expr.Base().Span.Start, objLit.Span.End},
 						parsingErr,
-						[]ValuelessToken{{DROP_PERMS_KEYWORD, ev.Span}},
+						[]Token{{DROP_PERMS_KEYWORD, ev.Span}},
 					},
 					Object: objLit,
 				}
 
 			case "import":
 				importStart := expr.Base().Span.Start
-				tokens := []ValuelessToken{
+				tokens := []Token{
 					{IMPORT_KEYWORD, ev.Span},
 				}
 
@@ -7145,7 +7169,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						ArgumentObject: argumentObject.(*ObjectLiteral),
 					}
 				}
-				tokens = append(tokens, ValuelessToken{ALLOW_KEYWORD, allowIdent.Base().Span})
+				tokens = append(tokens, Token{ALLOW_KEYWORD, allowIdent.Base().Span})
 
 				eatSpace()
 				grantedPerms, _ := parseExpression()
@@ -7195,7 +7219,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &ReturnStatement{
 					NodeBase: NodeBase{
 						Span:            NodeSpan{ev.Span.Start, end},
-						ValuelessTokens: []ValuelessToken{{RETURN_KEYWORD, ev.Span}},
+						ValuelessTokens: []Token{{RETURN_KEYWORD, ev.Span}},
 					},
 					Expr: returnValue,
 				}
@@ -7203,7 +7227,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &BreakStatement{
 					NodeBase: NodeBase{
 						Span:            ev.Span,
-						ValuelessTokens: []ValuelessToken{{BREAK_KEYWORD, ev.Span}},
+						ValuelessTokens: []Token{{BREAK_KEYWORD, ev.Span}},
 					},
 					Label: nil,
 				}
@@ -7211,7 +7235,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				return &ContinueStatement{
 					NodeBase: NodeBase{
 						Span:            ev.Span,
-						ValuelessTokens: []ValuelessToken{{CONTINUE_KEYWORD, ev.Span}},
+						ValuelessTokens: []Token{{CONTINUE_KEYWORD, ev.Span}},
 					},
 					Label: nil,
 				}
@@ -7262,7 +7286,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					NodeBase: NodeBase{
 						Span: NodeSpan{ev.Span.Start, right.Base().Span.End},
 						Err:  parsingErr,
-						ValuelessTokens: []ValuelessToken{
+						ValuelessTokens: []Token{
 							{ASSIGN_KEYWORD, ev.Span},
 						},
 					},
@@ -8421,7 +8445,7 @@ func traverse(v interface{}, fn func(interface{}) (TraversalAction, error), conf
 }
 
 // This functions performs a pre-order traversal on an AST (depth first).
-func Walk(node Node, fn func(Node, Node, Node, []Node) (error, TraversalAction)) (err error) {
+func Walk(node Node, fn func(node Node, parent Node, scopeNode Node, ancestorChain []Node) (error, TraversalAction)) (err error) {
 	defer func() {
 
 		v := recover()
@@ -8728,6 +8752,68 @@ func shiftNodeSpans(node Node, offset int) {
 		node.BasePtr().Span.End += offset
 		return nil, Continue
 	})
+}
+
+func GetTokens(node Node) []Token {
+	tokens := make([]Token, 0)
+	Walk(node, func(node, _, _ Node, _ []Node) (error, TraversalAction) {
+		tokens = append(tokens, node.Base().ValuelessTokens...)
+		var tokenType TokenType = -1
+
+		switch node.(type) {
+		case *IntLiteral:
+			tokenType = INT_LITERAL
+		case *NilLiteral:
+			tokenType = NIL_LITERAL
+		case *FloatLiteral:
+			tokenType = FLOAT_LITERAL
+		case *BooleanLiteral:
+			tokenType = BOOLEAN_LITERAL
+		case *StringLiteral:
+			tokenType = STRING_LITERAL
+		case *RateLiteral:
+			tokenType = RATE_LITERAL
+		case *QuantityLiteral:
+			tokenType = QUANTITY_LITERAL
+		case *FlagLiteral:
+			tokenType = FLAG_LITERAL
+		case *RuneLiteral:
+			tokenType = RUNE_LITERAL
+		case *AtHostLiteral:
+			tokenType = AT_HOST_LITERAL
+		case *HTTPHostLiteral:
+			tokenType = HTTP_HOST_LITERAL
+		case *URLLiteral:
+			tokenType = URL_LITERAL
+		case *URLPatternLiteral:
+			tokenType = URL_PATTERN_LITERAL
+		case *HTTPHostPatternLiteral:
+			tokenType = HTTP_HOST_PATTERN_LITERAL
+		case *PatternIdentifierLiteral:
+			tokenType = PATTERN_IDENTIFIER_LITERAL
+		case *IdentifierLiteral:
+			tokenType = IDENTIFIER_LITERAL
+		case *AbsolutePathLiteral:
+			tokenType = ABSOLUTE_PATH_LITERAL
+		case *RelativePathLiteral:
+			tokenType = RELATIVE_PATH_LITERAL
+		case *AbsolutePathPatternLiteral:
+			tokenType = ABSOLUTE_PATH_PATTERN_LITERAL
+		case *RelativePathPatternLiteral:
+			tokenType = RELATIVE_PATH_PATTERN_LITERAL
+		}
+
+		if tokenType >= 0 {
+			tokens = append(tokens, Token{Type: tokenType, Span: node.Base().Span})
+		}
+		return nil, Continue
+	})
+
+	sort.Slice(tokens, func(i, j int) bool {
+		return tokens[i].Span.End < tokens[j].Span.Start
+	})
+
+	return tokens
 }
 
 type globalVarInfo struct {
