@@ -3248,6 +3248,55 @@ func TestMustParseModule(t *testing.T) {
 		}, n)
 	})
 
+	t.Run("single line list literal [ integer <comma> integer ", func(t *testing.T) {
+		n, err := ParseModule("[ 1, 2", "")
+		assert.Error(t, err)
+		assert.EqualValues(t, &Module{
+			NodeBase: NodeBase{
+				NodeSpan{0, 6},
+				nil,
+				nil,
+			},
+			Statements: []Node{
+				&ListLiteral{
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						&ParsingError{
+							Message:        "unterminated list literal, missing closing bracket ']'",
+							NodeStartIndex: 0,
+							Index:          6,
+							NodeCategory:   KnownType,
+							NodeType:       (*ListLiteral)(nil),
+						},
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+						},
+					},
+					Elements: []Node{
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{2, 3},
+								nil,
+								nil,
+							},
+							Raw:   "1",
+							Value: 1,
+						},
+						&IntLiteral{
+							NodeBase: NodeBase{
+								NodeSpan{5, 6},
+								nil,
+								nil,
+							},
+							Raw:   "2",
+							Value: 2,
+						},
+					},
+				},
+			},
+		}, n)
+	})
+
 	//also used for checking block parsing
 	t.Run("single line empty if statement", func(t *testing.T) {
 		n := MustParseModule("if true { }")
@@ -5156,7 +5205,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
 			Statements: []Node{
 				&ListPatternLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 6}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 6},
+						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{1, 2}},
+							{CLOSING_BRACKET, NodeSpan{5, 6}},
+						},
+					},
 					Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{NodeSpan{3, 4}, nil, nil},

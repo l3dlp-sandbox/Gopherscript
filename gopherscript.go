@@ -3996,6 +3996,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 
 				var elements []Node
+				var valuelessTokens = []Token{{OPENING_BRACKET, NodeSpan{i - 1, i}}}
+
 				for i < len(s) && s[i] != ']' {
 					eatSpaceNewlineComma()
 
@@ -4004,15 +4006,17 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					}
 
 					e, isMissingExpr := parseExpression()
-					if i >= len(s) || (isMissingExpr && s[i] != ',') {
-						break
-					} else if !isMissingExpr {
+					if !isMissingExpr {
 						elements = append(elements, e)
+						if i >= len(s) {
+							break
+						}
+					} else if s[i] != ',' {
+						break
 					}
 
 					eatSpaceNewlineComma()
 				}
-
 				var parsingErr *ParsingError
 
 				if i >= len(s) || s[i] != ']' {
@@ -4024,13 +4028,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						(*ListPatternLiteral)(nil),
 					}
 				} else {
+					valuelessTokens = append(valuelessTokens, Token{CLOSING_BRACKET, NodeSpan{i, i + 1}})
 					i++
 				}
 
 				return &ListPatternLiteral{
 					NodeBase: NodeBase{
-						Span: NodeSpan{openingBracketIndex - 1, i},
-						Err:  parsingErr,
+						Span:            NodeSpan{openingBracketIndex - 1, i},
+						Err:             parsingErr,
+						ValuelessTokens: valuelessTokens,
 					},
 					Elements: elements,
 				}
@@ -4722,10 +4728,13 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				e, isMissingExpr := parseExpression()
-				if i >= len(s) || (isMissingExpr && s[i] != ',') {
-					break
-				} else if !isMissingExpr {
+				if !isMissingExpr {
 					elements = append(elements, e)
+					if i >= len(s) {
+						break
+					}
+				} else if s[i] != ',' {
+					break
 				}
 
 				eatSpaceNewlineComma()
