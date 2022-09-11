@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	gopherscript "github.com/debloat-dev/Gopherscript"
 	tui "github.com/debloat-dev/Gopherscript/internal/tui"
@@ -93,6 +94,10 @@ const FS_READ_MIN_CHUNK_SIZE = 1_000_000
 
 const CONTROL_KEYWORD_COLOR = termenv.ANSIBrightMagenta
 const OTHER_KEYWORD_COLOR = termenv.ANSIBlue
+const STRING_LITERAL_COLOR = termenv.ANSI256Color(209)
+const PATH_LITERAL_COLOR = termenv.ANSI256Color(209)
+const NUMBER_LITERAL_COLOR = termenv.ANSIBrightGreen
+const CONSTANT_COLOR = termenv.ANSIBlue
 
 var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
 	Timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -359,6 +364,18 @@ func copyRuneSlice(src []rune) []rune {
 	return sliceCopy
 }
 
+func truncateString(str string, length int) string {
+	if length <= 0 {
+		return ""
+	}
+
+	if utf8.RuneCountInString(str) < length {
+		return str
+	}
+
+	return string([]rune(str)[:length])
+}
+
 func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REPLConfiguration) {
 	old, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -416,7 +433,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			case *gopherscript.StringLiteral, *gopherscript.FlagLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
-					color: termenv.ANSI256Color(209),
+					color: STRING_LITERAL_COLOR,
 				})
 			case *gopherscript.AbsolutePathPatternLiteral, *gopherscript.RelativePathPatternLiteral, *gopherscript.URLPatternLiteral, *gopherscript.HTTPHostPatternLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
@@ -427,17 +444,17 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				*gopherscript.PathSlice, *gopherscript.URLQueryParameterSlice:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
-					color: termenv.ANSI256Color(209),
+					color: PATH_LITERAL_COLOR,
 				})
 			case *gopherscript.IntLiteral, *gopherscript.FloatLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
-					color: termenv.ANSIBrightGreen,
+					color: NUMBER_LITERAL_COLOR,
 				})
 			case *gopherscript.BooleanLiteral, *gopherscript.NilLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
 					span:  n.Base().Span,
-					color: termenv.ANSIBlue,
+					color: CONSTANT_COLOR,
 				})
 			case *gopherscript.QuantityLiteral:
 				colorizations = append(colorizations, ColorizationInfo{
@@ -524,6 +541,161 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		if prev < len(input) {
 			fmt.Print(string(input[prev:]))
 		}
+	}
+
+	colorizeValue := func(notColorized string, value interface{}) string {
+		s := termenv.String(notColorized)
+		var color termenv.Color = config.defaultFgColor
+		switch value.(type) {
+		case string:
+			color = STRING_LITERAL_COLOR
+		case gopherscript.Path, gopherscript.URL:
+			color = PATH_LITERAL_COLOR
+		case bool, nil:
+			color = CONSTANT_COLOR
+		case int64, int, float64:
+			color = NUMBER_LITERAL_COLOR
+		case time.Time:
+			color = termenv.ANSIBlue
+		}
+		s = s.Foreground(color)
+		return s.String()
+	}
+
+	printTable := func(termWidth int, cellSize int, keys []string, list gopherscript.List) {
+		keyCount := len(keys)
+		buff := bytes.NewBufferString("")
+
+		fmt.Print(strings.Repeat("-", termWidth-1))
+		fmt.Print(replaceNewLinesRawMode("\n"))
+
+		for _, k := range keys {
+			buff.Reset()
+			buff.WriteString(k)
+
+			if buff.Len()+1 > cellSize {
+				buff.Truncate(cellSize - 1)
+			}
+
+			fmt.Print(buff.String(), strings.Repeat(" ", cellSize-buff.Len()))
+			fmt.Print("|")
+		}
+
+		fmt.Print(replaceNewLinesRawMode("\n"))
+
+		buff.Reset()
+		for i := 0; i < keyCount; i++ {
+			buff.WriteString(strings.Repeat("-", cellSize))
+			buff.WriteRune('|')
+		}
+		fmt.Print(buff.String())
+
+		fmt.Print(replaceNewLinesRawMode("\n"))
+
+		for _, e := range list {
+			obj := e.(gopherscript.Object)
+
+			for _, k := range keys {
+				buff.Reset()
+				buff.Grow(cellSize)
+
+				notColorized := fmt.Sprint(obj[k])
+
+				if utf8.RuneCountInString(notColorized)+2 > cellSize {
+					colorized := []rune(colorizeValue(notColorized[:cellSize-2], obj[k]))
+
+					buff.WriteString(string(colorized))
+					buff.WriteString("..")
+				} else {
+					buff.WriteString(colorizeValue(notColorized, obj[k]))
+				}
+
+				fmt.Print(buff.String())
+
+				paddingRightLen := cellSize - len(notColorized)
+				if paddingRightLen > 0 {
+					fmt.Print(strings.Repeat(" ", paddingRightLen))
+				}
+
+				fmt.Print("|")
+			}
+
+			fmt.Print(replaceNewLinesRawMode("\n"))
+
+			// buff.Reset()
+			// for i := 0; i < keyCount; i++ {
+			// 	buff.WriteString(strings.Repeat("-", cellSize))
+			// 	buff.WriteRune('|')
+			// }
+			// fmt.Print(buff.String())
+
+			// fmt.Print(replaceNewLinesRawMode("\n"))
+		}
+	}
+
+	printOutput := func(inputModule *gopherscript.Module, result interface{}) {
+
+		termWidth, _, _ := term.GetSize(int(os.Stdout.Fd()))
+
+		const VALUE_FMT = "%#v\n\r"
+		var s string
+		switch r := result.(type) {
+		case gopherscript.List:
+			if len(r) == 0 {
+				return
+			}
+
+			if len(r) > 1 {
+				areAllObjects := true
+
+				for _, e := range r {
+					if _, isObj := e.(gopherscript.Object); !isObj {
+						areAllObjects = false
+						break
+					}
+				}
+
+				if areAllObjects {
+					keyMap := map[string]bool{}
+					for k, _ := range r[0].(gopherscript.Object) {
+						keyMap[k] = true
+					}
+
+					allHaveSameKeys := true
+
+				loop:
+					for _, e := range r[1:] {
+						obj := e.(gopherscript.Object)
+
+						for k, _ := range obj {
+							if !keyMap[k] {
+								allHaveSameKeys = false
+								break loop
+							}
+						}
+					}
+
+					keyCount := len(keyMap)
+					cellSize := (termWidth - keyCount) / keyCount
+					keys := make([]string, 0)
+					for k := range keyMap {
+						keys = append(keys, k)
+					}
+
+					if allHaveSameKeys {
+						printTable(termWidth, cellSize, keys, r)
+					}
+
+					return
+				}
+			}
+
+			s = fmt.Sprintf(VALUE_FMT, result)
+		default:
+			s = fmt.Sprintf(VALUE_FMT, result)
+		}
+
+		fmt.Print(s)
 	}
 
 	//we add a local scope in order to persist local variables across executions
@@ -923,9 +1095,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 						errString := replaceNewLinesRawMode(evalErr.Error())
 						fmt.Print(errString, "\n\r")
 					} else {
-						if list, ok := res.(gopherscript.List); !ok || len(list) != 0 {
-							fmt.Printf("%#v\n\r", res)
-						}
+						printOutput(mod, res)
 					}
 				}
 				termenv.CursorNextLine(1)
