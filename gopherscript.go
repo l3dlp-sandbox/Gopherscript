@@ -2546,6 +2546,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 		openingBraceIndex := i
 		i++
 		var parsingErr *ParsingError
+		var valuelessTokens = []Token{
+			{OPENING_CURLY_BRACKET, NodeSpan{openingBraceIndex, openingBraceIndex + 1}},
+		}
 
 		var stmts []Node
 
@@ -2572,6 +2575,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			}
 
 		} else {
+			valuelessTokens = append(valuelessTokens, Token{CLOSING_CURLY_BRACKET, NodeSpan{closingBraceIndex, closingBraceIndex + 1}})
 			i++
 		}
 
@@ -2580,12 +2584,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 		return &Block{
 			NodeBase: NodeBase{
-				Span: NodeSpan{openingBraceIndex, end},
-				Err:  parsingErr,
-				ValuelessTokens: []Token{
-					{OPENING_CURLY_BRACKET, NodeSpan{openingBraceIndex, openingBraceIndex + 1}},
-					{CLOSING_CURLY_BRACKET, NodeSpan{closingBraceIndex, closingBraceIndex + 1}},
-				},
+				Span:            NodeSpan{openingBraceIndex, end},
+				Err:             parsingErr,
+				ValuelessTokens: valuelessTokens,
 			},
 			Statements: stmts,
 		}
