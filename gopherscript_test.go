@@ -403,7 +403,14 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&ListLiteral{
-					NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
+					NodeBase: NodeBase{
+						NodeSpan{0, 4},
+						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{3, 4}},
+						},
+					},
 					Elements: []Node{
 						&RelativePathLiteral{
 							NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
@@ -1882,7 +1889,14 @@ func TestMustParseModule(t *testing.T) {
 					},
 					Arguments: []Node{
 						&ListLiteral{
-							NodeBase: NodeBase{NodeSpan{6, 8}, nil, nil},
+							NodeBase: NodeBase{
+								NodeSpan{6, 8},
+								nil,
+								[]Token{
+									{OPENING_BRACKET, NodeSpan{6, 7}},
+									{CLOSING_BRACKET, NodeSpan{7, 8}},
+								},
+							},
 							Elements: nil,
 						},
 					},
@@ -2986,7 +3000,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 2},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{1, 2}},
+						},
 					},
 					Elements: nil,
 				},
@@ -3007,7 +3024,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 3},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{2, 3}},
+						},
 					},
 					Elements: nil,
 				},
@@ -3028,7 +3048,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 5},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{4, 5}},
+						},
 					},
 					Elements: []Node{
 						&IntLiteral{
@@ -3059,7 +3082,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 7},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{6, 7}},
+						},
 					}, Elements: []Node{
 						&IntLiteral{
 							NodeBase: NodeBase{
@@ -3098,7 +3124,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{8, 9}},
+						},
 					},
 					Elements: []Node{
 						&IntLiteral{
@@ -3138,7 +3167,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{8, 9}},
+						},
 					},
 					Elements: []Node{
 						&IntLiteral{
@@ -3178,7 +3210,10 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 6},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_BRACKET, NodeSpan{0, 1}},
+							{CLOSING_BRACKET, NodeSpan{5, 6}},
+						},
 					},
 					Elements: []Node{
 						&IntLiteral{

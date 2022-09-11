@@ -4710,6 +4710,8 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			i++
 
 			var elements []Node
+			var valuelessTokens = []Token{{OPENING_BRACKET, NodeSpan{i - 1, i}}}
+
 			for i < len(s) && s[i] != ']' {
 				eatSpaceNewlineComma()
 
@@ -4738,13 +4740,15 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					(*ListLiteral)(nil),
 				}
 			} else {
+				valuelessTokens = append(valuelessTokens, Token{CLOSING_BRACKET, NodeSpan{i, i + 1}})
 				i++
 			}
 
 			return &ListLiteral{
 				NodeBase: NodeBase{
-					Span: NodeSpan{openingBracketIndex, i},
-					Err:  parsingErr,
+					Span:            NodeSpan{openingBracketIndex, i},
+					Err:             parsingErr,
+					ValuelessTokens: valuelessTokens,
 				},
 				Elements: elements,
 			}, false
