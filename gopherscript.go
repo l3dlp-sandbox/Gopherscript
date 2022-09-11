@@ -227,6 +227,7 @@ const (
 	RELATIVE_PATH_LITERAL
 	ABSOLUTE_PATH_PATTERN_LITERAL
 	RELATIVE_PATH_PATTERN_LITERAL
+	BINARY_OPERATOR
 )
 
 // represents a token with no data such as ',', '['
@@ -5248,6 +5249,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			openingParenIndex := i
 			i++
 			left, _ := parseExpression()
+			var tokens = []Token{{OPENING_PARENTHESIS, NodeSpan{openingParenIndex, openingParenIndex + 1}}}
 
 			eatSpace()
 
@@ -5255,6 +5257,12 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				i++
 				lhs = left
 				parenthesizedFirstStart = openingParenIndex
+				tokens := lhs.Base().ValuelessTokens
+				base := lhs.BasePtr()
+				base.ValuelessTokens = append([]Token{
+					{OPENING_PARENTHESIS, NodeSpan{openingParenIndex, openingParenIndex + 1}},
+				}, tokens...)
+				base.ValuelessTokens = append(base.ValuelessTokens, Token{CLOSING_PARENTHESIS, NodeSpan{i - 1, i}})
 				break
 			}
 
@@ -5273,6 +5281,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*BinaryExpression)(nil),
 						},
+						ValuelessTokens: tokens,
 					},
 					Operator: -1,
 					Left:     left,
@@ -5290,9 +5299,20 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 							KnownType,
 							(*BinaryExpression)(nil),
 						},
+						ValuelessTokens: tokens,
 					},
 					Operator: operator,
 					Left:     left,
+				}
+			}
+
+			makeInvalidOperatorError := func() *ParsingError {
+				return &ParsingError{
+					NON_EXISTING_OPERATOR,
+					i,
+					openingParenIndex,
+					KnownType,
+					(*BinaryExpression)(nil),
 				}
 			}
 
@@ -5304,7 +5324,9 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 			var parsingErr *ParsingError
 
-			var operator BinaryOperator
+			var operator BinaryOperator = -1
+			var operatorStart = i
+
 			switch s[i] {
 			case '+':
 				operator = Add
@@ -5340,13 +5362,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case '=':
 				i++
 				if i >= len(s) {
@@ -5358,14 +5374,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}
 
 				eatInvalidOperator()
-
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'a':
 				AND_LEN := len("and")
 
@@ -5377,13 +5386,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'i':
 				i++
 				if i >= len(s) {
@@ -5396,13 +5399,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				//TODO: eat some chars
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'k':
 				KEYOF_LEN := len("keyof")
 				if len(s)-i >= KEYOF_LEN && string(s[i:i+KEYOF_LEN]) == "keyof" {
@@ -5413,13 +5410,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'n':
 				NOTIN_LEN := len("not-in")
 				if len(s)-i >= NOTIN_LEN && string(s[i:i+NOTIN_LEN]) == "not-in" {
@@ -5437,13 +5428,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'm':
 				MATCH_LEN := len("match")
 				if len(s)-i >= MATCH_LEN && string(s[i:i+MATCH_LEN]) == "match" {
@@ -5454,13 +5439,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 'o':
 				OR_LEN := len("or")
 				if len(s)-i >= OR_LEN && string(s[i:i+OR_LEN]) == "or" {
@@ -5471,13 +5450,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 
 				eatInvalidOperator()
 
-				parsingErr = &ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				}
+				parsingErr = makeInvalidOperatorError()
 			case 's':
 				SUBSTROF_LEN := len("substrof")
 				if len(s)-i >= SUBSTROF_LEN && string(s[i:i+SUBSTROF_LEN]) == "substrof" {
@@ -5485,13 +5458,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 					i += SUBSTROF_LEN - 1
 					break
 				}
-				panic(ParsingError{
-					NON_EXISTING_OPERATOR,
-					i,
-					openingParenIndex,
-					KnownType,
-					(*BinaryExpression)(nil),
-				})
+				parsingErr = makeInvalidOperatorError()
 			case '.':
 				operator = Dot
 			}
@@ -5517,6 +5484,10 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 			if operator == Range && i < len(s) && s[i] == '<' {
 				operator = ExclEndRange
 				i++
+			}
+
+			if operator >= 0 {
+				tokens = append(tokens, Token{BINARY_OPERATOR, NodeSpan{operatorStart, i}})
 			}
 
 			eatSpace()
@@ -5563,14 +5534,16 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 						(*BinaryExpression)(nil),
 					}
 				} else {
+					tokens = append(tokens, Token{CLOSING_PARENTHESIS, NodeSpan{i, i + 1}})
 					i++
 				}
 			}
 
 			lhs = &BinaryExpression{
 				NodeBase: NodeBase{
-					Span: NodeSpan{openingParenIndex, i},
-					Err:  parsingErr,
+					Span:            NodeSpan{openingParenIndex, i},
+					Err:             parsingErr,
+					ValuelessTokens: tokens,
 				},
 				Operator: operator,
 				Left:     left,
@@ -8832,7 +8805,7 @@ func GetTokens(node Node) []Token {
 	})
 
 	sort.Slice(tokens, func(i, j int) bool {
-		return tokens[i].Span.End < tokens[j].Span.Start
+		return tokens[i].Span.Start < tokens[j].Span.Start
 	})
 
 	return tokens

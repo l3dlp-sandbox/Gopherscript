@@ -742,8 +742,15 @@ func TestMustParseModule(t *testing.T) {
 			NodeBase: NodeBase{NodeSpan{0, 4}, nil, nil},
 			Statements: []Node{
 				&Variable{
-					NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
-					Name:     "a",
+					NodeBase: NodeBase{
+						NodeSpan{1, 3},
+						nil,
+						[]Token{
+							{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+							{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+						},
+					},
+					Name: "a",
 				},
 			},
 		}, n)
@@ -757,8 +764,15 @@ func TestMustParseModule(t *testing.T) {
 				&MemberExpression{
 					NodeBase: NodeBase{NodeSpan{0, 9}, nil, nil},
 					Left: &Variable{
-						NodeBase: NodeBase{NodeSpan{1, 3}, nil, nil},
-						Name:     "a",
+						NodeBase: NodeBase{
+							NodeSpan{1, 3},
+							nil,
+							[]Token{
+								{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+								{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+							},
+						},
+						Name: "a",
 					},
 					PropertyName: &IdentifierLiteral{
 						NodeBase: NodeBase{NodeSpan{5, 9}, nil, nil},
@@ -2498,7 +2512,10 @@ func TestMustParseModule(t *testing.T) {
 							NodeBase: NodeBase{
 								NodeSpan{8, 9},
 								nil,
-								nil,
+								[]Token{
+									{OPENING_PARENTHESIS, NodeSpan{7, 8}},
+									{CLOSING_PARENTHESIS, NodeSpan{9, 10}},
+								},
 							},
 							Raw:   "1",
 							Value: 1,
@@ -3755,7 +3772,11 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{4, 12},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_PARENTHESIS, NodeSpan{4, 5}},
+								{BINARY_OPERATOR, NodeSpan{7, 9}},
+								{CLOSING_PARENTHESIS, NodeSpan{11, 12}},
+							},
 						},
 						Operator: Range,
 						Left: &IntLiteral{
@@ -3806,7 +3827,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 9},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+							{BINARY_OPERATOR, NodeSpan{4, 5}},
+							{CLOSING_PARENTHESIS, NodeSpan{8, 9}},
+						},
 					},
 					Operator: Add,
 					Left: &Variable{
@@ -3843,7 +3868,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 10},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+							{BINARY_OPERATOR, NodeSpan{4, 6}},
+							{CLOSING_PARENTHESIS, NodeSpan{9, 10}},
+						},
 					},
 					Operator: Range,
 					Left: &Variable{
@@ -3880,7 +3909,11 @@ func TestMustParseModule(t *testing.T) {
 					NodeBase: NodeBase{
 						NodeSpan{0, 11},
 						nil,
-						nil,
+						[]Token{
+							{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+							{BINARY_OPERATOR, NodeSpan{4, 7}},
+							{CLOSING_PARENTHESIS, NodeSpan{10, 11}},
+						},
 					},
 					Operator: ExclEndRange,
 					Left: &Variable{
@@ -3924,7 +3957,11 @@ func TestMustParseModule(t *testing.T) {
 							KnownType,
 							(*BinaryExpression)(nil),
 						},
-						nil,
+						[]Token{
+							{OPENING_PARENTHESIS, NodeSpan{0, 1}},
+							{BINARY_OPERATOR, NodeSpan{4, 5}},
+							{CLOSING_PARENTHESIS, NodeSpan{5, 6}},
+						},
 					},
 					Operator: Add,
 					Left: &Variable{
@@ -4364,7 +4401,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{2, 3},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_PARENTHESIS, NodeSpan{1, 2}},
+								{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+							},
 						},
 						Raw:   "1",
 						Value: 1,
@@ -4393,7 +4433,10 @@ func TestMustParseModule(t *testing.T) {
 						NodeBase: NodeBase{
 							NodeSpan{2, 3},
 							nil,
-							nil,
+							[]Token{
+								{OPENING_PARENTHESIS, NodeSpan{1, 2}},
+								{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+							},
 						},
 						Raw:   "1",
 						Value: 1,
@@ -7233,9 +7276,16 @@ func TestEval(t *testing.T) {
 		res, err := Eval(n.Statements[0], state)
 		assert.NoError(t, err)
 		assert.EqualValues(t, &IntLiteral{
-			NodeBase: NodeBase{NodeSpan{2, 3}, nil, nil},
-			Raw:      "1",
-			Value:    1,
+			NodeBase: NodeBase{
+				NodeSpan{2, 3},
+				nil,
+				[]Token{
+					{OPENING_PARENTHESIS, NodeSpan{1, 2}},
+					{CLOSING_PARENTHESIS, NodeSpan{3, 4}},
+				},
+			},
+			Raw:   "1",
+			Value: 1,
 		}, res)
 	})
 
