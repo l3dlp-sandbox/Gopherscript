@@ -669,6 +669,47 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				termenv.CursorForward(1)
 			}
 			continue
+		case CtrlBackspace:
+
+			if len(input) == 0 || backspaceCount >= len(input) {
+				continue
+			}
+
+			mod, _ := gopherscript.ParseModule(string(input), "")
+			tokens := gopherscript.GetTokens(mod)
+
+			switch len(tokens) {
+			case 0:
+				continue
+			}
+
+			cursorIndex := len(input) - backspaceCount
+			lastTokenIndex := 0
+
+			for i, token := range tokens {
+				if cursorIndex < token.Span.Start {
+					break
+				} else {
+					lastTokenIndex = i
+				}
+			}
+
+			lastToken := tokens[lastTokenIndex]
+			for _, token := range tokens {
+				debug(string(input[token.Span.Start:token.Span.End]), token)
+			}
+
+			start := lastToken.Span.Start
+			right := copyRuneSlice(input[cursorIndex:])
+			input = append(input[0:start], right...)
+
+			termenv.CursorBack(cursorIndex - start)
+			termenv.SaveCursorPosition()
+
+			fmt.Print(string(right))
+			termenv.ClearLineRight()
+			termenv.RestoreCursorPosition()
+			continue
 		case CtrlLeft:
 			mod, _ := gopherscript.ParseModule(string(input), "")
 			tokens := gopherscript.GetTokens(mod)
