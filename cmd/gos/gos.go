@@ -1021,7 +1021,7 @@ func findPathSuggestions(ctx *gopherscript.Context, pth string) []suggestion {
 		base = ""
 	}
 
-	entries, err := fsLs(ctx, gopherscript.Path(dir+"/"))
+	entries, err := fsList(ctx, gopherscript.Path(dir+"/"))
 	if err != nil {
 		return nil
 	}
@@ -1606,8 +1606,8 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			"mkfile": gopherscript.ValOf(fsMkfile),
 			"mkdir":  gopherscript.ValOf(fsMkdir),
 			"read":   gopherscript.ValOf(fsReadFile),
-			"ls":     gopherscript.ValOf(fsLs),
-			"del":    gopherscript.ValOf(fsDel),
+			"ls":     gopherscript.ValOf(fsList),
+			"rm":     gopherscript.ValOf(fsRemove),
 		},
 		"io": gopherscript.Object{
 			"ReadAll": gopherscript.ValOf(func(ctx *gopherscript.Context, reader io.Reader) ([]byte, error) {
@@ -1965,7 +1965,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 				}
 			case gopherscript.Path:
 				if resrc.IsDirPath() {
-					if res, err = fsLs(ctx, resrc); err != nil {
+					if res, err = fsList(ctx, resrc); err != nil {
 						return nil, err
 					}
 
@@ -2188,7 +2188,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 					return b, nil
 				}
 			case gopherscript.Path:
-				return nil, fsDel(ctx, res)
+				return nil, fsRemove(ctx, res)
 			default:
 				return nil, fmt.Errorf("resources of type %T not supported yet", res)
 			}
@@ -2203,7 +2203,7 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 	return state
 }
 
-func fsLs(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, error) {
+func fsList(ctx *gopherscript.Context, args ...interface{}) (gopherscript.List, error) {
 	var pth gopherscript.Path
 	var patt gopherscript.PathPattern
 	ERR := "a single path (or path pattern) argument is expected"
@@ -2484,7 +2484,7 @@ func fsAppendToFile(ctx *gopherscript.Context, args ...interface{}) error {
 	return nil
 }
 
-func fsDel(ctx *gopherscript.Context, args ...interface{}) error {
+func fsRemove(ctx *gopherscript.Context, args ...interface{}) error {
 
 	var fpath gopherscript.Path
 	for _, arg := range args {
