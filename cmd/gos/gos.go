@@ -35,6 +35,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	tabl "github.com/aquasecurity/table"
 	gopherscript "github.com/debloat-dev/Gopherscript"
 	tui "github.com/debloat-dev/Gopherscript/internal/tui"
 
@@ -102,6 +103,12 @@ const CONSTANT_COLOR = termenv.ANSIBlue
 var DEFAULT_HTTP_REQUEST_OPTIONS = &gopherscript.HttpRequestOptions{
 	Timeout:            DEFAULT_HTTP_CLIENT_TIMEOUT,
 	InsecureSkipVerify: true, //TODO: set to false
+}
+
+var KEY_PRIORITY = map[string]int{
+	"id":    -1000,
+	"name":  -999,
+	"title": -998,
 }
 
 var ALLOWED_PROMPT_FUNCTION_NAMES = []string{
@@ -386,6 +393,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	}()
 
 	reader := bufio.NewReader(os.Stdin)
+	outFD := os.Stdout.Fd()
 
 	history := CommandHistory{Commands: []string{""}}
 	commandIndex := 0
@@ -543,12 +551,29 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		}
 	}
 
-	colorizeValue := func(notColorized string, value interface{}) string {
+	var colorizeValue func(notColorized string, value interface{}) string
+	colorizeValue = func(notColorized string, value interface{}) string {
+
+		const CHUNK_SIZE = 5
+
+		if len(notColorized) > CHUNK_SIZE {
+			colorized := bytes.NewBufferString("")
+			for notColorized != "" {
+				chunkSize := min(len(notColorized), CHUNK_SIZE)
+				colorizedChunk := colorizeValue(notColorized[:chunkSize], value)
+				colorized.WriteString(colorizedChunk)
+				if len(notColorized) == chunkSize {
+					break
+				}
+				notColorized = notColorized[chunkSize:]
+			}
+			return colorized.String()
+		}
+
 		s := termenv.String(notColorized)
+
 		var color termenv.Color = config.defaultFgColor
 		switch value.(type) {
-		case string:
-			color = STRING_LITERAL_COLOR
 		case gopherscript.Path, gopherscript.URL:
 			color = PATH_LITERAL_COLOR
 		case bool, nil:
@@ -556,86 +581,48 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		case int64, int, float64:
 			color = NUMBER_LITERAL_COLOR
 		case time.Time:
-			color = termenv.ANSIBlue
+			color = termenv.ANSIBrightBlue
 		}
 		s = s.Foreground(color)
 		return s.String()
 	}
 
 	printTable := func(termWidth int, cellSize int, keys []string, list gopherscript.List) {
-		keyCount := len(keys)
 		buff := bytes.NewBufferString("")
 
-		fmt.Print(strings.Repeat("-", termWidth-1))
-		fmt.Print(replaceNewLinesRawMode("\n"))
-
-		for _, k := range keys {
-			buff.Reset()
-			buff.WriteString(k)
-
-			if buff.Len()+1 > cellSize {
-				buff.Truncate(cellSize - 1)
-			}
-
-			fmt.Print(buff.String(), strings.Repeat(" ", cellSize-buff.Len()))
-			fmt.Print("|")
-		}
-
-		fmt.Print(replaceNewLinesRawMode("\n"))
-
 		buff.Reset()
-		for i := 0; i < keyCount; i++ {
-			buff.WriteString(strings.Repeat("-", cellSize))
-			buff.WriteRune('|')
-		}
-		fmt.Print(buff.String())
 
-		fmt.Print(replaceNewLinesRawMode("\n"))
+		writer := bytes.NewBufferString("")
+		table := tabl.New(writer)
+		table.AddHeaders(keys...)
+		table.SetAvailableWidth(termWidth)
+		maxColumnWidth := termWidth / (len(keys) - 1)
+		table.SetColumnMaxWidth(maxColumnWidth)
+
+		dividers := tabl.UnicodeDividers
+		dividers.NS = termenv.CSI + termenv.ResetSeq + "m" + "│"
+		table.SetDividers(dividers)
 
 		for _, e := range list {
 			obj := e.(gopherscript.Object)
 
+			row := make([]string, 0)
 			for _, k := range keys {
 				buff.Reset()
-				buff.Grow(cellSize)
 
-				notColorized := fmt.Sprint(obj[k])
-
-				if utf8.RuneCountInString(notColorized)+2 > cellSize {
-					colorized := []rune(colorizeValue(notColorized[:cellSize-2], obj[k]))
-
-					buff.WriteString(string(colorized))
-					buff.WriteString("..")
-				} else {
-					buff.WriteString(colorizeValue(notColorized, obj[k]))
-				}
-
-				fmt.Print(buff.String())
-
-				paddingRightLen := cellSize - len(notColorized)
-				if paddingRightLen > 0 {
-					fmt.Print(strings.Repeat(" ", paddingRightLen))
-				}
-
-				fmt.Print("|")
+				notColorized := []byte(strings.ReplaceAll(fmt.Sprint(obj[k]), "xx", "\\n"))
+				colorized := colorizeValue(string(notColorized), obj[k])
+				row = append(row, string(colorized))
 			}
-
-			fmt.Print(replaceNewLinesRawMode("\n"))
-
-			// buff.Reset()
-			// for i := 0; i < keyCount; i++ {
-			// 	buff.WriteString(strings.Repeat("-", cellSize))
-			// 	buff.WriteRune('|')
-			// }
-			// fmt.Print(buff.String())
-
-			// fmt.Print(replaceNewLinesRawMode("\n"))
+			table.AddRow(row...)
 		}
+		table.Render()
+		fmt.Print(replaceNewLinesRawMode(writer.String()))
 	}
 
 	printOutput := func(inputModule *gopherscript.Module, result interface{}) {
 
-		termWidth, _, _ := term.GetSize(int(os.Stdout.Fd()))
+		termWidth, _, _ := term.GetSize(int(outFD))
 
 		const VALUE_FMT = "%#v\n\r"
 		var s string
@@ -681,6 +668,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					for k := range keyMap {
 						keys = append(keys, k)
 					}
+
+					sort.Slice(keys, func(i, j int) bool {
+						return KEY_PRIORITY[keys[i]] < KEY_PRIORITY[keys[j]]
+					})
 
 					if allHaveSameKeys {
 						printTable(termWidth, cellSize, keys, r)
@@ -1990,6 +1981,9 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			//return error if d negative ?
 			return time.Now().Add(-d)
 		},
+		"idt": func(ctx *gopherscript.Context, v interface{}) interface{} {
+			return v
+		},
 		"map": func(ctx *gopherscript.Context, filter interface{}, list gopherscript.List) (gopherscript.List, error) {
 			result := gopherscript.List{}
 
@@ -2162,6 +2156,9 @@ func NewState(ctx *gopherscript.Context) *gopherscript.State {
 			case JSON_CTYPE:
 				if doParse {
 					err = json.Unmarshal(b, &res)
+					if err == nil {
+						res = convertJSONValToGopherscriptVal(ctx, res)
+					}
 				} else {
 					res = string(b)
 				}

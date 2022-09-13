@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.0
+	github.com/aquasecurity/table v1.8.0
 	github.com/gdamore/tcell/v2 v2.5.2
 	github.com/muesli/termenv v0.11.0
 	github.com/rivo/tview v0.0.0-20220801133142-711ef394f9b3
@@ -14,7 +15,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.1 // indirect
-	github.com/davecgh/go-spew v1.1.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
