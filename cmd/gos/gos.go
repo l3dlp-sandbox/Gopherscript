@@ -420,6 +420,9 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	//prints the input with colorizations, after this function has been executed the cursor is at the end of line
 	printPromptAndInput := func() {
+		termenv.ClearLine()
+		moveCursorLineStart()
+
 		promptLen = writePrompt(state, config)
 		var colorizations []ColorizationInfo
 
@@ -773,9 +776,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				commandIndex = 0
 			}
 
-			termenv.ClearLine()
-			termenv.CursorBack(len(input) + promptLen)
-
 			printPromptAndInput()
 			continue
 		case Escape:
@@ -1018,8 +1018,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 				termenv.SaveCursorPosition()
 
-				termenv.ClearLine()
-				moveCursorLineStart()
 				printPromptAndInput()
 
 				termenv.RestoreCursorPosition()
@@ -1098,8 +1096,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		}
 
 		if code == NotSpecialCode && strconv.IsPrint(r) {
-			termenv.ClearLine()
-			moveCursorLineStart()
 			input = append(left, r)
 
 			//we append the corresponding closing delimiter if the new rune is an opening delimiter and the termina input buffer is empty
@@ -1109,13 +1105,13 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 					input = append(input, getClosingDelimiter(r))
 					backspaceCount++
 				}
+			}
 
-				input = append(input, right...)
-				printPromptAndInput()
+			input = append(input, right...)
+			printPromptAndInput()
 
-				if backspaceCount > 0 {
-					termenv.CursorBack(backspaceCount)
-				}
+			if backspaceCount > 0 {
+				termenv.CursorBack(backspaceCount)
 			}
 
 		} else {
