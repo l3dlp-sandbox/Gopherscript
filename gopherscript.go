@@ -9317,7 +9317,7 @@ func CompileStringPatternNode(node Node, state *State) (StringPatternElement, er
 	case *StringLiteral:
 		return ExactSimpleValueMatcher{v.Value}, nil
 	case *RuneLiteral:
-		return ExactSimpleValueMatcher{v.Value}, nil
+		return ExactSimpleValueMatcher{string(v.Value)}, nil
 	case *RuneRangeExpression:
 		lower := v.Lower.Value
 		upper := v.Upper.Value
