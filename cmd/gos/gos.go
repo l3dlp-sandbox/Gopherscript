@@ -1101,19 +1101,22 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			moveCursorLineStart()
 			input = append(left, r)
 
-			//we append the corresponding closing delimiter if the new rune is an opening delimiter
-			switch r {
-			case '[', '{', '(':
-				input = append(input, getClosingDelimiter(r))
-				backspaceCount++
+			//we append the corresponding closing delimiter if the new rune is an opening delimiter and the termina input buffer is empty
+			if reader.Buffered() == 0 {
+				switch r {
+				case '[', '{', '(':
+					input = append(input, getClosingDelimiter(r))
+					backspaceCount++
+				}
+
+				input = append(input, right...)
+				printPromptAndInput()
+
+				if backspaceCount > 0 {
+					termenv.CursorBack(backspaceCount)
+				}
 			}
 
-			input = append(input, right...)
-			printPromptAndInput()
-
-			if backspaceCount > 0 {
-				termenv.CursorBack(backspaceCount)
-			}
 		} else {
 			//fmt.Printf("%v", r)
 		}
