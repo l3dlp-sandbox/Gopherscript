@@ -46,7 +46,7 @@ require {
 
 return {
     builtin-commands: [cd, pwd, whoami, hostname, now]
-    aliased-commands: [echo, go] # TODO: specify timeout durations ?
+    trusted-commands: [echo, go]
     prompt: [
         [@(whoami()) bright-blue]
         ["@" bright-blue]

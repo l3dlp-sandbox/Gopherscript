@@ -79,6 +79,7 @@ const FS_TOTAL_NEW_FILE_LIMIT_NAME = "fs/total-new-file"
 const FS_NEW_FILE_RATE_LIMIT_NAME = "fs/new-file"
 
 const HTTP_REQUEST_RATE_LIMIT_NAME = "http/request"
+const NO_TIMEOUT_OPTION_NAME = "no-timeout"
 
 var DEFAULT_LIMITATIONS = []gopherscript.Limitation{
 	{Name: FS_READ_LIMIT_NAME, ByteRate: 1_000},
@@ -1330,7 +1331,7 @@ switch_:
 
 type REPLConfiguration struct {
 	builtinCommands []string
-	aliasedCommands []string
+	trustedCommands []string
 	prompt          gopherscript.List
 	defaultFgColor  termenv.Color
 }
@@ -1355,8 +1356,8 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 				}
 				config.builtinCommands = append(config.builtinCommands, string(ident))
 			}
-		case "aliased-commands":
-			ALIASED_COMMAND_LIST_ERR := "invalid configuration: aliased-commands should be a list of identifiers"
+		case "trusted-commands":
+			ALIASED_COMMAND_LIST_ERR := "invalid configuration: trusted-commands should be a list of identifiers"
 			list, isList := v.(gopherscript.List)
 			if !isList {
 				return config, errors.New(ALIASED_COMMAND_LIST_ERR)
@@ -1366,7 +1367,7 @@ func makeConfiguration(obj gopherscript.Object) (REPLConfiguration, error) {
 				if !ok {
 					return config, errors.New(ALIASED_COMMAND_LIST_ERR)
 				}
-				config.aliasedCommands = append(config.aliasedCommands, string(ident))
+				config.trustedCommands = append(config.trustedCommands, string(ident))
 			}
 		case "prompt":
 			PROMPT_CONFIG_ERR := "invalid configuration: prompt should be a list"
@@ -1634,13 +1635,16 @@ func main() {
 				//add aliased commands to the global scope
 
 				globalScope := state.GlobalScope()
-				for _, cmd := range config.aliasedCommands {
+				for _, cmd := range config.trustedCommands {
 					if _, alreadyPresent := globalScope[cmd]; alreadyPresent {
-						panic(errors.New("aliased commands cannot override a global variable"))
+						panic(errors.New("trusted commands cannot override a global variable"))
 					}
 					globalScope[cmd] = func(cmd string) interface{} {
 						return gopherscript.ValOf(func(ctx *gopherscript.Context, args ...interface{}) (string, error) {
-							exArgs := []interface{}{gopherscript.Identifier(cmd)}
+							exArgs := []interface{}{
+								gopherscript.Option{Name: NO_TIMEOUT_OPTION_NAME, Value: true},
+								gopherscript.Identifier(cmd),
+							}
 							exArgs = append(exArgs, args...)
 							return ex(ctx, exArgs...)
 						})
@@ -1670,6 +1674,9 @@ func ex(ctx *gopherscript.Context, args ...interface{}) (string, error) {
 	var cmdName gopherscript.Identifier
 	var timeoutDuration time.Duration
 	var maxMemory gopherscript.ByteCount //future use
+	var noTimeout bool
+
+	const TIMEOUT_INCONSISTENCY_ERROR = "inconsistent arguments: --" + NO_TIMEOUT_OPTION_NAME + " AND a timeout duration were provided"
 
 	//options come first
 top:
@@ -1683,6 +1690,9 @@ top:
 
 			switch end := a.End.(type) {
 			case time.Duration:
+				if noTimeout {
+					return "", fmt.Errorf(TIMEOUT_INCONSISTENCY_ERROR)
+				}
 				if timeoutDuration != 0 {
 					return "", fmt.Errorf("ex: error: maximum duration provided at least twice")
 				}
@@ -1696,16 +1706,27 @@ top:
 				return "", fmt.Errorf("ex: error: invalid argument of type %T", end)
 			}
 			args = args[1:]
+		case gopherscript.Option:
+			switch a.Name {
+			case NO_TIMEOUT_OPTION_NAME:
+				if timeoutDuration != 0 {
+					return "", fmt.Errorf(TIMEOUT_INCONSISTENCY_ERROR)
+				}
+				if boolean, isBool := a.Value.(bool); !boolean || !isBool {
+					return "", fmt.Errorf("ex: --%s should have a value of true", NO_TIMEOUT_OPTION_NAME)
+				}
+
+				noTimeout = true
+				args = args[1:]
+			default:
+				return "", fmt.Errorf("invalid argument %v ", a)
+			}
 		default:
-			return "", fmt.Errorf("ex: error: arguments preceding the name of the command should be: at most one duration range")
+			return "", fmt.Errorf("ex: error: arguments preceding the name of the command should be: at most one duration range or --" + NO_TIMEOUT_OPTION_NAME)
 		}
 	}
 
-	if timeoutDuration == 0 {
-		timeoutDuration = EX_DEFAULT_TIMEOUT_DURATION
-	}
-
-	//we remove the subcommand chain from <argss>
+	//we remove the subcommand chain from <args>
 	for len(args) != 0 {
 		name, ok := args[0].(gopherscript.Identifier)
 		if ok {
@@ -1750,15 +1771,25 @@ top:
 		close(doneChan)
 	}()
 
-	select {
-	case <-doneChan:
-		return string(b), err
-	case <-time.After(timeoutDuration):
-		err = errors.New("ex: timeout")
-		return "", err
-	case err = <-limitChan:
-		return "", err
+	if noTimeout {
+		select {
+		case <-doneChan:
+			return string(b), err
+		case err = <-limitChan:
+			return "", err
+		}
+	} else {
+		select {
+		case <-doneChan:
+			return string(b), err
+		case <-time.After(timeoutDuration):
+			err = errors.New("ex: timeout")
+			return "", err
+		case err = <-limitChan:
+			return "", err
+		}
 	}
+
 }
 
 func NewState(ctx *gopherscript.Context) *gopherscript.State {

@@ -5072,7 +5072,7 @@ func ParseModule(str string, fpath string) (result *Module, resultErr error) {
 				}, false
 			}
 
-			for i < len(s) && (isAlpha(s[i]) || isDigit(s[i])) {
+			for i < len(s) && (isAlpha(s[i]) || isDigit(s[i]) || s[i] == '-') {
 				i++
 			}
 
