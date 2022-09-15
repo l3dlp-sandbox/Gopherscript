@@ -411,7 +411,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	outFD := os.Stdout.Fd()
 
 	history := commandHistory{commands: []string{""}, index: 0}
-
 	input := make([]rune, 0)
 	prevLineCount := 1
 	prevRowIndex := -1
@@ -423,6 +422,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	promptLen := writePrompt(state, config)
 	termWidth, _, _ := term.GetSize(int(outFD))
 
+	getNewLineCount := func() int {
+		return 1 + (len(input)+promptLen)/termWidth
+	}
+
 	reset := func() {
 		input = nil
 		backspaceCount = 0
@@ -430,7 +433,8 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		pressedTabCount = 0
 		ignoreNextChar = false
 
-		prevLineCount = 1
+		prevLineCount = getNewLineCount()
+		prevRowIndex = prevLineCount - 1
 	}
 
 	moveCursorLineStart := func() {
@@ -439,10 +443,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	getCursorIndex := func() int {
 		return len(input) - backspaceCount
-	}
-
-	getNewLineCount := func() int {
-		return 1 + (len(input)+promptLen)/termWidth
 	}
 
 	getColorizations := func(mod *gopherscript.Module) []ColorizationInfo {
@@ -552,7 +552,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		return colorizations
 	}
 
-	//prints the input with colorizations
+	//moves the cursor at the start of the prompt, prints the prompt and the input with colorizations and then moves the cursor at the right place
 	printPromptAndInput := func(inputGotReplaced bool) {
 		termenv.ClearLine()
 		mod, _ := gopherscript.ParseModule(string(input), "")
@@ -568,15 +568,15 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		rowIndex := (getCursorIndex() + promptLen) / termWidth
 		columnIndex := (getCursorIndex() + promptLen) % termWidth
 
-		//debug(" backspaceCount=", backspaceCount, "len(input)=", len(input),)
-		//debug(" newLineCount=", lineCount, " lineCount=", prevLineCount, " rowIndex=", rowIndex, " termWidth=", termWidth, "colulmIndex=", columnIndex)
-		//debug("prevRowIndex=", prevRowIndex)
+		debug("| backspaceCount=", backspaceCount, "len(input)=", len(input), "prevRowIndex=", prevRowIndex)
+		debug(" newLineCount=", lineCount, " lineCount=", prevLineCount, " rowIndex=", rowIndex, " termWidth=", termWidth, "colulmIndex=", columnIndex)
 
 		if lineCount > prevLineCount {
 			if !inputGotReplaced {
 				fmt.Printf("\n\r")
 			}
 		} else if prevLineCount > 1 && prevRowIndex != 0 {
+			debug("up by", prevRowIndex)
 			termenv.CursorUp(prevRowIndex)
 		}
 
@@ -826,9 +826,14 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		case ArrowDown:
 			//termenv.ClearLine()
 			//termenv.CursorBack(len(input) + promptLen)
+			prevInputLineCount := prevLineCount
+			termenv.ClearLine()
+
 			reset()
-			prevLineCount = getNewLineCount()
-			prevRowIndex = prevLineCount - 1
+			diff := abs(prevInputLineCount - prevLineCount)
+			if diff != 0 {
+				termenv.CursorUp(diff)
+			}
 
 			input = []rune(history.current())
 
