@@ -337,8 +337,22 @@ func getSpecialCode(runeSlice []rune) SpecialCode {
 	return NotSpecialCode
 }
 
-type CommandHistory struct {
-	Commands []string `json:"commands"`
+type commandHistory struct {
+	commands []string `json:"commands"`
+	index    int
+}
+
+func (history commandHistory) current() string {
+	return history.commands[history.index]
+}
+
+func (history *commandHistory) scroll(n int) {
+	history.index += n
+	if history.index < 0 {
+		history.index = len(history.commands) - 1
+	} else if history.index >= len(history.commands) {
+		history.index = 0
+	}
 }
 
 type ColorizationInfo struct {
@@ -396,17 +410,18 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	reader := bufio.NewReader(os.Stdin)
 	outFD := os.Stdout.Fd()
 
-	history := CommandHistory{Commands: []string{""}}
-	commandIndex := 0
+	history := commandHistory{commands: []string{""}, index: 0}
 
 	input := make([]rune, 0)
 	prevLineCount := 1
 	prevRowIndex := -1
+
 	var runeSeq []rune
 	backspaceCount := 0
 	pressedTabCount := 0
 	ignoreNextChar := false
 	promptLen := writePrompt(state, config)
+	termWidth, _, _ := term.GetSize(int(outFD))
 
 	reset := func() {
 		input = nil
@@ -414,6 +429,8 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		runeSeq = nil
 		pressedTabCount = 0
 		ignoreNextChar = false
+
+		prevLineCount = 1
 	}
 
 	moveCursorLineStart := func() {
@@ -422,6 +439,10 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	getCursorIndex := func() int {
 		return len(input) - backspaceCount
+	}
+
+	getNewLineCount := func() int {
+		return 1 + (len(input)+promptLen)/termWidth
 	}
 
 	getColorizations := func(mod *gopherscript.Module) []ColorizationInfo {
@@ -532,7 +553,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 	}
 
 	//prints the input with colorizations
-	printPromptAndInput := func() {
+	printPromptAndInput := func(inputGotReplaced bool) {
 		termenv.ClearLine()
 		mod, _ := gopherscript.ParseModule(string(input), "")
 		colorizations := getColorizations(mod)
@@ -541,9 +562,8 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			return colorizations[i].span.Start < colorizations[j].span.Start
 		})
 
-		termWidth, _, _ := term.GetSize(int(outFD))
 		//terminal resizings are not supported yet
-		lineCount := 1 + (len(input)+promptLen)/termWidth
+		lineCount := getNewLineCount()
 
 		rowIndex := (getCursorIndex() + promptLen) / termWidth
 		columnIndex := (getCursorIndex() + promptLen) % termWidth
@@ -553,7 +573,9 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		//debug("prevRowIndex=", prevRowIndex)
 
 		if lineCount > prevLineCount {
-			fmt.Printf("\n\r")
+			if !inputGotReplaced {
+				fmt.Printf("\n\r")
+			}
 		} else if prevLineCount > 1 && prevRowIndex != 0 {
 			termenv.CursorUp(prevRowIndex)
 		}
@@ -672,8 +694,6 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 	printOutput := func(inputModule *gopherscript.Module, result interface{}) {
 
-		termWidth, _, _ := term.GetSize(int(outFD))
-
 		const VALUE_FMT = "%#v\n\r"
 		var s string
 		switch r := result.(type) {
@@ -789,7 +809,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			if backspaceCount == prevBackspaceCount {
 				return
 			}
-			printPromptAndInput()
+			printPromptAndInput(false)
 		}
 
 		moveEnd := func() {
@@ -797,31 +817,28 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 				return
 			}
 			backspaceCount = 0
-			printPromptAndInput()
+			printPromptAndInput(false)
 		}
 
 		switch code {
 		case ArrowUp:
 			fallthrough
 		case ArrowDown:
-			termenv.ClearLine()
-			termenv.CursorBack(len(input) + promptLen)
+			//termenv.ClearLine()
+			//termenv.CursorBack(len(input) + promptLen)
 			reset()
-			input = []rune(history.Commands[commandIndex])
+			prevLineCount = getNewLineCount()
+			prevRowIndex = prevLineCount - 1
+
+			input = []rune(history.current())
 
 			if code == ArrowUp {
-				commandIndex--
+				history.scroll(-1)
 			} else {
-				commandIndex++
+				history.scroll(+1)
 			}
 
-			if commandIndex < 0 {
-				commandIndex = len(history.Commands) - 1
-			} else if commandIndex >= len(history.Commands) {
-				commandIndex = 0
-			}
-
-			printPromptAndInput()
+			printPromptAndInput(true)
 			continue
 		case Escape:
 			continue
@@ -855,7 +872,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			termenv.CursorBack(1)
 			termenv.SaveCursorPosition()
 
-			printPromptAndInput()
+			printPromptAndInput(false)
 			termenv.RestoreCursorPosition()
 			continue
 		case Home:
@@ -867,13 +884,13 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 		case ArrowLeft:
 			if backspaceCount < len(input) {
 				backspaceCount += 1
-				printPromptAndInput()
+				printPromptAndInput(false)
 			}
 			continue
 		case ArrowRight:
 			if backspaceCount > 0 {
 				backspaceCount -= 1
-				printPromptAndInput()
+				printPromptAndInput(false)
 			}
 			continue
 		case CtrlBackspace:
@@ -957,7 +974,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			backward := cursorIndex - newCursorIndex
 			backspaceCount += backward
 
-			printPromptAndInput()
+			printPromptAndInput(false)
 			continue
 		case CtrlRight:
 			mod, _ := gopherscript.ParseModule(string(input), "")
@@ -999,7 +1016,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			forward := newCursorIndex - cursorIndex
 
 			backspaceCount -= forward
-			printPromptAndInput()
+			printPromptAndInput(false)
 			continue
 		case CtrlC:
 			return
@@ -1054,7 +1071,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 				termenv.SaveCursorPosition()
 
-				printPromptAndInput()
+				printPromptAndInput(false)
 
 				termenv.RestoreCursorPosition()
 				termenv.CursorForward(newCharCount)
@@ -1078,11 +1095,11 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 
 		case Enter:
 			if strings.Trim(string(input), " ") != "" {
-				history.Commands = append(history.Commands, string(input))
-				if history.Commands[0] == "" {
-					history.Commands = history.Commands[1:]
+				history.commands = append(history.commands, string(input))
+				if history.commands[0] == "" {
+					history.commands = history.commands[1:]
 				} else {
-					commandIndex++
+					history.scroll(+1)
 				}
 			}
 
@@ -1144,7 +1161,7 @@ func startShell(state *gopherscript.State, ctx *gopherscript.Context, config REP
 			}
 
 			input = append(input, right...)
-			printPromptAndInput()
+			printPromptAndInput(false)
 
 		} else {
 			//fmt.Printf("%v", r)
